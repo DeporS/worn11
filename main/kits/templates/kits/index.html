@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>Worn11 - Moja Kolekcja</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+
+<div class="container py-5">
+    <div class="row mb-4">
+        <div class="col">
+            <h1>Moja Kolekcja 👕</h1>
+            <h3 class="text-success">Wartość: {{ total_value }} PLN</h3>
+        </div>
+    </div>
+
+    <div class="row">
+        {% for item in my_kits %}
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 shadow-sm">
+                {% if item.kit.main_image %}
+                    <img src="{{ item.kit.main_image.url }}" class="card-img-top" alt="{{ item.kit.kit_type }}" style="height: 250px; object-fit: cover;">
+                {% else %}
+                    <div class="d-flex align-items-center justify-content-center bg-secondary text-white" style="height: 250px;">
+                        Brak zdjęcia
+                    </div>
+                {% endif %}
+                
+                <div class="card-body">
+                    <h5 class="card-title">{{ item.kit.team.name }}</h5>
+                    <p class="card-text text-muted">{{ item.kit.season }} - {{ item.kit.kit_type }}</p>
+                    
+                    <ul class="list-group list-group-flush mb-3">
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span>Rozmiar:</span> <strong>{{ item.size }}</strong>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span>Stan:</span> <strong>{{ item.get_condition_display }}</strong>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span>Technologia:</span> <span class="badge bg-dark">{{ item.get_shirt_technology_display }}</span>
+                        </li>
+                    </ul>
+
+                    <div class="d-grid">
+                        <button class="btn btn-outline-primary">
+                            Wartość: {{ item.final_value }} PLN
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-12">
+            <div class="alert alert-warning">
+                Nie masz jeszcze żadnych koszulek w kolekcji! Dodaj je w panelu admina.
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+</body>
+</html>
