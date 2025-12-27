@@ -3,6 +3,9 @@
 messi
 mk02
 
+- Venv
+cd main -> source venv/bin/activate
+
 - Frontend:
 cd frontend -> npm run dev
 
