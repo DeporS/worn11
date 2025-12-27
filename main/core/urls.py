@@ -21,7 +21,7 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', include('kits.urls')), # Include URLs from the kits app
+    path('api/', include('kits.urls')), # Include URLs from the kits app
 ]
 
 # Serve media files during development
