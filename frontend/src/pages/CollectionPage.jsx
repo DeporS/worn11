@@ -37,7 +37,7 @@ const CollectionPage = () => {
   return (
     <div className="container py-5">
       <header className="mb-5 text-center">
-        <h1 className="display-5 fw-bold">Worn11 🔍</h1>
+        <h1 className="display-5 fw-bold">Search collections 🔍</h1>
         <div className="mt-4">
             <SearchBar 
                 value={searchUser} 

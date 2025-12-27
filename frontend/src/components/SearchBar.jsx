@@ -7,7 +7,7 @@ const SearchBar = ({ value, onChange, onSearch }) => {
         <input 
             type="text" 
             className="form-control" 
-            placeholder="Username (e.g. messi)"
+            placeholder="Username"
             value={value}
             onChange={(e) => onChange(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && onSearch()}

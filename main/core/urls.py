@@ -22,6 +22,13 @@ from django.conf.urls.static import static
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('kits.urls')), # Include URLs from the kits app
+
+    # Endpoints for login/registration
+    path('api/auth/', include('dj_rest_auth.urls')),
+    path('api/auth/registration/', include('dj_rest_auth.registration.urls')),
+    path('api/auth/google/', include('allauth.socialaccount.providers.google.urls')), # For google
+
+    path('accounts/', include('allauth.urls')), # Required for allauth
 ]
 
 # Serve media files during development

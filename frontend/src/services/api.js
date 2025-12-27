@@ -8,6 +8,18 @@ const api = axios.create({
     timeout: 5000, // Timeout after 5 seconds
 });
 
+// INTERCEPTOR: Before each request, add the token
+api.interceptors.request.use(
+    (config) => {
+        const token = localStorage.getItem('access_token');
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
+        return config;
+    },
+    (error) => Promise.reject(error)
+);
+
 // Helper function
 export const getUserCollection = async (username) => {
     try {
