@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { jwtDecode } from "jwt-decode";
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import CollectionPage from './pages/CollectionPage';
+import ProfilePage from './pages/ProfilePage';
 import NavBar from './components/NavBar';
 import api from './services/api';
 
@@ -35,19 +36,26 @@ function App() {
   };
 
   return (
-    <div>
-      <NavBar 
-        user={user} 
-        onLoginSuccess={handleLoginSuccess} 
-        onLogout={handleLogout} 
-        refreshUser={fetchUserData} 
-      />
+    <Router>
+      <div>
+        <NavBar 
+          user={user} 
+          onLoginSuccess={handleLoginSuccess} 
+          onLogout={handleLogout} 
+          refreshUser={fetchUserData} 
+        />
 
-      {/* Pass user */}
-      <CollectionPage user={user} />
-      
-      {/* <Footer /> */}
-    </div>
+        <Routes>
+          {/* Landing Page */}
+          <Route path="/" element={<CollectionPage user={user} />} />
+    
+          {/* Profile Page */}  
+          <Route path="/profile"
+            element={user ? <ProfilePage user={user} /> : <Navigate to="/" />} 
+          />
+        </Routes>
+      </div>
+    </Router>
   )
 }
 

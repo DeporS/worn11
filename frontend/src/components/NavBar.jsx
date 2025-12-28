@@ -1,5 +1,6 @@
 import React from 'react';
 import LoginButton from './LoginButton';
+import { Link } from 'react-router-dom';
 
 const NavBar = ({user, onLoginSuccess, onLogout}) => {
   return (
@@ -14,9 +15,15 @@ const NavBar = ({user, onLoginSuccess, onLogout}) => {
             {user ? (
                 // LOGGED IN
                 <div className="d-flex align-items-center gap-3">
-                    <span className="text-muted small">
-                        <strong>{user.username}</strong>
-                    </span>
+                    <Link 
+                        to="/profile" 
+                        className="text-decoration-none text-dark fw-bold d-flex align-items-center gap-2"
+                    >
+                        <div className="bg-primary text-white rounded-circle d-flex justify-content-center align-items-center" style={{width: '35px', height: '35px'}}>
+                            {user.username.charAt(0).toUpperCase()}
+                        </div>
+                        {user.username}
+                    </Link>
                     <button 
                         className="btn btn-outline-danger btn-sm" 
                         onClick={onLogout}

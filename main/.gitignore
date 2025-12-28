@@ -1,4 +1,7 @@
 venv/
 .venv/
 __pycache__/
-#media/user_kits/
+db.sqlite3
+*.sqlite3
+media/user_kits/
+.env
