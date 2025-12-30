@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+from datetime import timedelta
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -66,11 +67,22 @@ REST_FRAMEWORK = {
     ]
 }
 
+# JWT configuration
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=30),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=90),
+
+    'ROTATE_REFRESH_TOKENS': False,
+    'BLACKLIST_AFTER_ROTATION': True,
+}
+
 # dj-rest-auth configuration
 REST_AUTH = {
     'USE_JWT': True,
     'JWT_AUTH_COOKIE': 'worn11-auth',
     'JWT_AUTH_REFRESH_COOKIE': 'worn11-refresh-token',
+    # Enables token refreshing via cookie
+    'JWT_AUTH_HTTPONLY': False,
 }
 
 # django-allauth configuration
