@@ -1,8 +1,10 @@
 from rest_framework import generics, permissions
 from rest_framework.permissions import IsAuthenticated
-from .models import UserKit, Kit
+from .models import UserKit, Kit, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES
 from .serializers import UserKitSerializer, KitSerializer
 from django.shortcuts import get_object_or_404
+from rest_framework.views import APIView
+from rest_framework.response import Response
 
 # Endpoint: My collection + adding new kits
 class MyCollectionAPI(generics.ListCreateAPIView):
@@ -33,3 +35,13 @@ class UserCollectionAPI(generics.ListAPIView):
 class KitCatalogAPI(generics.ListAPIView):
     queryset = Kit.objects.all()
     serializer_class = KitSerializer
+
+# Endpoint: Get options for kit attributes
+class KitOptionsView(APIView):
+    def get(self, request):
+        return Response({
+            "sizes": [{'value': key, 'label': label} for key, label in SIZE_CHOICES],
+            "conditions": [{'value': key, 'label': label} for key, label in CONDITION_CHOICES],
+            "technologies": [{'value': key, 'label': label} for key, label in SHIRT_TECHNOLOGIES],
+            "types": [{'value': key, 'label': label} for key, label in SHIRT_TYPES],
+        })

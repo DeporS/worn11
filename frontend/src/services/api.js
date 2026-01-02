@@ -31,4 +31,18 @@ export const getUserCollection = async (username) => {
     }
 };
 
+// Function to add a kit to the user's collection
+export const addKitToCollection = async (fromData) => {
+    try {
+        const response = await api.post('/my-collection/', fromData, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+            },
+        });
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+}
+
 export default api;

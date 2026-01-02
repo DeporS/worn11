@@ -8,6 +8,27 @@ SHIRT_TECHNOLOGIES = [
     ('MATCH_WORN', 'Match Worn'),
 ]
 
+SHIRT_TYPES = [
+    ('Home', 'Home'),
+    ('Away', 'Away'),
+    ('Third', 'Third'),
+    ('Fourth', 'Fourth'),
+    ('Cup', 'Cup'),
+    ('Training', 'Training'),
+    ('GK', 'Goalkeeper'),
+]
+
+SIZE_CHOICES = [
+    ('KIDS', 'Kids'),
+    ('XS', 'Extra Small'),
+    ('S', 'Small'),
+    ('M', 'Medium'),
+    ('L', 'Large'),
+    ('XL', 'Extra Large'),
+    ('XXL', 'Double Extra Large'),
+    ('XXXL', 'Triple Extra Large'),
+]
+
 CONDITION_CHOICES = [
     ('BNWT', 'Brand New With Tags'),
     ('MINT', 'New Without Tags'),
@@ -18,11 +39,14 @@ CONDITION_CHOICES = [
 ]
 
 SIZE_MULTIPLIERS = {
+    'KIDS': Decimal('0.25'),
+    'XS': Decimal('0.4'),
     'S': Decimal('0.6'),
     'M': Decimal('0.9'),
     'L': Decimal('1.0'),
     'XL': Decimal('0.9'),
     'XXL': Decimal('0.75'),
+    'XXXL': Decimal('0.6'),
 }
 
 CONDITION_MULTIPLIERS = {
@@ -69,7 +93,7 @@ class UserKit(models.Model):
     kit = models.ForeignKey(Kit, on_delete=models.CASCADE, related_name='owned_by')
     shirt_technology = models.CharField(max_length=20, choices=SHIRT_TECHNOLOGIES)
     condition = models.CharField(max_length=20, choices=CONDITION_CHOICES)
-    size = models.CharField(max_length=10, choices=[('S', 'Small'), ('M', 'Medium'), ('L', 'Large'), ('XL', 'Extra Large'), ('XXL', 'Double Extra Large')])
+    size = models.CharField(max_length=10, choices=[('KIDS', 'Kids'), ('XS', 'Extra Small'), ('S', 'Small'), ('M', 'Medium'), ('L', 'Large'), ('XL', 'Extra Large'), ('XXL', 'Double Extra Large'), ('XXXL', 'Triple Extra Large')])
     
     for_sale = models.BooleanField(default=False)
 

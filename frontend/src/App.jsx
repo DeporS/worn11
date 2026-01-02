@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import CollectionPage from './pages/CollectionPage';
 import ProfilePage from './pages/ProfilePage';
+import AddShirtFormPage from './pages/AddShirtFormPage';
 import NavBar from './components/NavBar';
 import api from './services/api';
 
@@ -49,9 +50,14 @@ function App() {
           {/* Landing Page */}
           <Route path="/" element={<CollectionPage user={user} />} />
     
-          {/* Profile Page */}  
-          <Route path="/profile"
+          {/* My Collection Page */}  
+          <Route path="/my-collection"
             element={user ? <ProfilePage user={user} /> : <Navigate to="/" />} 
+          />
+
+          {/* Add Shirt Form Page */}
+          <Route path="/add-kit"
+            element={user ? <AddShirtFormPage /> : <Navigate to="/" />} 
           />
         </Routes>
       </div>

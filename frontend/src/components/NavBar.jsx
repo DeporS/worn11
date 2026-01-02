@@ -16,7 +16,7 @@ const NavBar = ({user, onLoginSuccess, onLogout}) => {
                 // LOGGED IN
                 <div className="d-flex align-items-center gap-3">
                     <Link 
-                        to="/profile" 
+                        to="/my-collection" 
                         className="text-decoration-none text-dark fw-bold d-flex align-items-center gap-2"
                     >
                         <div className="bg-primary text-white rounded-circle d-flex justify-content-center align-items-center" style={{width: '35px', height: '35px'}}>

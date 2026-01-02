@@ -23,16 +23,52 @@ class UserKitImageSerializer(serializers.ModelSerializer):
 
 # UserKit Serializer
 class UserKitSerializer(serializers.ModelSerializer):
+    # Read-only nested serializers
     kit = KitSerializer(read_only=True)
     images = UserKitImageSerializer(many=True, read_only=True)
 
     condition_display = serializers.CharField(source='get_condition_display', read_only=True)
     technology_display = serializers.CharField(source='get_shirt_technology_display', read_only=True)
 
+    # Write-only fields for creating/updating UserKit
+    team_name = serializers.CharField(write_only=True)
+    season = serializers.CharField(write_only=True)
+    kit_type = serializers.CharField(write_only=True)
+
     class Meta:
         model = UserKit
         fields = [
-            'id', 'user', 'kit', 'shirt_technology', 'condition', 'size',
-            'for_sale', 'manual_value', 'final_value', 'images',
-            'condition_display', 'technology_display'
+            'id', 'user', 
+            # Read-only fields
+            'kit', 'images', 'condition_display', 'technology_display',
+            # Write-only fields
+            'team_name', 'season', 'kit_type',
+            # Modifiable fields
+            'condition', 'shirt_technology', 'size', 'for_sale', 'manual_value'
         ]
+        read_only_fields = ['user', 'final_value', 'kit']
+    
+    # Override create method to handle nested kit creation
+    def create(self, validated_data):
+        team_name = validated_data.pop('team_name')
+        season = validated_data.pop('season')
+        kit_type = validated_data.pop('kit_type')
+
+        # Get or create the Team
+        team, _ = Team.objects.get_or_create(name=team_name.title())
+
+        # Get or create the Kit
+        kit, _ = Kit.objects.get_or_create(team=team, season=season, kit_type=kit_type)
+
+        # Create the UserKit
+        user_kit = UserKit.objects.create(kit=kit, **validated_data)
+
+        # Images handling
+        request = self.context.get('request')
+        if request and request.FILES:
+            images_list = request.FILES.getlist('images')
+            if images_list:
+                for image_data in images_list:
+                    UserKitImage.objects.create(user_kit=user_kit, image=image_data)
+
+        return user_kit

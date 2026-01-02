@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getUserCollection } from '../services/api';
+import { Link } from 'react-router-dom';
 import KitCard from '../components/KitCard';
 
 const ProfilePage = ({ user }) => {
@@ -41,26 +42,10 @@ const ProfilePage = ({ user }) => {
         </div>
       </div>
 
-      {/* Przycisk Dodawania
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h4 className="mb-0">My Collection 👕</h4>
-        <button 
-            className={`btn ${showAddForm ? 'btn-secondary' : 'btn-success'}`}
-            onClick={() => setShowAddForm(!showAddForm)}
-        >
-            {showAddForm ? 'Close Form' : '+ Add New Kit'}
-        </button>
-      </div> */}
-
-      {/* Formularz Dodawania (Pokazuje się po kliknięciu) */}
-      {/* {showAddForm && (
-          <div className="mb-5">
-              <AddKitForm onKitAdded={() => {
-                  fetchMyCollection(); // Odśwież listę po dodaniu
-                  setShowAddForm(false); // Zamknij formularz
-              }} />
-          </div>
-      )} */}
+      {/* Add Kit Button */}
+      <Link to="/add-kit" className="btn btn-success">
+        + Add New Kit
+      </Link>
 
       {/* Shirt list */}
       {loading ? (
