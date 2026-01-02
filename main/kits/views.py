@@ -1,7 +1,7 @@
 from rest_framework import generics, permissions
 from rest_framework.permissions import IsAuthenticated
-from .models import UserKit, Kit, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES
-from .serializers import UserKitSerializer, KitSerializer
+from .models import UserKit, Kit, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team
+from .serializers import UserKitSerializer, KitSerializer, TeamSerializer
 from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -45,3 +45,16 @@ class KitOptionsView(APIView):
             "technologies": [{'value': key, 'label': label} for key, label in SHIRT_TECHNOLOGIES],
             "types": [{'value': key, 'label': label} for key, label in SHIRT_TYPES],
         })
+
+
+class TeamSearchAPI(generics.ListAPIView):
+    serializer_class = TeamSerializer
+
+    def get_queryset(self):
+        # Get search query from URL parameters e.g., /api/teams/search/?q=Bar
+        query = self.request.query_params.get('q', '')
+
+        if len(query) < 2:
+            return Team.objects.none()  # Return empty queryset for short queries
+
+        return Team.objects.filter(name__icontains=query)[:5] # Limit to 5 results

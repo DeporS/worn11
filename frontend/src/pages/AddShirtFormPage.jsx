@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { addKitToCollection } from '../services/api';
 import api from '../services/api';
@@ -11,6 +11,7 @@ const AddShirtFormPage = () => {
     const [conditionOptions, setConditionOptions] = useState([]);
     const [technologyOptions, setTechnologyOptions] = useState([]);
     const [typeOptions, setTypeOptions] = useState([]);
+    const [suggestions, setSuggestions] = useState([]);
 
     // Form States
     const [teamName, setTeamName] = useState('');
@@ -27,6 +28,8 @@ const AddShirtFormPage = () => {
     // UI States
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const isSelectionRef = useRef(false);
 
     useEffect(() => {
         api.get('/options/') 
@@ -40,6 +43,41 @@ const AddShirtFormPage = () => {
         })
         .catch(err => console.error("Failed to fetch options", err));
     }, []);
+
+    // Fetch team suggestions when teamName changes
+    useEffect(() => {
+
+        // If the change was due to a selection, do not fetch
+        if (isSelectionRef.current) {
+            isSelectionRef.current = false; // Reset the flag for future changes
+            return;
+        }
+
+        // if team name is less than 2 characters, do not fetch
+        if (teamName.length < 2) {
+            setSuggestions([]);
+            return;
+        }
+
+        // Debounce fetch
+        const timerId = setTimeout(() => {
+            api.get(`teams/search/?q=${teamName}`)
+                .then(res => {
+                    setSuggestions(res.data);
+                    setShowSuggestions(true);
+                })
+        }, 300); // 300ms debounce
+
+        return () => clearTimeout(timerId); // Cleanup on unmount or teamName change
+    }, [teamName]); // Do when teamName changes
+
+    const handleSuggestionClick = (team) => {
+        isSelectionRef.current = true; // Mark that a suggestion was selected
+
+        setTeamName(team.name); // Fill input with selected suggestion
+        setSuggestions([]);     // Clear suggestions list
+        setShowSuggestions(false); // Hide suggestions list
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -86,13 +124,44 @@ const AddShirtFormPage = () => {
 
                 <form onSubmit={handleSubmit}>
                     {/* Team */}
-                    <div className="mb-3">
+                    <div className="mb-3 position-relative">
                         <label className="form-label">Team Name</label>
                         <input 
-                            type="text" className="form-control" required
+                            type="text" 
+                            className="form-control" 
+                            required
                             placeholder=""
-                            value={teamName} onChange={e => setTeamName(e.target.value)}
+                            value={teamName} 
+                            onChange={e => setTeamName(e.target.value)}
+                            autoComplete="off"
                         />
+                        {/* Suggestions Dropdown */}
+                        {showSuggestions && suggestions.length > 0 && (
+                            <ul className="list-group position-absolute w-100 shadow" style={{ zIndex: 1000, top: '100%' }}>
+                                {suggestions.map((team) => (
+                                    <li 
+                                        key={team.id} 
+                                        className="list-group-item list-group-item-action d-flex align-items-center gap-3"
+                                        style={{ cursor: 'pointer' }}
+                                        onClick={() => handleSuggestionClick(team)}
+                                    >
+                                        {/* LOGO */}
+                                        {team.logo ? (
+                                            <img 
+                                                src={team.logo} 
+                                                alt={team.name} 
+                                                style={{ width: '30px', height: '30px', objectFit: 'contain' }} 
+                                            />
+                                        ) : (
+                                            <div style={{width: '30px', height: '30px', background: '#eee', borderRadius: '50%'}}></div>
+                                        )}
+                                        
+                                        {/* TEAM NAME */}
+                                        <span>{team.name}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
                     </div>
 
                     {/* Season */}
