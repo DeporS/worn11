@@ -116,12 +116,16 @@ class UserKit(models.Model):
         else:
             # Calculate based on multipliers
             base_price = self.kit.estimated_price
-            size_multiplier = SIZE_MULTIPLIERS.get(self.size, Decimal('1.0'))
-            condition_multiplier = CONDITION_MULTIPLIERS.get(self.condition, Decimal('1.0'))
-            technology_multiplier = TECHNOLOGIE_MULTIPLIERS.get(self.shirt_technology, Decimal('1.0'))
 
-            calculated_value = base_price * size_multiplier * condition_multiplier * technology_multiplier
-            self.final_value = calculated_value.quantize(Decimal('0.01'))  # Round to 2 decimal places
+            if base_price and base_price > 0:
+                size_multiplier = SIZE_MULTIPLIERS.get(self.size, Decimal('1.0'))
+                condition_multiplier = CONDITION_MULTIPLIERS.get(self.condition, Decimal('1.0'))
+                technology_multiplier = TECHNOLOGIE_MULTIPLIERS.get(self.shirt_technology, Decimal('1.0'))
+
+                calculated_value = base_price * size_multiplier * condition_multiplier * technology_multiplier
+                self.final_value = calculated_value.quantize(Decimal('0.01'))  # Round to 2 decimal places
+            else:
+                self.final_value = Decimal('0.00')
         
         super().save(*args, **kwargs)
     

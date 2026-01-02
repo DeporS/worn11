@@ -40,7 +40,7 @@ class UserKitSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'user', 
             # Read-only fields
-            'kit', 'images', 'condition_display', 'technology_display',
+            'kit', 'images', 'condition_display', 'technology_display', 'final_value',
             # Write-only fields
             'team_name', 'season', 'kit_type',
             # Modifiable fields
@@ -58,7 +58,7 @@ class UserKitSerializer(serializers.ModelSerializer):
         team, _ = Team.objects.get_or_create(name=team_name.title())
 
         # Get or create the Kit
-        kit, _ = Kit.objects.get_or_create(team=team, season=season, kit_type=kit_type)
+        kit, _ = Kit.objects.get_or_create(team=team, season=season, kit_type=kit_type, defaults={'estimated_price': 0})
 
         # Create the UserKit
         user_kit = UserKit.objects.create(kit=kit, **validated_data)
