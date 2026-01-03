@@ -1,6 +1,13 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const KitCard = ({ item }) => {
+  const navigate = useNavigate();
+
+  const handleEditClick = () => {
+    navigate(`/edit-kit/${item.id}`); // navigate to /edit-kit/15
+  };
+
   return (
     <div className="card h-100 shadow-sm border-0">
       {/* Gallery of photos */}
@@ -30,6 +37,23 @@ const KitCard = ({ item }) => {
             <span>{item.kit.kit_type}</span>
         </div>
         <span className="badge bg-success fs-6">{item.final_value} USD</span>
+
+        {/* Edit and Delete Buttons */}
+        <div className="d-flex justify-content-between mt-3">
+             
+             {/* Edit Button */}
+             <button 
+                className="btn btn-outline-primary btn-sm" 
+                onClick={handleEditClick}
+             >
+                <i className="bi bi-pencil-fill me-1"></i> Edit
+             </button>
+
+             {/* Delete Button
+             <button className="btn btn-outline-danger btn-sm">
+                <i className="bi bi-trash"></i>
+             </button> */}
+         </div>
       </div>
     </div>
   );

@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import CollectionPage from './pages/CollectionPage';
 import ProfilePage from './pages/ProfilePage';
 import AddShirtFormPage from './pages/AddShirtFormPage';
+import EditShirtFormPage from './pages/EditShirtFormPage';
 import NavBar from './components/NavBar';
 import api from './services/api';
 
@@ -58,6 +59,11 @@ function App() {
           {/* Add Shirt Form Page */}
           <Route path="/add-kit"
             element={user ? <AddShirtFormPage /> : <Navigate to="/" />} 
+          />
+
+          {/* Edit Shirt Form Page */}
+          <Route path="/edit-kit/:id"
+            element={user ? <EditShirtFormPage user={user} /> : <Navigate to="/" />} 
           />
         </Routes>
       </div>

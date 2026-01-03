@@ -19,6 +19,14 @@ class MyCollectionAPI(generics.ListCreateAPIView):
         # Automatically assign the logged-in user on save
         serializer.save(user=self.request.user)
 
+# Endpoint: Detail, update, delete for a specific kit in collection
+class MyCollectionDetailAPI(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = UserKitSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return UserKit.objects.filter(user=self.request.user)
+
 # Endpoint: Show other user's collection
 class UserCollectionAPI(generics.ListAPIView):
     serializer_class = UserKitSerializer
@@ -57,4 +65,7 @@ class TeamSearchAPI(generics.ListAPIView):
         if len(query) < 2:
             return Team.objects.none()  # Return empty queryset for short queries
 
-        return Team.objects.filter(name__icontains=query)[:5] # Limit to 5 results
+        return Team.objects.filter(
+            name__icontains=query,
+            is_verified=True
+        )[:5] # Limit to 5 results

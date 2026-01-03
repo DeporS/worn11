@@ -167,11 +167,22 @@ const AddShirtFormPage = () => {
                     {/* Season */}
                     <div className="mb-3">
                         <label className="form-label">Season</label>
-                        <input 
-                            type="text" className="form-control" required
-                            placeholder=""
-                            value={season} onChange={e => setSeason(e.target.value)}
-                        />
+                        <select
+                            className="form-select"
+                            required
+                            value={season}
+                            onChange={e => setSeason(e.target.value)}
+                        >
+                            <option value=""></option>
+                            {Array.from({ length: 2026 - 1960 }, (_, i) => {
+                            const start = 2026 - i
+                            return (
+                                <option key={start} value={`${start - 1}/${start}`}>
+                                {start - 1}/{start}
+                                </option>
+                            )
+                            })}
+                        </select>
                     </div>
 
                     {/* Technology */}
@@ -179,6 +190,7 @@ const AddShirtFormPage = () => {
                         <label className="form-label">Shirt Technology</label>
                         <select 
                             className="form-select" 
+                            required
                             value={technology} 
                             onChange={e => setTechnology(e.target.value)}
                             disabled={technologyOptions.length === 0} // Disable before options load
@@ -195,10 +207,13 @@ const AddShirtFormPage = () => {
 
                     {/* Type and Size (in one row) */}
                     <div className="row">
+
+                        {/* Type */}
                         <div className="col-6 mb-3">
                             <label className="form-label">Type</label>
                             <select 
                                 className="form-select" 
+                                required
                                 value={kitType} 
                                 onChange={e => setKitType(e.target.value)}
                                 disabled={typeOptions.length === 0} // Disable before options load
@@ -212,11 +227,13 @@ const AddShirtFormPage = () => {
                                 ))}
                             </select>
                         </div>
-
+                        
+                        {/* Size */}
                         <div className="col-6 mb-3">
                             <label className="form-label">Size</label>
                             <select 
                                 className="form-select" 
+                                required
                                 value={size} 
                                 onChange={e => setSize(e.target.value)}
                                 disabled={sizeOptions.length === 0} // Disable before options load
@@ -237,6 +254,7 @@ const AddShirtFormPage = () => {
                         <label className="form-label">Condition</label>
                         <select 
                             className="form-select" 
+                            required
                             value={condition} 
                             onChange={e => setCondition(e.target.value)}
                             disabled={conditionOptions.length === 0} // Disable before options load
@@ -257,6 +275,7 @@ const AddShirtFormPage = () => {
                         <input 
                             type="file" 
                             className="form-control" 
+                            required
                             accept="image/*"
                             multiple
                             onChange={(e) => {
@@ -267,15 +286,48 @@ const AddShirtFormPage = () => {
                         />
                         <div className="form-text">Select one or more photos of the shirt.</div>
                     </div>
+                    
+                    {/* Price and For Sale (in one row) */}
+                    <div className="row">
+
+                        {/* Price */}
+                        <div className="col-6 mb-3">
+                            <label className="form-label">Price ($)</label>
+                            <input 
+                                type="text" className="form-control"
+                                placeholder="Leave blank to auto-calculate"
+                                value={manualValue} onChange={e => setManualValue(e.target.value)}
+                            />
+                        </div>
+
+                        {/* For Sale */}
+                        <div className="col-6 mb-3 form-check">
+                            <label className="form-label d-block">&nbsp;</label> 
+    
+                            <div className="form-check form-switch fs-4 d-flex align-items-center justify-content-center ps-0">
+                                <input 
+                                    className="form-check-input my-0" 
+                                    type="checkbox" 
+                                    role="switch" 
+                                    id="forSaleCheck"
+                                    style={{ cursor: 'pointer' }}
+                                    checked={forSale} 
+                                    onChange={e => setForSale(e.target.checked)} 
+                                />
+                                <label className="form-check-label ms-3 fs-6" htmlFor="forSaleCheck">
+                                    {forSale ? <b>For sale</b> : 'Not for sale'}
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
 
                     {/* Buttons */}
                     <div className="d-grid gap-2">
-                        <button type="submit" className="btn btn-primary btn-lg" disabled={loading || isFormIncomplete}>
+                        <button type="submit" className="btn btn-primary btn-lg" disabled={loading}>
                             {loading
                                 ? 'Uploading...'
-                                : isFormIncomplete
-                                    ? 'Fill all fields to add to collection'
-                                    : 'Add to Collection'}
+                                : 'Add to Collection'}
                         </button>
                         <button type="button" className="btn btn-light" onClick={() => navigate('/profile')}>
                             Cancel
