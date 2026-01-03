@@ -6,6 +6,7 @@ import AddShirtFormPage from './pages/AddShirtFormPage';
 import EditShirtFormPage from './pages/EditShirtFormPage';
 import NavBar from './components/NavBar';
 import api from './services/api';
+import './index.css';
 
 function App() {
   const [user, setUser] = useState(null); // User state

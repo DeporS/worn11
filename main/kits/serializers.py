@@ -27,6 +27,7 @@ class UserKitSerializer(serializers.ModelSerializer):
     kit = KitSerializer(read_only=True)
     images = UserKitImageSerializer(many=True, read_only=True)
 
+    size_display = serializers.CharField(source='get_size_display', read_only=True)
     condition_display = serializers.CharField(source='get_condition_display', read_only=True)
     technology_display = serializers.CharField(source='get_shirt_technology_display', read_only=True)
 
@@ -40,7 +41,7 @@ class UserKitSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'user', 
             # Read-only fields
-            'kit', 'images', 'condition_display', 'technology_display', 'final_value',
+            'kit', 'images', 'condition_display', 'technology_display', 'final_value', 'size_display',
             # Write-only fields
             'team_name', 'season', 'kit_type',
             # Modifiable fields
