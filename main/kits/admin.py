@@ -2,6 +2,7 @@ from django.contrib import admin
 from django import forms
 from django.shortcuts import render
 from django.http import HttpResponseRedirect
+from django.db.models import Count
 from .models import Team, Kit, UserKit, UserKitImage
 
 class UserKitImageInline(admin.TabularInline):
@@ -45,10 +46,22 @@ def merge_teams_action(modeladmin, request, queryset):
 
 # Register in admin
 class TeamAdmin(admin.ModelAdmin):
-    list_display = ['name', 'is_verified']
+    list_display = ['name', 'is_verified', 'kits_count']
     list_filter = ['is_verified']
     search_fields = ['name']
     actions = [merge_teams_action]
+
+    # Count of kits related to the team
+    def kits_count(self, obj):
+        return obj.kits.count()
+    
+    kits_count.short_description = 'Kits in DB' # Column name
+    kits_count.admin_order_field = 'kits_count' # Allow sorting by this field
+    
+    # Optimize database query
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        return queryset.annotate(kits_count=Count('kits'))
 
 admin.site.register(Team, TeamAdmin)
 admin.site.register(Kit)
