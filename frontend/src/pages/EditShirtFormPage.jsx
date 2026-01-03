@@ -188,8 +188,24 @@ const EditShirtFormPage = () => {
                         {/* Season */}
                         <div className="mb-3">
                             <label className="form-label">Season</label>
-                            <input type="text" className="form-control" required
-                                value={season} onChange={e => setSeason(e.target.value)} />
+                            {/* <input type="text" className="form-control" required
+                                value={season} onChange={e => setSeason(e.target.value)} /> */}
+                            <select
+                                className="form-select"
+                                required
+                                value={season}
+                                onChange={e => setSeason(e.target.value)}
+                            >
+                                <option value=""></option>
+                                {Array.from({ length: 2026 - 1960 }, (_, i) => {
+                                const start = 2026 - i
+                                return (
+                                    <option key={start} value={`${start - 1}/${start}`}>
+                                    {start - 1}/{start}
+                                    </option>
+                                )
+                                })}
+                            </select>
                         </div>
     
                         {/* Technology */}
