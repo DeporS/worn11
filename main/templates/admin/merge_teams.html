@@ -1,0 +1,37 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<div id="content-main">
+    <h1>Merge Teams</h1>
+    
+    <p>You are about to merge the following teams:</p>
+    
+    <ul>
+        {% for team in teams %}
+            <li><strong>{{ team.name }}</strong> (ID: {{ team.id }}) {% if team.logo %}- has a logo{% endif %}</li>
+        {% endfor %}
+    </ul>
+
+    <p>Select the <strong>DESTINATION TEAM</strong> (the one that will survive and take over the kits):</p>
+    <form action="" method="post">
+        {% csrf_token %}
+        
+        <div style="margin-bottom: 20px;">
+            {{ form.as_p }}
+        </div>
+
+        {% for team in teams %}
+            <input type="hidden" name="_selected_action" value="{{ team.pk }}" />
+        {% endfor %}
+
+        <input type="hidden" name="action" value="merge_teams_action" />
+        
+        <input type="hidden" name="apply" value="True" />
+
+        <div class="submit-row">
+            <input type="submit" value="Confirm Merge" class="default" />
+            <a href="#" onclick="window.history.back(); return false;" class="button cancel-link">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

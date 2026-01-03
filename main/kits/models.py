@@ -66,8 +66,10 @@ TECHNOLOGIE_MULTIPLIERS = {
 
 # Football Teams (ex. Barcelona, Real Madrid, etc.)
 class Team(models.Model):
-    name = models.CharField(max_length=100)
-    logo = models.ImageField(upload_to='team_logos/')
+    name = models.CharField(max_length=100, unique=True)
+    logo = models.ImageField(upload_to='team_logos/', null=True, blank=True)
+
+    is_verified = models.BooleanField(default=False) # Admin can verify teams to avoid duplicates
 
     def __str__(self):
         return self.name
