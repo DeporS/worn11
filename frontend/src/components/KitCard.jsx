@@ -42,7 +42,7 @@ const KitCard = ({ item }) => {
                 <h5 className="card-title">{item.kit.team.name}</h5>
 
                 {/* Condition */}
-                <p className="card-text text-muted mb-1 mt-1">{item.condition_display} Condition</p>
+                <p className="card-text text-muted small mb-1 mt-1">{item.condition_display} Condition</p>
 
                 {/* Season & Kit Type */}
                 <div className="d-flex justify-content-between text-muted small mb-1 mt-1">

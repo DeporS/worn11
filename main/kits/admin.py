@@ -3,7 +3,9 @@ from django import forms
 from django.shortcuts import render
 from django.http import HttpResponseRedirect
 from django.db.models import Count
-from .models import Team, Kit, UserKit, UserKitImage
+from django.contrib.auth.admin import UserAdmin
+from django.contrib.auth.models import User
+from .models import Team, Kit, UserKit, UserKitImage, Profile
 
 class UserKitImageInline(admin.TabularInline):
     model = UserKitImage
@@ -63,6 +65,37 @@ class TeamAdmin(admin.ModelAdmin):
         queryset = super().get_queryset(request)
         return queryset.annotate(kits_count=Count('kits'))
 
+# User Profile Inline
+class ProfileInline(admin.StackedInline):
+    model = Profile
+    can_delete = False
+    verbose_name_plural = 'Profile INFO (Pro & Moderator Status)'
+
+# Custom User Admin to include Profile
+class CustomUserAdmin(UserAdmin):
+    inlines = (ProfileInline, )
+
+    list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff', 'get_is_pro', 'get_is_moderator')
+
+    list_filter = UserAdmin.list_filter + ('is_active', 'profile__is_pro', 'profile__is_moderator')
+
+
+    # Methods to display is_pro and is_moderator in list_display
+    def get_is_pro(self, obj):
+        return getattr(obj.profile, 'is_pro', False)
+    
+    get_is_pro.short_description = 'Is Pro'
+    get_is_pro.boolean = True
+
+    def get_is_moderator(self, obj):
+        return getattr(obj.profile, 'is_moderator', False)
+    
+    get_is_moderator.short_description = 'Is Moderator'
+    get_is_moderator.boolean = True
+
+
 admin.site.register(Team, TeamAdmin)
 admin.site.register(Kit)
 admin.site.register(UserKit, UserKitAdmin)
+admin.site.unregister(User)
+admin.site.register(User, CustomUserAdmin)

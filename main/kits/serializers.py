@@ -1,5 +1,7 @@
 from rest_framework import serializers
-from .models import Team, Kit, UserKit, UserKitImage
+from .models import Team, Kit, UserKit, UserKitImage, User
+from django.contrib.auth.models import User
+from dj_rest_auth.serializers import UserDetailsSerializer
 
 # Team Serializer
 class TeamSerializer(serializers.ModelSerializer):
@@ -73,3 +75,25 @@ class UserKitSerializer(serializers.ModelSerializer):
                     UserKitImage.objects.create(user_kit=user_kit, image=image_data)
 
         return user_kit
+
+# User serializer
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email', 'is_pro', 'is_moderator']
+        read_only_fields = ['is_pro', 'is_moderator']
+
+# Custom User Details Serializer to include is_pro field
+class CustomUserDetailsSerializer(UserDetailsSerializer):
+
+    is_pro = serializers.SerializerMethodField()
+
+    class Meta(UserDetailsSerializer.Meta):
+        fields = UserDetailsSerializer.Meta.fields + ('is_pro',) 
+
+    def get_is_pro(self, obj):
+        # Safely get is_pro from profile
+        try:
+            return obj.profile.is_pro
+        except AttributeError:
+            return False

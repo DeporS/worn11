@@ -83,6 +83,7 @@ REST_AUTH = {
     'JWT_AUTH_REFRESH_COOKIE': 'worn11-refresh-token',
     # Enables token refreshing via cookie
     'JWT_AUTH_HTTPONLY': False,
+    'USER_DETAILS_SERIALIZER': 'kits.serializers.CustomUserDetailsSerializer',
 }
 
 # django-allauth configuration

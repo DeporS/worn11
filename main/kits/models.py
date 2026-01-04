@@ -1,6 +1,9 @@
 from decimal import Decimal
 from django.db import models
 from django.contrib.auth.models import User
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from django.core.exceptions import ObjectDoesNotExist
 
 SHIRT_TECHNOLOGIES = [
     ('PLAYER_ISSUE', 'Player Issue'),
@@ -63,6 +66,17 @@ TECHNOLOGIE_MULTIPLIERS = {
     'REPLICA': Decimal('1.0'),
     'MATCH_WORN': Decimal('5.0'),
 }
+
+# User profile
+class Profile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    is_pro = models.BooleanField(default=False)  # Pro users have extra features
+    is_moderator = models.BooleanField(default=False)  # Moderators can help manage content
+
+    # pro_expiration_date = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.user.username} Profile"
 
 # Football Teams (ex. Barcelona, Real Madrid, etc.)
 class Team(models.Model):
@@ -142,3 +156,21 @@ class UserKitImage(models.Model):
     
     def __str__(self):
         return f"Image for {self.user_kit}"
+
+
+
+# SIGNALS
+
+# Create or update user profile on User creation
+@receiver(post_save, sender=User)
+def create_user_profile(sender, instance, created, **kwargs):
+    if created:
+        Profile.objects.create(user=instance)
+
+@receiver(post_save, sender=User)
+def save_user_profile(sender, instance, **kwargs):
+    try:
+        instance.profile.save()
+    except ObjectDoesNotExist:
+        # Create profile if it does not exist
+        Profile.objects.create(user=instance)

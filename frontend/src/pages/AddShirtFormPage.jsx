@@ -24,12 +24,51 @@ const AddShirtFormPage = () => {
     const [manualValue, setManualValue] = useState('');
     const [selectedFiles, setSelectedFiles] = useState([]);
 
-
     // UI States
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const isSelectionRef = useRef(false);
+    const fileInputRef = useRef(null); // Ref for file input
+
+    // User
+    const [isPro, setIsPro] = useState(false);
+    const MAX_PHOTOS = isPro ? 20 : 5;
+
+    // Handle file selection
+    const handleFileSelect = (e) => {
+        if (e.target.files) {
+            const newFiles = Array.from(e.target.files);
+            const totalFiles = selectedFiles.length + newFiles.length;
+
+            if (totalFiles > MAX_PHOTOS) {
+            if (!user.is_pro) {
+                alert("Free users are limited to 5 photos. Upgrade to PRO to upload up to 20! 🚀");
+                // LINK TO UPGRADE TO PRO PAGE CAN BE ADDED HERE
+            } else {
+                alert(`You are PRO and can upload up to ${MAX_PHOTOS} photos.`);
+            }
+            return;
+        }
+
+            // Add new files to existing ones (do not overwrite)
+            setSelectedFiles(prevFiles => [...prevFiles, ...newFiles]);
+        }
+        // Reset file input value to allow re-selection of the same file
+        if (fileInputRef.current) {
+            fileInputRef.current.value = "";
+        }
+    };
+
+    // Remove photo by index
+    const removePhoto = (indexToRemove) => {
+        setSelectedFiles(prevFiles => prevFiles.filter((_, index) => index !== indexToRemove));
+    };
+
+    // Trigger hidden file input click
+    const triggerFileInput = () => {
+        fileInputRef.current.click();
+    };
 
     useEffect(() => {
         api.get('/options/') 
@@ -42,6 +81,15 @@ const AddShirtFormPage = () => {
                 setTypeOptions(types);
         })
         .catch(err => console.error("Failed to fetch options", err));
+
+        api.get('/auth/user/')
+            .then(res => {
+                // Check if user is pro
+                if (res.data.is_pro === true) {
+                    setIsPro(true);
+                }
+            })
+            .catch(err => console.log("User not logged in or fetch error"));
     }, []);
 
     // Fetch team suggestions when teamName changes
@@ -269,22 +317,81 @@ const AddShirtFormPage = () => {
                         </select>
                     </div>
 
-                    {/* Photos (Input File) */}
+                    {/* Photos */}
                     <div className="mb-4">
-                        <label className="form-label">Photos</label>
+                        <div className="d-flex justify-content-between align-items-center mb-2">
+                            <label className="form-label fw-bold m-0">Photos ({selectedFiles.length}/{MAX_PHOTOS})</label>
+                            {!isPro && (
+                                <small className="text-primary" style={{cursor: 'pointer'}} onClick={() => navigate('/get-pro')}>
+                                    Need more? Go PRO 💎
+                                </small>
+                            )}
+                        </div>
+
+                        {/* Hidden input */}
                         <input 
                             type="file" 
-                            className="form-control" 
-                            required
+                            ref={fileInputRef}
+                            className="d-none" 
                             accept="image/*"
                             multiple
-                            onChange={(e) => {
-                                if (e.target.files) {
-                                    setSelectedFiles(Array.from(e.target.files));
-                                }
-                            }} 
+                            onChange={handleFileSelect} 
                         />
-                        <div className="form-text">Select one or more photos of the shirt.</div>
+
+                        {/* Container for tiles */}
+                        <div className="d-flex flex-wrap gap-3">
+                            
+                            {/* Mapping added photos */}
+                            {selectedFiles.map((file, index) => (
+                                <div key={index} className="position-relative" style={{ width: '100px', height: '100px' }}>
+                                    <img 
+                                        src={URL.createObjectURL(file)} 
+                                        alt="preview" 
+                                        className="rounded border shadow-sm"
+                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                    />
+                                    <button
+                                        type="button"
+                                        className="btn btn-danger btn-sm position-absolute top-0 end-0 rounded-circle p-0 d-flex align-items-center justify-content-center"
+                                        style={{ width: '20px', height: '20px', transform: 'translate(30%, -30%)' }}
+                                        onClick={() => removePhoto(index)}
+                                    >
+                                        <span style={{ fontSize: '12px', lineHeight: 1 }}>&times;</span>
+                                    </button>
+                                </div>
+                            ))}
+
+                            {/* PLUS Button */}
+                            {selectedFiles.length < MAX_PHOTOS && (
+                                <div 
+                                    onClick={triggerFileInput} 
+                                    className="rounded border border-2 d-flex flex-column align-items-center justify-content-center text-muted bg-light"
+                                    style={{ width: '100px', height: '100px', cursor: 'pointer', borderStyle: 'dashed' }}
+                                > 
+                                    <i className="bi bi-plus-lg fs-3"></i>
+                                    <small style={{ fontSize: '10px' }}>Add Photo</small>
+                                </div>
+                            )}
+
+                            {/* Locked slots for FREE users */}
+                            {!isPro && selectedFiles.length >= 5 && (
+                                <div 
+                                    className="rounded border border-2 d-flex flex-column align-items-center justify-content-center text-muted bg-light opacity-50"
+                                    style={{ width: '100px', height: '100px', cursor: 'pointer', borderStyle: 'dashed' }}
+                                    onClick={() => navigate('/get-pro')}
+                                >
+                                    <i className="bi bi-lock-fill fs-3 text-warning"></i>
+                                    <small style={{ fontSize: '10px' }}>Unlock PRO</small>
+                                </div>
+                            )}
+                        </div>
+                        
+                        <div className="form-text mt-2">
+                            {!isPro
+                                ? `You can add up to ${MAX_PHOTOS} photos.`
+                                : `As a PRO member, enjoy adding up to ${MAX_PHOTOS} photos!`
+                            }
+                        </div>
                     </div>
                     
                     {/* Price and For Sale (in one row) */}
