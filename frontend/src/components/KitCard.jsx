@@ -41,22 +41,23 @@ const KitCard = ({ item }) => {
                 {/* Team Name */}
                 <h5 className="card-title">{item.kit.team.name}</h5>
 
-                {/* Condition */}
-                <p className="card-text text-muted small mb-1 mt-1">{item.condition_display} Condition</p>
-
                 {/* Season & Kit Type */}
                 <div className="d-flex justify-content-between text-muted small mb-1 mt-1">
                     <span>{item.kit.season}</span>
                     <span>{item.kit.kit_type}</span>
                 </div>
 
-                {/* Size & Condition */}
+                {/* Technology & Size */}
                 <div className="d-flex justify-content-between text-muted small mb-1 mt-1">
                     <span>{item.technology_display}</span>
-                    <span>{item.size_display}</span>
+                    <span>{item.size}</span>
                 </div>
+                
+                {/* Condition */}
+                <p className="card-text text-muted small mb-1 mt-1">{item.condition_display}</p>
 
-                <span className="badge bg-success fs-6">{item.final_value} USD</span>
+                {/* Final Value */}
+                <span className="badge bg-success fs-6 mt-1">{item.final_value} USD</span>
 
                 {/* Edit and Delete Buttons */}
                 <div className="d-flex justify-content-between mt-3">
