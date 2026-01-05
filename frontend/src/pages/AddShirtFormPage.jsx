@@ -165,8 +165,8 @@ const AddShirtFormPage = () => {
         formData.append('for_sale', forSale);
         formData.append('manual_value', manualValue);
         
-        selectedFiles.forEach((file) => {
-            formData.append('images', file); 
+        selectedFiles.forEach((item) => {
+            formData.append('images', item.file); 
         });
 
         try {
