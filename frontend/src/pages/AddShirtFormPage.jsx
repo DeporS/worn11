@@ -1,7 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { addKitToCollection } from '../services/api';
 import api from '../services/api';
+import { nanoid } from 'nanoid';
+
+import '../styles/photos.css';
 
 const AddShirtFormPage = () => {
     const navigate = useNavigate();
@@ -31,6 +35,7 @@ const AddShirtFormPage = () => {
     const isSelectionRef = useRef(false);
     const fileInputRef = useRef(null); // Ref for file input
 
+
     // User
     const [isPro, setIsPro] = useState(false);
     const MAX_PHOTOS = isPro ? 20 : 5;
@@ -38,18 +43,25 @@ const AddShirtFormPage = () => {
     // Handle file selection
     const handleFileSelect = (e) => {
         if (e.target.files) {
-            const newFiles = Array.from(e.target.files);
+            const rawFiles = Array.from(e.target.files);
+            
+            const newFiles = rawFiles.map(file => ({
+                file: file,
+                id: nanoid(),
+                preview: URL.createObjectURL(file)
+            }));
+
             const totalFiles = selectedFiles.length + newFiles.length;
 
             if (totalFiles > MAX_PHOTOS) {
-            if (!user.is_pro) {
-                alert("Free users are limited to 5 photos. Upgrade to PRO to upload up to 20! 🚀");
-                // LINK TO UPGRADE TO PRO PAGE CAN BE ADDED HERE
-            } else {
-                alert(`You are PRO and can upload up to ${MAX_PHOTOS} photos.`);
+                if (!isPro) {
+                    alert("Free users are limited to 5 photos. Upgrade to PRO to upload up to 20! 🚀");
+                    // LINK TO UPGRADE TO PRO PAGE CAN BE ADDED HERE
+                } else {
+                    alert(`You are PRO and can upload up to ${MAX_PHOTOS} photos.`);
+                }
+                return;
             }
-            return;
-        }
 
             // Add new files to existing ones (do not overwrite)
             setSelectedFiles(prevFiles => [...prevFiles, ...newFiles]);
@@ -63,6 +75,17 @@ const AddShirtFormPage = () => {
     // Remove photo by index
     const removePhoto = (indexToRemove) => {
         setSelectedFiles(prevFiles => prevFiles.filter((_, index) => index !== indexToRemove));
+    };
+
+    // Remove photo by id
+    const removePhotoById = (id) => {
+        setSelectedFiles(prev => {
+            const fileToRemove = prev.find(f => f.id === id);
+            if (fileToRemove) {
+                URL.revokeObjectURL(fileToRemove.preview);
+            }
+            return prev.filter(item => item.id !== id);
+        });
     };
 
     // Trigger hidden file input click
@@ -157,7 +180,7 @@ const AddShirtFormPage = () => {
         }
     };
 
-    const isFormIncomplete = !technology || !size || !condition || !kitType;
+
 
   return (
     <div className="container py-5">
@@ -339,51 +362,71 @@ const AddShirtFormPage = () => {
                         />
 
                         {/* Container for tiles */}
-                        <div className="d-flex flex-wrap gap-3">
+                        <div
+                            className="d-flex flex-wrap"
+                            style={{ gap: '16px' }}
+                        >
+                            <AnimatePresence mode="popLayout">
                             
-                            {/* Mapping added photos */}
-                            {selectedFiles.map((file, index) => (
-                                <div key={index} className="position-relative" style={{ width: '100px', height: '100px' }}>
-                                    <img 
-                                        src={URL.createObjectURL(file)} 
-                                        alt="preview" 
-                                        className="rounded border shadow-sm"
-                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                    />
-                                    <button
-                                        type="button"
-                                        className="btn btn-danger btn-sm position-absolute top-0 end-0 rounded-circle p-0 d-flex align-items-center justify-content-center"
-                                        style={{ width: '20px', height: '20px', transform: 'translate(30%, -30%)' }}
-                                        onClick={() => removePhoto(index)}
+                                {/* Mapping added photos */}
+                                {selectedFiles.map((item, index) => (
+                                    <motion.div 
+                                        key={item.id} 
+                                        layout // To jedno słowo aktywuje magiczną animację przesunięcia pozycji!
+                                        initial={{ opacity: 0, scale: 0.8 }} // Start (wejście)
+                                        animate={{ opacity: 1, scale: 1 }}   // Stan widoczny
+                                        exit={{ opacity: 0, scale: 0.5 }}    // Koniec (usuwanie)
+                                        transition={{ duration: 0.3 }}       // Czas trwania
+                                        className="photo-tile position-relative"
+                                        style={{ width: '100px', height: '100px' }}
                                     >
-                                        <span style={{ fontSize: '12px', lineHeight: 1 }}>&times;</span>
-                                    </button>
-                                </div>
-                            ))}
+                                        <img 
+                                            src={item.preview} 
+                                            alt="preview" 
+                                            className="rounded border shadow-sm w-100 h-100"
+                                            style={{ objectFit: 'cover' }}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="btn btn-danger btn-sm position-absolute top-0 end-0 rounded-circle p-0 d-flex align-items-center justify-content-center"
+                                            style={{ width: '20px', height: '20px', transform: 'translate(30%, -30%)' }}
+                                            onClick={() => removePhotoById(item.id)}
+                                        >
+                                            <span style={{ fontSize: '12px', lineHeight: 1 }}>&times;</span>
+                                        </button>
+                                    </motion.div>
+                                ))}
 
-                            {/* PLUS Button */}
-                            {selectedFiles.length < MAX_PHOTOS && (
-                                <div 
-                                    onClick={triggerFileInput} 
-                                    className="rounded border border-2 d-flex flex-column align-items-center justify-content-center text-muted bg-light"
-                                    style={{ width: '100px', height: '100px', cursor: 'pointer', borderStyle: 'dashed' }}
-                                > 
-                                    <i className="bi bi-plus-lg fs-3"></i>
-                                    <small style={{ fontSize: '10px' }}>Add Photo</small>
-                                </div>
-                            )}
+                                {/* PLUS Button */}
+                                {selectedFiles.length < MAX_PHOTOS && (
+                                    <motion.div 
+                                        layout
+                                        key="add-photo-btn"
+                                        onClick={triggerFileInput} 
+                                        className="rounded border border-2 d-flex flex-column align-items-center justify-content-center text-muted bg-light"
+                                        style={{ width: '100px', height: '100px', cursor: 'pointer', borderStyle: 'dashed' }}
+                                    > 
+                                        <i className="bi bi-plus-lg fs-3"></i>
+                                        <small style={{ fontSize: '10px' }}>Add Photo</small>
+                                    </motion.div>
+                                )}
 
-                            {/* Locked slots for FREE users */}
-                            {!isPro && selectedFiles.length >= 5 && (
-                                <div 
-                                    className="rounded border border-2 d-flex flex-column align-items-center justify-content-center text-muted bg-light opacity-50"
-                                    style={{ width: '100px', height: '100px', cursor: 'pointer', borderStyle: 'dashed' }}
-                                    onClick={() => navigate('/get-pro')}
-                                >
-                                    <i className="bi bi-lock-fill fs-3 text-warning"></i>
-                                    <small style={{ fontSize: '10px' }}>Unlock PRO</small>
-                                </div>
-                            )}
+                                {/* Locked slots for FREE users */}
+                                {!isPro && selectedFiles.length >= 5 && (
+                                    <motion.div 
+                                        layout
+                                        key="lock-photo-btn"
+                                        className="rounded border border-2 d-flex flex-column align-items-center justify-content-center text-muted bg-light opacity-50"
+                                        style={{ width: '100px', height: '100px', cursor: 'pointer', borderStyle: 'dashed' }}
+                                        onClick={() => navigate('/get-pro')}
+                                    >
+                                        <i className="bi bi-lock-fill fs-3 text-warning"></i>
+                                        <small style={{ fontSize: '10px' }}>Unlock PRO</small>
+                                    </motion.div>
+                                )}
+
+                            </AnimatePresence>
+
                         </div>
                         
                         <div className="form-text mt-2">

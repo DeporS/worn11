@@ -75,6 +75,7 @@ const KitCard = ({ item }) => {
                         <i className="bi bi-trash"></i>
                     </button> */}
                 </div>
+                
             </div>
         </div>
     );
