@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, use } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { addKitToCollection } from '../services/api';
@@ -34,11 +34,35 @@ const AddShirtFormPage = () => {
     const [showSuggestions, setShowSuggestions] = useState(false);
     const isSelectionRef = useRef(false);
     const fileInputRef = useRef(null); // Ref for file input
-
+    const [dragOverIndex, setDragOverIndex] = useState(null); // for drag and drop
 
     // User
     const [isPro, setIsPro] = useState(false);
     const MAX_PHOTOS = isPro ? 20 : 5;
+
+    // Refs for drag and drop
+    const dragItem = useRef(null);
+    const dragOverItem = useRef(null);
+
+    // Handle sorting of photos
+    const handleSort = () => {
+
+        // create a copy of the items array
+        let _selectedFiles = [...selectedFiles];
+
+        // Remove and save the dragged item content
+        const draggedItemContent = _selectedFiles.splice(dragItem.current, 1)[0];
+
+        // Switch the position
+        _selectedFiles.splice(dragOverItem.current, 0, draggedItemContent);
+
+        // Reset the references
+        dragItem.current = null;
+        dragOverItem.current = null;
+
+        // Update the actual array
+        setSelectedFiles(_selectedFiles);
+    };
 
     // Handle file selection
     const handleFileSelect = (e) => {
@@ -372,28 +396,66 @@ const AddShirtFormPage = () => {
                                 {selectedFiles.map((item, index) => (
                                     <motion.div 
                                         key={item.id} 
-                                        layout // To jedno słowo aktywuje magiczną animację przesunięcia pozycji!
-                                        initial={{ opacity: 0, scale: 0.8 }} // Start (wejście)
-                                        animate={{ opacity: 1, scale: 1 }}   // Stan widoczny
-                                        exit={{ opacity: 0, scale: 0.5 }}    // Koniec (usuwanie)
-                                        transition={{ duration: 0.3 }}       // Czas trwania
+                                        layout
+
+                                        draggable
+                                        onDragStart={(e) => {
+                                            dragItem.current = index;
+                                            e.dataTransfer.effectAllowed = "move"; // Show move cursor
+                                            e.dataTransfer.setData("text/html", e.target.parentNode);
+                                        }}
+                                        onDragEnter={(e) => {
+                                            dragOverItem.current = index;
+                                            setDragOverIndex(index);
+                                        }}
+                                        onDragEnd={() => {
+                                            handleSort();
+                                            setDragOverIndex(null);
+                                        }}
+                                        onDragOver={(e) => e.preventDefault()} // Necessary to allow drop
+
+                                        initial={{ opacity: 0, scale: 0.8 }} // Start 
+                                        animate={{ opacity: 1, scale: 1 }}   // Visible state
+                                        exit={{ opacity: 0, scale: 0.5 }}    // End (removal)
+                                        transition={{ duration: 0.3 }}       // Duration
                                         className="photo-tile position-relative"
-                                        style={{ width: '100px', height: '100px' }}
+                                        style={{ 
+                                            width: '100px', 
+                                            height: '100px', 
+                                            cursor: 'grab',
+                                            border: dragOverIndex === index ? '2px solid #0d6efd' : 'none',
+                                            borderRadius: '0.375rem' 
+                                        }}
+                                        whileDrag={{ cursor: 'grabbing' }}
                                     >
                                         <img 
                                             src={item.preview} 
                                             alt="preview" 
                                             className="rounded border shadow-sm w-100 h-100"
-                                            style={{ objectFit: 'cover' }}
+                                            style={{ objectFit: 'cover', pointerEvents: 'none' }}
                                         />
+
+                                        <div className="hover-overlay position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-dark bg-opacity-10"
+                                            style={{ pointerEvents: 'none' }}>
+                                            <i className="bi bi-arrows-move text-white fs-3 drop-shadow"></i>
+                                        </div>
+
                                         <button
                                             type="button"
                                             className="btn btn-danger btn-sm position-absolute top-0 end-0 rounded-circle p-0 d-flex align-items-center justify-content-center"
-                                            style={{ width: '20px', height: '20px', transform: 'translate(30%, -30%)' }}
-                                            onClick={() => removePhotoById(item.id)}
+                                            style={{ width: '20px', height: '20px', transform: 'translate(30%, -30%)', zIndex: 10 }}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                removePhotoById(item.id)
+                                            }}
                                         >
                                             <span style={{ fontSize: '12px', lineHeight: 1 }}>&times;</span>
                                         </button>
+
+                                        {/* Photo number */}
+                                        <span className="position-absolute bottom-0 start-0 badge bg-dark bg-opacity-50" style={{fontSize: '9px', margin: '2px'}}>
+                                            {index + 1}
+                                        </span>
                                     </motion.div>
                                 ))}
 

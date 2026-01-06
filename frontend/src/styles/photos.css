@@ -3,3 +3,16 @@
   height: 100px;
   flex-shrink: 0;
 }
+
+.photo-tile .hover-overlay {
+    opacity: 0;
+    transition: opacity 0.2s ease-in-out;
+}
+
+.photo-tile:hover .hover-overlay {
+    opacity: 1;
+}
+
+.drop-shadow {
+    filter: drop-shadow(0 0 3px rgba(0,0,0,0.8));
+}
