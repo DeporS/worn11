@@ -43,13 +43,13 @@ class UserKitSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'user', 
             # Read-only fields
-            'kit', 'images', 'condition_display', 'technology_display', 'final_value', 'size_display',
+            'kit', 'images', 'condition_display', 'technology_display', 'final_value', 'size_display', 'added_at',
             # Write-only fields
             'team_name', 'season', 'kit_type',
             # Modifiable fields
             'condition', 'shirt_technology', 'size', 'for_sale', 'manual_value'
         ]
-        read_only_fields = ['user', 'final_value', 'kit']
+        read_only_fields = ['user', 'final_value', 'kit', 'images', 'condition_display', 'technology_display', 'size_display', 'added_at']
     
     # Override create method to handle nested kit creation
     def create(self, validated_data):

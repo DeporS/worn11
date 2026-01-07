@@ -369,8 +369,17 @@ const AddShirtFormPage = () => {
                         <div className="d-flex justify-content-between align-items-center mb-2">
                             <label className="form-label fw-bold m-0">Photos ({selectedFiles.length}/{MAX_PHOTOS})</label>
                             {!isPro && (
-                                <small className="text-primary" style={{cursor: 'pointer'}} onClick={() => navigate('/get-pro')}>
-                                    Need more? Go PRO 💎
+                                <small
+                                    className="text-primary"
+                                >
+                                    <a 
+                                        href="/get-pro" 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="pro-link"
+                                    >
+                                        Need more? Go PRO 💎
+                                    </a>
                                 </small>
                             )}
                         </div>
@@ -387,7 +396,7 @@ const AddShirtFormPage = () => {
 
                         {/* Container for tiles */}
                         <div
-                            className="d-flex flex-wrap"
+                            className="d-flex flex-wrap align-items-start"
                             style={{ gap: '16px' }}
                         >
                             <AnimatePresence mode="popLayout">
@@ -475,16 +484,23 @@ const AddShirtFormPage = () => {
 
                                 {/* Locked slots for FREE users */}
                                 {!isPro && selectedFiles.length >= 5 && (
-                                    <motion.div 
+                                    <motion.a
+                                        href="/get-pro"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
                                         layout
-                                        key="lock-photo-btn"
-                                        className="rounded border border-2 d-flex flex-column align-items-center justify-content-center text-muted bg-light opacity-50"
-                                        style={{ width: '100px', height: '100px', cursor: 'pointer', borderStyle: 'dashed' }}
-                                        onClick={() => navigate('/get-pro')}
-                                    >
-                                        <i className="bi bi-lock-fill fs-3 text-warning"></i>
-                                        <small style={{ fontSize: '10px' }}>Unlock PRO</small>
-                                    </motion.div>
+                                        className="text-decoration-none"
+                                        >
+                                        <motion.div 
+                                            layout
+                                            key="lock-photo-btn"
+                                            className="rounded border border-2 d-flex flex-column align-items-center justify-content-center text-muted bg-light opacity-50"
+                                            style={{ width: '100px', height: '100px', cursor: 'pointer', borderStyle: 'dashed' }}
+                                        >
+                                            <i className="bi bi-lock-fill fs-3 text-warning"></i>
+                                            <small style={{ fontSize: '10px' }}>Unlock PRO</small>
+                                        </motion.div>
+                                    </motion.a>
                                 )}
 
                             </AnimatePresence>

@@ -74,6 +74,15 @@ const KitCard = ({ item }) => {
                     <button className="btn btn-outline-danger btn-sm">
                         <i className="bi bi-trash"></i>
                     </button> */}
+
+                    <small className="text-muted" style={{ fontSize: '0.75rem' }}>
+                        <i className="bi bi-clock me-1"></i>
+                        {new Date(item.added_at).toLocaleDateString('en-GB', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                        })}
+                    </small>
                 </div>
                 
             </div>

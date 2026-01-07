@@ -12,7 +12,12 @@ class UserKitImageInline(admin.TabularInline):
     extra = 1 # Number of extra forms to display
 
 class UserKitAdmin(admin.ModelAdmin):
-    list_display = ('user', 'kit', 'size', 'condition', 'shirt_technology', 'final_value', 'for_sale')
+    list_display = ('user', 'kit', 'size', 'condition', 'shirt_technology', 'final_value', 'for_sale', 'added_at')
+    list_filter = ('size', 'condition', 'shirt_technology', 'for_sale', 'added_at')
+    search_fields = ('user__username', 'kit__team__name', 'kit__season', 'kit__kit_type')
+
+    readonly_fields = ('final_value', 'added_at')
+
     inlines = [UserKitImageInline] # Include the inline images
 
 class MergeTeamForm(forms.Form):

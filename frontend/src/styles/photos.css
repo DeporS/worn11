@@ -16,3 +16,16 @@
 .drop-shadow {
     filter: drop-shadow(0 0 3px rgba(0,0,0,0.8));
 }
+
+.pro-link{
+    color: inherit;
+    text-decoration: none;
+    cursor: pointer;
+    font-weight: 500;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.pro-link:hover {
+    opacity: 0.85;
+    transform: translateY(-1px);
+}
