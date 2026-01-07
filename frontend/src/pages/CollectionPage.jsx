@@ -34,6 +34,9 @@ const CollectionPage = () => {
       });
   };
 
+
+
+
   return (
     <div className="container py-5">
       <header className="mb-5 text-center">
@@ -60,7 +63,10 @@ const CollectionPage = () => {
       <div className="row g-4">
         {kits.map(item => (
           <div key={item.id} className="col-12 col-md-6 col-lg-4">
-            <KitCard item={item} />
+            <KitCard 
+              item={item} 
+              
+            />
           </div>
         ))}
 

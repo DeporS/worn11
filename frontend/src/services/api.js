@@ -43,6 +43,16 @@ export const addKitToCollection = async (fromData) => {
     } catch (error) {
         throw error;
     }
-}
+};
+
+// Function to delete a kit from the user's collection
+export const deleteKitFromCollection = async (kitId) => {
+    try {
+        const response = await api.delete(`/my-collection/${kitId}/`);
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+};
 
 export default api;

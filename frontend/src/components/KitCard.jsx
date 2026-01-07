@@ -1,8 +1,42 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { deleteKitFromCollection } from '../services/api';
+import { useState } from 'react';
+import Swal from 'sweetalert2';
 
-const KitCard = ({ item }) => {
+const KitCard = ({ item, onDeleteSuccess }) => {
     const navigate = useNavigate();
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    const handleDeleteClick = async () => {
+        Swal.fire({
+            title: 'Are you sure?',
+            text: "You won't be able to revert this!",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc3545', 
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Yes, delete it'
+        }).then(async (result) => {
+            if (result.isConfirmed) {
+                try {
+                    setIsDeleting(true);
+                    await deleteKitFromCollection(item.id);
+                    
+                    Swal.fire(
+                        'Deleted!',
+                        'Your kit has been removed.',
+                        'success'
+                    );
+
+                    if (onDeleteSuccess) onDeleteSuccess(item.id);
+                } catch (error) {
+                    setIsDeleting(false);
+                    Swal.fire('Error!', 'Something went wrong.', 'error');
+                }
+            }
+        });
+};
 
     const handleEditClick = () => {
         navigate(`/edit-kit/${item.id}`); // navigate to /edit-kit/15
@@ -60,21 +94,33 @@ const KitCard = ({ item }) => {
                 <span className="badge bg-success fs-6 mt-1">{item.final_value} USD</span>
 
                 {/* Edit and Delete Buttons */}
-                <div className="d-flex justify-content-between mt-3">
-                    
-                    {/* Edit Button */}
-                    <button 
-                        className="btn btn-outline-primary btn-sm" 
-                        onClick={handleEditClick}
-                    >
-                        <i className="bi bi-pencil-fill me-1"></i> Edit
-                    </button>
+                <div className="d-flex justify-content-between mt-3 align-items-center">
+                    <div>
+                        {/* Edit Button */}
+                        <button 
+                            className="btn btn-outline-primary btn-sm" 
+                            onClick={handleEditClick}
+                        >
+                            <i className="bi bi-pencil-fill me-1"></i> Edit
+                        </button>
 
-                    {/* Delete Button
-                    <button className="btn btn-outline-danger btn-sm">
-                        <i className="bi bi-trash"></i>
-                    </button> */}
-
+                        {/* Delete Button */}
+                        <button 
+                            className="btn btn-outline-danger btn-sm"
+                            onClick={handleDeleteClick}
+                            disabled={isDeleting} // Block button while deleting
+                        >
+                            {isDeleting ? (
+                                <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                            ) : (
+                                <>
+                                    <i className="bi bi-trash-fill me-1"></i> Delete
+                                </>
+                            )}
+                        </button>
+                    </div>
+                        
+                    {/* Added At */}
                     <small className="text-muted" style={{ fontSize: '0.75rem' }}>
                         <i className="bi bi-clock me-1"></i>
                         {new Date(item.added_at).toLocaleDateString('en-GB', {

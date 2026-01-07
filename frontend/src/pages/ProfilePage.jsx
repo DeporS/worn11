@@ -28,6 +28,11 @@ const ProfilePage = ({ user }) => {
 
     if (!user) return <div className="text-center mt-5">Please log in to view your profile.</div>;
 
+    // Handle deletion of a kit from the collection
+    const handleDeleteSuccess = (deletedKitId) => {
+        setMyKits(prevKits => prevKits.filter(item => item.id !== deletedKitId));
+    };
+
     return (
         <div className="container py-5">
       {/* Profile headline */}
@@ -54,7 +59,7 @@ const ProfilePage = ({ user }) => {
         <div className="row g-4">
             {myKits.map(item => (
             <div key={item.id} className="col-12 col-md-6 col-lg-4">
-                <KitCard item={item} />
+                <KitCard item={item} onDeleteSuccess={handleDeleteSuccess} />
                 {/* EDIT / DELETE WILL BE HERE */}
             </div>
             ))}
