@@ -2,6 +2,7 @@ from rest_framework import serializers
 from .models import Team, Kit, UserKit, UserKitImage, User
 from django.contrib.auth.models import User
 from dj_rest_auth.serializers import UserDetailsSerializer
+import json
 
 # Team Serializer
 class TeamSerializer(serializers.ModelSerializer):
@@ -37,6 +38,13 @@ class UserKitSerializer(serializers.ModelSerializer):
     team_name = serializers.CharField(write_only=True)
     season = serializers.CharField(write_only=True)
     kit_type = serializers.CharField(write_only=True)
+    new_images = serializers.ListField(
+        child=serializers.ImageField(), write_only=True, required=False
+    )
+    deleted_images = serializers.ListField(
+        child=serializers.IntegerField(), write_only=True, required=False
+    )
+    images_order = serializers.CharField(write_only=True, required=False)
 
     class Meta:
         model = UserKit
@@ -45,7 +53,7 @@ class UserKitSerializer(serializers.ModelSerializer):
             # Read-only fields
             'kit', 'images', 'condition_display', 'technology_display', 'final_value', 'size_display', 'added_at',
             # Write-only fields
-            'team_name', 'season', 'kit_type',
+            'team_name', 'season', 'kit_type', 'new_images', 'deleted_images', 'images_order',
             # Modifiable fields
             'condition', 'shirt_technology', 'size', 'for_sale', 'manual_value'
         ]
@@ -75,6 +83,38 @@ class UserKitSerializer(serializers.ModelSerializer):
                     UserKitImage.objects.create(user_kit=user_kit, image=image_data)
 
         return user_kit
+    
+    def update(self, instance, validated_data):
+
+        images_order_json = validated_data.pop('images_order', None)
+        # Wyciągamy dane o zdjęciach
+        new_images = validated_data.pop('new_images', [])
+        deleted_images_ids = validated_data.pop('deleted_images', [])
+
+        # 1. Usuwanie wskazanych zdjęć
+        if deleted_images_ids:
+            # Upewniamy się, że usuwamy zdjęcia tylko z tego konkretnego zestawu (security)
+            instance.images.filter(id__in=deleted_images_ids).delete()
+
+        # 2. Dodawanie nowych zdjęć
+        for image in new_images:
+            UserKitImage.objects.create(user_kit=instance, image=image)
+        
+        # AKTUALIZACJA KOLEJNOŚCI
+        if images_order_json:
+            try:
+                order_list = json.loads(images_order_json) # Zamiana stringa "[1, 5, 2]" na listę [1, 5, 2]
+                
+                # Iterujemy po liście i aktualizujemy pole 'order' w bazie
+                for index, img_id in enumerate(order_list):
+                    # Upewniamy się, że zdjęcie należy do tego UserKit (security!)
+                    instance.images.filter(id=img_id).update(order=index)
+                    
+            except json.JSONDecodeError:
+                pass # Ignorujemy błędy parsowania
+
+        # 3. Standardowa aktualizacja reszty pól (Team, Size itp.)
+        return super().update(instance, validated_data)
 
 # User serializer
 class UserSerializer(serializers.ModelSerializer):

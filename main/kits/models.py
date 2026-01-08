@@ -156,6 +156,10 @@ class UserKitImage(models.Model):
     user_kit = models.ForeignKey(UserKit, on_delete=models.CASCADE, related_name='images')
     image = models.ImageField(upload_to='user_kits/')
     created_at = models.DateTimeField(auto_now_add=True)
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['order']  
     
     def __str__(self):
         return f"Image for {self.user_kit}"
