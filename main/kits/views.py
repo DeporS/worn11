@@ -13,7 +13,7 @@ class MyCollectionAPI(generics.ListCreateAPIView):
 
     def get_queryset(self):
         # Return only kits of the logged-in user
-        return UserKit.objects.filter(user=self.request.user).select_related('kit', 'kit__team')
+        return UserKit.objects.filter(user=self.request.user).select_related('kit', 'kit__team').order_by('-added_at')
 
     def perform_create(self, serializer):
         # Automatically assign the logged-in user on save
@@ -37,7 +37,7 @@ class UserCollectionAPI(generics.ListAPIView):
         username = self.kwargs['username']
 
         # Return kits of the specified user
-        return UserKit.objects.filter(user__username=username).select_related('kit', 'kit__team')
+        return UserKit.objects.filter(user__username=username).select_related('kit', 'kit__team').order_by('-added_at')
 
 # Endpoint: Catalog of all available kits (e.g., for selection when adding)
 class KitCatalogAPI(generics.ListAPIView):
