@@ -65,4 +65,11 @@ export const getUserStats = async (username) => {
     }
 };
 
+// Search users by username
+export const searchUsers = async (query) => {
+    // Query example: /users/search/?q=messi
+    const response = await api.get(`/users/search/?q=${query}`);
+    return response.data;
+};
+
 export default api;

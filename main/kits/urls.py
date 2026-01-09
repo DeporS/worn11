@@ -7,6 +7,7 @@ from .views import (
     KitOptionsView,
     TeamSearchAPI,
     UserCollectionStatsAPI,
+    UserSearchAPI,
 )
 from .views_auth import GoogleLogin
 
@@ -20,4 +21,5 @@ urlpatterns = [
     path('options/', KitOptionsView.as_view(), name='kit-options'),
     path('teams/search/', TeamSearchAPI.as_view(), name='team-search'),
     path('user-stats/<str:username>/', UserCollectionStatsAPI.as_view(), name='user-stats'),
+    path('users/search/', UserSearchAPI.as_view(), name='user-search'),
 ]

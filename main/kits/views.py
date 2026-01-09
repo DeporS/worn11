@@ -1,11 +1,12 @@
 from rest_framework import generics, permissions
 from rest_framework.permissions import IsAuthenticated
 from .models import UserKit, Kit, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team
-from .serializers import UserKitSerializer, KitSerializer, TeamSerializer
+from .serializers import UserKitSerializer, KitSerializer, TeamSerializer, UserSearchSerializer
 from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db.models import Sum, Count
+from django.contrib.auth.models import User
 
 # Endpoint: My collection + adding new kits
 class MyCollectionAPI(generics.ListCreateAPIView):
@@ -87,3 +88,19 @@ class UserCollectionStatsAPI(APIView):
             "total_value": stats['total_value'] or 0,
             "total_kits": stats['total_kits'] or 0
         })
+
+# Endpoint: User search
+class UserSearchAPI(generics.ListAPIView):
+    serializer_class = UserSearchSerializer
+    permission_classes = [permissions.AllowAny]
+
+    def get_queryset(self):
+        query = self.request.query_params.get('q', '')
+        if len(query) < 2:
+            return User.objects.none() # Don't search for very short queries
+
+        return User.objects.filter(
+            username__icontains=query # Search for username fragment (case-insensitive)
+        ).annotate(
+            kits_count=Count('collection') # Count kits for each user
+        ).order_by('-kits_count')[:10] # Limit to top 10 results

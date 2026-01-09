@@ -147,3 +147,11 @@ class CustomUserDetailsSerializer(UserDetailsSerializer):
             return obj.profile.is_pro
         except AttributeError:
             return False
+
+# User Search Serializer with kits count
+class UserSearchSerializer(serializers.ModelSerializer):
+    kits_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email', 'kits_count']
