@@ -338,6 +338,20 @@ const EditShirtFormPage = () => {
                                 <div className="mb-4">
                                     <div className="d-flex justify-content-between align-items-center mb-2">
                                         <label className="form-label fw-bold m-0">Photos ({galleryItems.length}/{MAX_PHOTOS})</label>
+                                        {!isPro && (
+                                            <small
+                                                className="text-primary"
+                                            >
+                                                <a 
+                                                    href="/get-pro" 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer"
+                                                    className="pro-link"
+                                                >
+                                                    Need more? Go PRO 💎
+                                                </a>
+                                            </small>
+                                        )}
                                     </div>
 
                                     <input type="file" ref={fileInputRef} className="d-none" accept="image/*" multiple onChange={handleFileSelect} />
