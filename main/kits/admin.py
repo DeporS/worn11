@@ -53,22 +53,35 @@ def merge_teams_action(modeladmin, request, queryset):
 
 # Register in admin
 class TeamAdmin(admin.ModelAdmin):
-    list_display = ['name', 'is_verified', 'kits_count']
+    list_display = ['id', 'name', 'kits_in_collections_count', 'kits_definitions_count']
+
     list_filter = ['is_verified']
+
     search_fields = ['name']
+
     actions = [merge_teams_action]
 
-    # Count of kits related to the team
-    def kits_count(self, obj):
-        return obj.kits.count()
-    
-    kits_count.short_description = 'Kits in DB' # Column name
-    kits_count.admin_order_field = 'kits_count' # Allow sorting by this field
-    
-    # Optimize database query
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        return queryset.annotate(kits_count=Count('kits'))
+        # Annotate dodaje wirtualne kolumny do zapytania SQL
+        queryset = queryset.annotate(
+            # Policz, ile razy ten team występuje w UserKit (przez relację kit -> userkit)
+            _user_kits_count=Count('kits__owned_by', distinct=True),
+            
+            # Opcjonalnie: Policz, ile mamy definicji koszulek tego klubu w bazie
+            _definitions_count=Count('kits', distinct=True)
+        )
+        return queryset
+    
+    # Metoda wyświetlająca liczbę koszulek w kolekcjach użytkowników
+    @admin.display(description='In User Collections', ordering='_user_kits_count')
+    def kits_in_collections_count(self, obj):
+        return obj._user_kits_count
+
+    # Metoda wyświetlająca liczbę definicji (to co widziałeś wcześniej jako 5)
+    @admin.display(description='Kit Definitions (DB)', ordering='_definitions_count')
+    def kits_definitions_count(self, obj):
+        return obj._definitions_count
 
 # User Profile Inline
 class ProfileInline(admin.StackedInline):

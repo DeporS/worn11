@@ -87,33 +87,33 @@ class UserKitSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
 
         images_order_json = validated_data.pop('images_order', None)
-        # Wyciągamy dane o zdjęciach
+        # photos data
         new_images = validated_data.pop('new_images', [])
         deleted_images_ids = validated_data.pop('deleted_images', [])
 
-        # 1. Usuwanie wskazanych zdjęć
+        # Deleting specified photos
         if deleted_images_ids:
-            # Upewniamy się, że usuwamy zdjęcia tylko z tego konkretnego zestawu (security)
+            # Ensure we only delete photos from this specific set (security)
             instance.images.filter(id__in=deleted_images_ids).delete()
 
-        # 2. Dodawanie nowych zdjęć
+        # Adding new photos
         for image in new_images:
             UserKitImage.objects.create(user_kit=instance, image=image)
         
-        # AKTUALIZACJA KOLEJNOŚCI
+        # UPDATING ORDER OF IMAGES
         if images_order_json:
             try:
-                order_list = json.loads(images_order_json) # Zamiana stringa "[1, 5, 2]" na listę [1, 5, 2]
+                order_list = json.loads(images_order_json) # Converting string "[1, 5, 2]" to list [1, 5, 2]
                 
-                # Iterujemy po liście i aktualizujemy pole 'order' w bazie
+                # Iterating over the list and updating the 'order' field in the database
                 for index, img_id in enumerate(order_list):
-                    # Upewniamy się, że zdjęcie należy do tego UserKit (security!)
+                    # Ensuring the image belongs to this UserKit (security!)
                     instance.images.filter(id=img_id).update(order=index)
                     
             except json.JSONDecodeError:
-                pass # Ignorujemy błędy parsowania
+                pass # Ignoring parsing errors
 
-        # 3. Standardowa aktualizacja reszty pól (Team, Size itp.)
+        # Standard update of the remaining fields (Team, Size, etc.)
         return super().update(instance, validated_data)
 
 # User serializer

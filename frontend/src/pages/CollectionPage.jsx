@@ -31,7 +31,7 @@ const CollectionPage = () => {
           setError('An unexpected error occurred.');
         }
         setLoading(false);
-      });
+  });
   };
 
 
