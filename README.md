@@ -1,8 +1,5 @@
 # worn11
 
-messi
-mk02
-
 - Backend
 cd main -> source venv/bin/activate -> python manage.py runserver
 
