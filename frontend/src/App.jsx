@@ -57,6 +57,11 @@ function App() {
             element={user ? <ProfilePage user={user} /> : <Navigate to="/" />} 
           />
 
+          {/* User Profile Page */}
+          <Route path="/profile/:username" 
+            element={<ProfilePage user={user} />} 
+          />
+
           {/* Add Shirt Form Page */}
           <Route path="/add-kit"
             element={user ? <AddShirtFormPage /> : <Navigate to="/" />} 
