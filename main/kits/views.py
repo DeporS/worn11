@@ -5,6 +5,7 @@ from .serializers import UserKitSerializer, KitSerializer, TeamSerializer
 from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from django.db.models import Sum, Count
 
 # Endpoint: My collection + adding new kits
 class MyCollectionAPI(generics.ListCreateAPIView):
@@ -69,3 +70,20 @@ class TeamSearchAPI(generics.ListAPIView):
             name__icontains=query,
             is_verified=True
         )[:5] # Limit to 5 results
+
+# Endpoint: User's collection statistics
+class UserCollectionStatsAPI(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, username):
+        queryset = UserKit.objects.filter(user__username=username)
+
+        stats = queryset.aggregate(
+            total_value=Sum('final_value'), # Total collection value
+            total_kits=Count('id')  # Shirt count
+        )
+
+        return Response({
+            "total_value": stats['total_value'] or 0,
+            "total_kits": stats['total_kits'] or 0
+        })

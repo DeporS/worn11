@@ -55,4 +55,14 @@ export const deleteKitFromCollection = async (kitId) => {
     }
 };
 
+// Function to get user collection stats
+export const getUserStats = async (username) => {
+    try {
+        const response = await api.get(`/user-stats/${username}/`); 
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+};
+
 export default api;

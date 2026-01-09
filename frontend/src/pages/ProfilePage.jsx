@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
-import { getUserCollection } from '../services/api';
+import { getUserCollection, getUserStats } from '../services/api';
 import { Link } from 'react-router-dom';
 import KitCard from '../components/KitCard';
 
 const ProfilePage = ({ user }) => {
     const [myKits, setMyKits] = useState([]);
+    const [stats, setStats] = useState({ total_value: 0, total_kits: 0 });
+
     const [loading, setLoading] = useState(true);
     
+    // Fetch user's collection on mount (Can add pagination later)
     const fetchMyCollection = () => {
         if (user?.username) {
             setLoading(true);
@@ -22,15 +25,30 @@ const ProfilePage = ({ user }) => {
         }
     };
 
+    // Fetch stats on mount
+    const fetchStats = () => {
+        if (user?.username) {
+            getUserStats(user.username)
+                .then(res => setStats(res))
+                .catch(err => console.error(err));
+        }
+    };
+
     useEffect(() => {
-        fetchMyCollection();
-    }, [user]); // Do when user loads
+        if (user) {
+            setLoading(true);
+            // Fetch both collection and stats in parallel
+            Promise.all([fetchMyCollection(), fetchStats()])
+                .finally(() => setLoading(false));
+        }
+    }, [user]);
 
     if (!user) return <div className="text-center mt-5">Please log in to view your profile.</div>;
 
     // Handle deletion of a kit from the collection
     const handleDeleteSuccess = (deletedKitId) => {
         setMyKits(prevKits => prevKits.filter(item => item.id !== deletedKitId));
+        fetchStats(); // Refresh stats after deletion
     };
 
     return (
@@ -42,8 +60,13 @@ const ProfilePage = ({ user }) => {
             <p className="text-muted mb-0">{user.email}</p>
         </div>
         <div className="text-end">
-            <h3 className="text-primary fw-bold mb-0">{myKits.length}</h3>
-            <span className="small text-muted">Kits in collection</span>
+            <h3 className="text-primary fw-bold mb-0">{stats.total_kits}</h3>
+            <span className="small text-muted d-block">Kits in collection</span>
+
+            <h4 className="text-success fw-bold mb-0 mt-2">
+                ${stats.total_value.toLocaleString()} 
+            </h4>
+            <span className="small text-muted">Total Value</span>
         </div>
       </div>
 
