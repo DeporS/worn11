@@ -40,9 +40,6 @@ const EditShirtFormPage = () => {
     const [isPro, setIsPro] = useState(false); // User subscription status
     const MAX_PHOTOS = isPro ? 20 : 5;
 
-    // // New photos
-    // const [selectedFiles, setSelectedFiles] = useState([]);
-
     // UI States
     const [loading, setLoading] = useState(false);
     const [initialLoading, setInitialLoading] = useState(true); // Data loading state
@@ -161,33 +158,6 @@ const EditShirtFormPage = () => {
 
     const triggerFileInput = () => fileInputRef.current.click(); // Open file dialog
 
-    // Autocomplete Team Name
-    useEffect(() => {
-        if (isSelectionRef.current) {
-            isSelectionRef.current = false;
-            return;
-        }
-        if (teamName.length < 2) {
-            setSuggestions([]);
-            return;
-        }
-        const timerId = setTimeout(() => {
-            api.get(`teams/search/?q=${teamName}`)
-                .then(res => {
-                    setSuggestions(res.data);
-                    setShowSuggestions(true);
-                })
-        }, 300);
-        return () => clearTimeout(timerId);
-    }, [teamName]);
-
-    const handleSuggestionClick = (team) => {
-        isSelectionRef.current = true;
-        setTeamName(team.name);
-        setSuggestions([]);
-        setShowSuggestions(false);
-    };
-
     // SAVING CHANGES
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -216,7 +186,7 @@ const EditShirtFormPage = () => {
         // Append new photos
         galleryItems.forEach((item) => {
             if (!item.isExisting && item.file) {
-                formData.append('new_images', item.file); // change 'new_images' if backend expects a different key
+                formData.append('new_images', item.file);
             }
         });
 
@@ -242,6 +212,33 @@ const EditShirtFormPage = () => {
             setError('Something went wrong while updating.');
             setLoading(false);
         }
+    };
+
+    // Autocomplete Team Name
+    useEffect(() => {
+        if (isSelectionRef.current) {
+            isSelectionRef.current = false;
+            return;
+        }
+        if (teamName.length < 2) {
+            setSuggestions([]);
+            return;
+        }
+        const timerId = setTimeout(() => {
+            api.get(`teams/search/?q=${teamName}`)
+                .then(res => {
+                    setSuggestions(res.data);
+                    setShowSuggestions(true);
+                })
+        }, 300);
+        return () => clearTimeout(timerId);
+    }, [teamName]);
+
+    const handleSuggestionClick = (team) => {
+        isSelectionRef.current = true;
+        setTeamName(team.name);
+        setSuggestions([]);
+        setShowSuggestions(false);
     };
 
     if (initialLoading) return <div className="text-center mt-5">Loading kit details...</div>;
@@ -349,7 +346,7 @@ const EditShirtFormPage = () => {
                                         <AnimatePresence mode="popLayout">
                                             {galleryItems.map((item, index) => (
                                                 <motion.div
-                                                    key={item.id} // Używamy ID (z bazy lub nanoid)
+                                                    key={item.id} // id (from database or nanoid)
                                                     layout
                                                     draggable
                                                     onDragStart={(e) => {
@@ -369,7 +366,7 @@ const EditShirtFormPage = () => {
                                                     animate={{ opacity: 1, scale: 1 }}
                                                     exit={{ opacity: 0, scale: 0.5 }}
                                                     transition={{ duration: 0.3 }}
-                                                    className="photo-tile position-relative overflow-hidden"
+                                                    className="photo-tile position-relative"
                                                     style={{
                                                         width: '100px', height: '100px', cursor: 'grab',
                                                         border: dragOverIndex === index ? '2px solid #0d6efd' : 'none',
@@ -384,14 +381,31 @@ const EditShirtFormPage = () => {
                                                         <i className="bi bi-arrows-move text-white fs-3 drop-shadow"></i>
                                                     </div>
 
-                                                    <button type="button" className="btn btn-danger btn-sm position-absolute top-0 end-0 rounded-circle p-0 d-flex align-items-center justify-content-center"
-                                                        style={{ width: '20px', height: '20px', transform: 'translate(30%, -30%)', zIndex: 10, cursor: 'pointer' }}
-                                                        onClick={(e) => { e.stopPropagation(); handleRemovePhoto(item.id); }}>
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-danger btn-sm position-absolute top-0 end-0 rounded-circle p-0 d-flex align-items-center justify-content-center"
+                                                        style={{ width: '20px', height: '20px', transform: 'translate(30%, -30%)', zIndex: 10 }}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleRemovePhoto(item.id)
+                                                        }}
+                                                    >
                                                         <span style={{ fontSize: '12px', lineHeight: 1 }}>&times;</span>
                                                     </button>
 
-                                                    {/* Badge z info czy to stare czy nowe */}
-                                                    {item.isExisting && <span className="position-absolute bottom-0 end-0 badge bg-info bg-opacity-75" style={{ fontSize: '8px', margin: '2px' }}>OLD</span>}
+                                                    {/* Info old or new */}
+                                                    <span
+                                                        className={`position-absolute bottom-0 end-0 badge ${item.isExisting ? 'bg-info' : 'bg-success'
+                                                            } bg-opacity-75`}
+                                                        style={{ fontSize: '8px', margin: '2px' }}
+                                                    >
+                                                        {item.isExisting ? 'OLD' : 'NEW'}
+                                                    </span>
+
+                                                    {/* Photo number */}
+                                                    <span className="position-absolute bottom-0 start-0 badge bg-dark bg-opacity-50" style={{ fontSize: '9px', margin: '2px' }}>
+                                                        {index + 1}
+                                                    </span>
                                                 </motion.div>
                                             ))}
 
