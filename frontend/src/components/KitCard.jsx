@@ -95,7 +95,10 @@ const KitCard = ({ item, onDeleteSuccess }) => {
 
                 {/* Edit and Delete Buttons */}
                 <div className="d-flex justify-content-between mt-3 align-items-center">
+                    
                     <div className="gap-2 d-flex">
+                        {item.is_owner && (
+                            <>
                         {/* Edit Button */}
                         <button
                             className="btn btn-outline-primary btn-sm"
@@ -118,6 +121,8 @@ const KitCard = ({ item, onDeleteSuccess }) => {
                                 </>
                             )}
                         </button>
+                            </>
+                        )}
                     </div>
 
                     {/* Added At */}

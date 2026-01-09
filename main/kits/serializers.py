@@ -46,19 +46,29 @@ class UserKitSerializer(serializers.ModelSerializer):
     )
     images_order = serializers.CharField(write_only=True, required=False)
 
+    # Not in the model
+    is_owner = serializers.SerializerMethodField()
+
     class Meta:
         model = UserKit
         fields = [
             'id', 'user', 
             # Read-only fields
-            'kit', 'images', 'condition_display', 'technology_display', 'final_value', 'size_display', 'added_at',
+            'kit', 'images', 'condition_display', 'technology_display', 'final_value', 'size_display', 'added_at', 'is_owner',
             # Write-only fields
             'team_name', 'season', 'kit_type', 'new_images', 'deleted_images', 'images_order',
             # Modifiable fields
             'condition', 'shirt_technology', 'size', 'for_sale', 'manual_value'
         ]
-        read_only_fields = ['user', 'final_value', 'kit', 'images', 'condition_display', 'technology_display', 'size_display', 'added_at']
+        read_only_fields = ['user', 'final_value', 'kit', 'images', 'condition_display', 'technology_display', 'size_display', 'added_at', 'is_owner']
     
+    # Getting is_owner field
+    def get_is_owner(self, obj):
+        request = self.context.get('request', None)
+        if request and hasattr(request, 'user'):
+            return obj.user == request.user
+        return False
+
     # Override create method to handle nested kit creation
     def create(self, validated_data):
         team_name = validated_data.pop('team_name')

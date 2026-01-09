@@ -36,7 +36,7 @@ const ProfilePage = ({ user }) => {
         })
         .finally(() => setLoading(false));
 
-    }, [profileUsername]); // Odpalaj zawsze, gdy zmieni się nick w URL
+    }, [profileUsername, user?.username]);
 
     if (!profileUsername) return <div className="text-center mt-5">Please log in.</div>;
     if (loading) return <div className="text-center mt-5"><div className="spinner-border text-primary"></div></div>;
@@ -44,7 +44,6 @@ const ProfilePage = ({ user }) => {
 
     const handleDeleteSuccess = (deletedKitId) => {
         setMyKits(prev => prev.filter(item => item.id !== deletedKitId));
-        // Refresh stats (opcjonalnie, można też ręcznie odjąć od stanu stats)
         getUserStats(profileUsername).then(setStats);
     };
 
