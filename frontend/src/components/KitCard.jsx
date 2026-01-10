@@ -77,8 +77,8 @@ const KitCard = ({ item, onDeleteSuccess }) => {
                 {/* Team Name && Estimated Value */}
                 <div className="d-flex justify-content-between align-items-center mb-3 mt-0">
                     <div className="d-flex align-items-center" style={{ gap: '8px' }}>
+                        {item.kit.team.logo && <img src={item.kit.team.logo} alt="Team Logo" style={{ height: '20px', marginTop: '2px' }} />}
                         <h5 className="card-title mb-0" title="Team">{item.kit.team.name}</h5>
-                        <img src={item.kit.team.logo} alt="Team Logo" style={{ height: '20px', marginTop: '2px' }} />
                     </div>
                     <span className="badge-outline" title="Estimated Value">${item.final_value}</span>
                 </div>
