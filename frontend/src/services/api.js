@@ -31,10 +31,10 @@ export const getUserCollection = async (username) => {
     }
 };
 
-// Function to add a kit to the user's collection
-export const addKitToCollection = async (fromData) => {
+// Add a kit to the user's collection
+export const addKitToCollection = async (formData) => {
     try {
-        const response = await api.post('/my-collection/', fromData, {
+        const response = await api.post('/my-collection/', formData, {
             headers: {
                 'Content-Type': 'multipart/form-data',
             },
@@ -45,7 +45,7 @@ export const addKitToCollection = async (fromData) => {
     }
 };
 
-// Function to delete a kit from the user's collection
+// Delete a kit from the user's collection
 export const deleteKitFromCollection = async (kitId) => {
     try {
         const response = await api.delete(`/my-collection/${kitId}/`);
@@ -70,6 +70,20 @@ export const searchUsers = async (query) => {
     // Query example: /users/search/?q=messi
     const response = await api.get(`/users/search/?q=${query}`);
     return response.data;
+};
+
+// Update user profile
+export const updateUserProfile = async (formData) => {
+    try {
+        const response = await api.put('/profile/update/', formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+            },
+        });
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
 };
 
 export default api;

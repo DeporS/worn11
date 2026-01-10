@@ -1,12 +1,23 @@
-from rest_framework import generics, permissions
+from rest_framework import generics, permissions, status
 from rest_framework.permissions import IsAuthenticated
-from .models import UserKit, Kit, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team
-from .serializers import UserKitSerializer, KitSerializer, TeamSerializer, UserSearchSerializer
-from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser
+
+from django.shortcuts import get_object_or_404
 from django.db.models import Sum, Count
 from django.contrib.auth.models import User
+
+from .models import UserKit, Kit, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile
+from .serializers import UserKitSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer
+
+# Current user
+class CurrentUserAPI(generics.RetrieveAPIView):
+    serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        return self.request.user
 
 # Endpoint: My collection + adding new kits
 class MyCollectionAPI(generics.ListCreateAPIView):
@@ -104,3 +115,13 @@ class UserSearchAPI(generics.ListAPIView):
         ).annotate(
             kits_count=Count('collection') # Count kits for each user
         ).order_by('-kits_count')[:10] # Limit to top 10 results
+
+# Endpoint: Update user profile
+class UpdateProfileView(generics.RetrieveUpdateAPIView):
+    serializer_class = ProfileSerializer
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get_object(self):
+        # Return the profile of the currently authenticated user
+        return self.request.user.profile

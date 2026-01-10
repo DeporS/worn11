@@ -1,4 +1,6 @@
 from django.urls import path
+from django.conf import settings
+from django.conf.urls.static import static
 from .views import (
     MyCollectionAPI, 
     MyCollectionDetailAPI,
@@ -8,6 +10,8 @@ from .views import (
     TeamSearchAPI,
     UserCollectionStatsAPI,
     UserSearchAPI,
+    UpdateProfileView,
+    CurrentUserAPI,
 )
 from .views_auth import GoogleLogin
 
@@ -22,4 +26,9 @@ urlpatterns = [
     path('teams/search/', TeamSearchAPI.as_view(), name='team-search'),
     path('user-stats/<str:username>/', UserCollectionStatsAPI.as_view(), name='user-stats'),
     path('users/search/', UserSearchAPI.as_view(), name='user-search'),
+    path('profile/update/', UpdateProfileView.as_view(), name='update-profile'),
+    path('auth/user/', CurrentUserAPI.as_view(), name='current-user'),
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

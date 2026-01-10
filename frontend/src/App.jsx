@@ -4,6 +4,7 @@ import CollectionPage from './pages/CollectionPage';
 import ProfilePage from './pages/ProfilePage';
 import AddShirtFormPage from './pages/AddShirtFormPage';
 import EditShirtFormPage from './pages/EditShirtFormPage';
+import EditProfilePage from './pages/EditProfilePage';
 import NavBar from './components/NavBar';
 import api from './services/api';
 import './index.css';
@@ -61,6 +62,17 @@ function App() {
           <Route path="/profile/:username" 
             element={<ProfilePage user={user} />} 
           />
+
+          {/* Edit Profile Page */}
+          <Route 
+                path="/profile/edit" 
+                element={
+                    <EditProfilePage 
+                        user={user} // User logged in
+                        setUser={setUser} // Function to update user state
+                    />
+                } 
+            />
 
           {/* Add Shirt Form Page */}
           <Route path="/add-kit"

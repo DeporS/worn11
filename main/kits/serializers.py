@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Team, Kit, UserKit, UserKitImage, User
+from .models import Team, Kit, UserKit, UserKitImage, User, Profile
 from django.contrib.auth.models import User
 from dj_rest_auth.serializers import UserDetailsSerializer
 import json
@@ -126,12 +126,21 @@ class UserKitSerializer(serializers.ModelSerializer):
         # Standard update of the remaining fields (Team, Size, etc.)
         return super().update(instance, validated_data)
 
+# Profile Serializer
+class ProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Profile
+        fields = ['avatar', 'bio', 'is_pro', 'is_moderator']
+        read_only_fields = ['is_pro', 'is_moderator']
+
 # User serializer
 class UserSerializer(serializers.ModelSerializer):
+    # Nested profile serializer
+    profile = ProfileSerializer(read_only=True)
+
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'is_pro', 'is_moderator']
-        read_only_fields = ['is_pro', 'is_moderator']
+        fields = ['id', 'username', 'email', 'profile']
 
 # Custom User Details Serializer to include is_pro field
 class CustomUserDetailsSerializer(UserDetailsSerializer):
@@ -151,7 +160,8 @@ class CustomUserDetailsSerializer(UserDetailsSerializer):
 # User Search Serializer with kits count
 class UserSearchSerializer(serializers.ModelSerializer):
     kits_count = serializers.IntegerField(read_only=True)
+    avatar = serializers.ImageField(source='profile.avatar', read_only=True)
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'kits_count']
+        fields = ['id', 'username', 'email', 'kits_count', 'avatar']

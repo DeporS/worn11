@@ -20,6 +20,11 @@ class UserKitAdmin(admin.ModelAdmin):
 
     inlines = [UserKitImageInline] # Include the inline images
 
+class KitAdmin(admin.ModelAdmin):
+    list_display = ('team', 'season', 'kit_type', 'estimated_price')
+    list_filter = ('season', 'kit_type', 'team__is_verified')
+    search_fields = ('team__name', 'season', 'kit_type')
+
 class MergeTeamForm(forms.Form):
     # Form for selecting the destination team
     destination_team = forms.ModelChoiceField(queryset=Team.objects.all())
@@ -113,7 +118,7 @@ class CustomUserAdmin(UserAdmin):
 
 
 admin.site.register(Team, TeamAdmin)
-admin.site.register(Kit)
+admin.site.register(Kit, KitAdmin)
 admin.site.register(UserKit, UserKitAdmin)
 admin.site.unregister(User)
 admin.site.register(User, CustomUserAdmin)

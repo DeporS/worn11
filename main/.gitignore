@@ -5,4 +5,5 @@ db.sqlite3
 *.sqlite3
 media/user_kits/
 media/team_logos/
+media/profile_avatars/
 .env
