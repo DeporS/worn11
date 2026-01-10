@@ -183,10 +183,23 @@ const EditShirtFormPage = () => {
             formData.append('manual_value', '');
         }
 
-        // Append new photos
+        const fullOrder = [];
+        let newImageIndex = 0;
+
+        // iterate over galleryItems to build the order and append new images
         galleryItems.forEach((item) => {
-            if (!item.isExisting && item.file) {
+            if (item.isExisting) {
+                // If the photo exists, add its ID to the order
+                fullOrder.push(item.id);
+            } else if (item.file) {
+                // If it's a new photo:
+                // 1. Add the file to FormData
                 formData.append('new_images', item.file);
+                
+                // 2. In the order, save a placeholder, e.g. "new_0"
+                fullOrder.push(`new_${newImageIndex}`);
+                
+                newImageIndex++;
             }
         });
 
@@ -199,7 +212,12 @@ const EditShirtFormPage = () => {
             .filter(item => item.isExisting)
             .map(item => item.id);
 
-        formData.append('images_order', JSON.stringify(existingImagesOrder));
+        formData.append('images_order', JSON.stringify(fullOrder));
+
+        console.log("=== Sending to backend ===");
+        for (let pair of formData.entries()) {
+            console.log(pair[0] + ': ' + pair[1]);
+        }
 
         try {
             await api.patch(`/my-collection/${id}/`, formData, {

@@ -107,21 +107,41 @@ class UserKitSerializer(serializers.ModelSerializer):
             instance.images.filter(id__in=deleted_images_ids).delete()
 
         # Adding new photos
+        created_new_images = [] 
         for image in new_images:
-            UserKitImage.objects.create(user_kit=instance, image=image)
+            img_obj = UserKitImage.objects.create(user_kit=instance, image=image)
+            created_new_images.append(img_obj)
         
         # UPDATING ORDER OF IMAGES
         if images_order_json:
             try:
-                order_list = json.loads(images_order_json) # Converting string "[1, 5, 2]" to list [1, 5, 2]
+                order_list = json.loads(images_order_json) # Converting string to list 
                 
                 # Iterating over the list and updating the 'order' field in the database
-                for index, img_id in enumerate(order_list):
-                    # Ensuring the image belongs to this UserKit (security!)
-                    instance.images.filter(id=img_id).update(order=index)
+                for index, item in enumerate(order_list):
                     
+                    # A: Old photo (just an ID)
+                    if isinstance(item, int) or (isinstance(item, str) and item.isdigit()):
+                        instance.images.filter(id=item).update(order=index)
+
+                    # B: New photo (placeholder "new_X")
+                    elif isinstance(item, str) and item.startswith('new_'):
+                        try:
+                            # Parse "new_0" -> take what is after 'new_' -> int(0)
+                            new_img_idx = int(item.split('_')[1])
+                            
+                            # Check if such an index exists in our created_new_images list
+                            if 0 <= new_img_idx < len(created_new_images):
+                                # Retrieve the object from memory
+                                img_obj = created_new_images[new_img_idx]
+                                # Update its order
+                                img_obj.order = index
+                                img_obj.save()
+                        except (IndexError, ValueError):
+                            # Ignore errors if frontend sent something strange
+                            pass
             except json.JSONDecodeError:
-                pass # Ignoring parsing errors
+                pass
 
         # Standard update of the remaining fields (Team, Size, etc.)
         return super().update(instance, validated_data)
