@@ -3,6 +3,8 @@ import { getUserCollection, getUserStats } from '../services/api';
 import { Link, useParams } from 'react-router-dom';
 import KitCard from '../components/KitCard';
 
+import '../styles/profile.css';
+
 const ProfilePage = ({ user }) => {
     const { username } = useParams(); // Get username from URL params
 
@@ -49,50 +51,60 @@ const ProfilePage = ({ user }) => {
 
     return (
         <div className="container py-5">
-        {/* Profile headline */}
-        <div className="bg-white p-4 rounded shadow-sm mb-5 d-flex justify-content-between align-items-center">
-            <div>
-                <h2 className="fw-bold mb-0">@{profileUsername}</h2>
-                {isOwner && user?.email && (
-                    <p className="text-muted mb-0">{user.email}</p>
-                )}
-            </div>
-            <div className="text-end">
-                <h3 className="text-primary fw-bold mb-0">{stats.total_kits}</h3>
-                <span className="small text-muted d-block">Kits in collection</span>
-
-                <h4 className="text-success fw-bold mb-0 mt-2">
-                    ${stats.total_value.toLocaleString()} 
-                </h4>
-                <span className="small text-muted">Total Value</span>
-            </div>
-        </div>
-
-        {/* Add Kit Button */}
-        {isOwner && (
-            <Link to="/add-kit" className="btn btn-success mb-4">
-                + Add New Kit
-            </Link>
-        )}
-
-        {/* Shirt list */}
-        {loading ? (
-            <div className="text-center"><div className="spinner-border text-primary"></div></div>
-        ) : (
-            <div className="row g-4">
-                {myKits.map(item => (
-                    <div key={item.id} className="col-12 col-md-6 col-lg-4">
-                        <KitCard item={item} onDeleteSuccess={handleDeleteSuccess} />
+            {/* Profile headline */}
+            <div className="bg-white p-4 rounded shadow-sm mb-5 d-flex justify-content-between align-items-center">
+                <div>
+                    <div className="d-flex align-items-center gap-1">
+                        <h2 className="fw-bold mb-0">@{profileUsername}</h2>
+                        {isOwner && (
+                            <Link to="/profile/edit" className="btn edit-button" title="Edit Profile">
+                                ✏️
+                            </Link>
+                        )}
                     </div>
-                ))}
-                
-                {myKits.length === 0 && (
-                    <div className="text-center text-muted py-5 w-100">
-                        <p>{isOwner ? "You don't" : "This user doesn't"} have any kits yet.</p>
-                    </div>
-                )}
+                    
+                    {isOwner && user?.email && (
+                        <p className="text-muted mb-0">{user.email}</p>
+                    )}
+                </div>
+                <div className="text-end">
+                    <h3 className="text-primary fw-bold mb-0">{stats.total_kits}</h3>
+                    <span className="small text-muted d-block">Kits in collection</span>
+
+                    <h4 className="text-success fw-bold mb-0 mt-2">
+                        ${stats.total_value.toLocaleString()} 
+                    </h4>
+                    <span className="small text-muted">Total Value</span>
+                </div>
             </div>
-        )}
+
+            {/* Add Kit Button */}
+            {isOwner && (
+                <div className="d-flex justify-content-center my-5">
+                    <Link to="/add-kit" className="add-ghost">
+                        + Add kit
+                    </Link>
+                </div>
+            )}
+
+            {/* Shirt list */}
+            {loading ? (
+                <div className="text-center"><div className="spinner-border text-primary"></div></div>
+            ) : (
+                <div className="row g-4">
+                    {myKits.map(item => (
+                        <div key={item.id} className="col-12 col-md-6 col-lg-4">
+                            <KitCard item={item} onDeleteSuccess={handleDeleteSuccess} />
+                        </div>
+                    ))}
+                    
+                    {myKits.length === 0 && (
+                        <div className="text-center text-muted py-5 w-100">
+                            <p>{isOwner ? "You don't" : "This user doesn't"} have any kits yet.</p>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 };

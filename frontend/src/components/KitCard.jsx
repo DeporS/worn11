@@ -4,6 +4,8 @@ import { deleteKitFromCollection } from '../services/api';
 import { useState } from 'react';
 import Swal from 'sweetalert2';
 
+import '../styles/profile.css';
+
 const KitCard = ({ item, onDeleteSuccess }) => {
     const navigate = useNavigate();
     const [isDeleting, setIsDeleting] = useState(false);
@@ -72,46 +74,50 @@ const KitCard = ({ item, onDeleteSuccess }) => {
             </div>
 
             <div className="card-body">
-                {/* Team Name */}
-                <h5 className="card-title">{item.kit.team.name}</h5>
-
+                {/* Team Name && Estimated Value */}
+                <div className="d-flex justify-content-between align-items-center mb-3 mt-0">
+                    <h5 className="card-title mb-0" title="Team">{item.kit.team.name}</h5>
+                    <span className="badge-outline" title="Estimated Value">${item.final_value}</span>
+                </div>
+                
                 {/* Season & Kit Type */}
                 <div className="d-flex justify-content-between text-muted small mb-1 mt-1">
-                    <span>{item.kit.season}</span>
-                    <span>{item.kit.kit_type}</span>
+                    <span title="Season">{item.kit.season}</span>
+                    <span title="Kit Type">{item.kit.kit_type}</span>
                 </div>
 
                 {/* Technology & Size */}
                 <div className="d-flex justify-content-between text-muted small mb-1 mt-1">
-                    <span>{item.technology_display}</span>
-                    <span>{item.size}</span>
+                    <span title="Technology">{item.technology_display}</span>
+                    <span title="Size">{item.size}</span>
                 </div>
 
-                {/* Condition */}
-                <p className="card-text text-muted small mb-1 mt-1">{item.condition_display}</p>
-
-                {/* Final Value */}
-                <span className="badge bg-success fs-6 mt-1">{item.final_value} USD</span>
+                {/** Condition & FREE SPACE*/}
+                <div className="d-flex justify-content-between text-muted small mb-1 mt-1">
+                    <span title="Condition">{item.condition_display}</span>
+                </div>       
 
                 {/* Edit and Delete Buttons */}
-                <div className="d-flex justify-content-between mt-3 align-items-center">
+                <div className="d-flex justify-content-between mt-1 align-items-center">
                     
                     <div className="gap-2 d-flex">
                         {item.is_owner && (
                             <>
                         {/* Edit Button */}
                         <button
-                            className="btn btn-outline-primary btn-sm"
+                            className="btn btn-sm edit-button"
                             onClick={handleEditClick}
+                            title="Edit Kit"
                         >
                             ✏
                         </button>
 
                         {/* Delete Button */}
                         <button
-                            className="btn btn-outline-danger btn-sm"
+                            className="btn btn-sm edit-button"
                             onClick={handleDeleteClick}
                             disabled={isDeleting} // Block button while deleting
+                            title="Delete Kit"
                         >
                             {isDeleting ? (
                                 <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
