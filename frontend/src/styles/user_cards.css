@@ -1,0 +1,11 @@
+.user-card {
+    transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+
+.user-card:hover {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+.user-card-link:hover {
+    background-color: rgba(0, 0, 0, 0.03); /* neutralny hover */
+}
