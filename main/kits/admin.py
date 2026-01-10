@@ -5,7 +5,9 @@ from django.http import HttpResponseRedirect
 from django.db.models import Count
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.models import User
+
 from .models import Team, Kit, UserKit, UserKitImage, Profile
+from .forms import MergeTeamForm
 
 class UserKitImageInline(admin.TabularInline):
     model = UserKitImage
@@ -25,9 +27,6 @@ class KitAdmin(admin.ModelAdmin):
     list_filter = ('season', 'kit_type', 'team__is_verified')
     search_fields = ('team__name', 'season', 'kit_type')
 
-class MergeTeamForm(forms.Form):
-    # Form for selecting the destination team
-    destination_team = forms.ModelChoiceField(queryset=Team.objects.all())
 
 @admin.action(description='Merge selected teams into one')
 def merge_teams_action(modeladmin, request, queryset):
@@ -53,12 +52,12 @@ def merge_teams_action(modeladmin, request, queryset):
         return HttpResponseRedirect(request.get_full_path())
 
     # If this is a GET (displaying the selection form)
-    form = MergeTeamForm()
+    form = MergeTeamForm(teams=queryset) # Pass the queryset to limit choices
     return render(request, 'admin/merge_teams.html', context={'teams': queryset, 'form': form})
 
 # Register in admin
 class TeamAdmin(admin.ModelAdmin):
-    list_display = ['id', 'name', 'kits_in_collections_count', 'kits_definitions_count']
+    list_display = ['id', 'name', 'kits_in_collections_count', 'kits_definitions_count', 'is_verified']
 
     list_filter = ['is_verified']
 
@@ -68,22 +67,22 @@ class TeamAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        # Annotate dodaje wirtualne kolumny do zapytania SQL
+        # Annotate adds virtual columns to the SQL query
         queryset = queryset.annotate(
-            # Policz, ile razy ten team występuje w UserKit (przez relację kit -> userkit)
+            # Count how many kits of this team are owned by users (All user kits with this team)
             _user_kits_count=Count('kits__owned_by', distinct=True),
             
-            # Opcjonalnie: Policz, ile mamy definicji koszulek tego klubu w bazie
+            # how many kit definitions of this team are in the database (Distinct team kits, f.e. different seasons/types)
             _definitions_count=Count('kits', distinct=True)
         )
         return queryset
     
-    # Metoda wyświetlająca liczbę koszulek w kolekcjach użytkowników
+    # Method to display the number of kits in user collections
     @admin.display(description='In User Collections', ordering='_user_kits_count')
     def kits_in_collections_count(self, obj):
         return obj._user_kits_count
 
-    # Metoda wyświetlająca liczbę definicji (to co widziałeś wcześniej jako 5)
+    # Method to display the number of kit definitions 
     @admin.display(description='Kit Definitions (DB)', ordering='_definitions_count')
     def kits_definitions_count(self, obj):
         return obj._definitions_count

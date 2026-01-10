@@ -214,10 +214,10 @@ const EditShirtFormPage = () => {
 
         formData.append('images_order', JSON.stringify(fullOrder));
 
-        console.log("=== Sending to backend ===");
-        for (let pair of formData.entries()) {
-            console.log(pair[0] + ': ' + pair[1]);
-        }
+        // console.log("=== Sending to backend ===");
+        // for (let pair of formData.entries()) {
+        //     console.log(pair[0] + ': ' + pair[1]);
+        // }
 
         try {
             await api.patch(`/my-collection/${id}/`, formData, {
