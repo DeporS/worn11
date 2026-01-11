@@ -9,6 +9,7 @@ import '../styles/profile.css';
 const KitCard = ({ item, onDeleteSuccess }) => {
     const navigate = useNavigate();
     const [isDeleting, setIsDeleting] = useState(false);
+    const [selectedImage, setSelectedImage] = useState(null);
 
     const handleDeleteClick = async () => {
         Swal.fire({
@@ -45,42 +46,55 @@ const KitCard = ({ item, onDeleteSuccess }) => {
     };
 
     return (
-        <div className="card h-100 shadow-sm border-0 kit-card-relative">
+        <>
+            <div className="card h-100 shadow-sm border-0 kit-card-relative">
 
-            {item.for_sale && (
-                <div className="ribbon">
-                    For Sale
-                </div>
-            )}
+                {item.for_sale && (
+                    <div className="ribbon">
+                        For Sale
+                    </div>
+                )}
 
-            {/* Gallery of photos */}
-            <div
-                className="p-2 d-flex custom-scrollbar"
-                style={{
-                    gap: '2px',
-                    scrollSnapType: 'x mandatory',
-                    scrollPaddingLeft: '8px',
-                    maxWidth: '100%',
-                    scrollBehavior: 'smooth',
-                    overflowX: 'scroll',
-                }}
-                onWheel={(e) => {
-                    const el = e.currentTarget;
-                    const canScrollHorizontally = el.scrollWidth > el.clientWidth;
+                {/* Gallery of photos */}
+                <div
+                    className="p-2 d-flex custom-scrollbar"
+                    style={{
+                        gap: '2px',
+                        scrollSnapType: 'x mandatory',
+                        scrollPaddingLeft: '8px',
+                        maxWidth: '100%',
+                        scrollBehavior: 'smooth',
+                        overflowX: 'scroll',
+                    }}
+                    onWheel={(e) => {
+                        const el = e.currentTarget;
+                        const canScrollHorizontally = el.scrollWidth > el.clientWidth;
 
-                    if (canScrollHorizontally) {
-                        e.preventDefault();
-                        el.scrollLeft += e.deltaY;
-                    }
-                }}
-            >
-                {item.images.length > 0 ? (
-                    item.images.map(photo => (
-                        <img
-                            key={photo.id}
-                            src={photo.image}
-                            alt="Kit"
-                            className="rounded"
+                        if (canScrollHorizontally) {
+                            e.preventDefault();
+                            el.scrollLeft += e.deltaY;
+                        }
+                    }}
+                >
+                    {item.images.length > 0 ? (
+                        item.images.map(photo => (
+                            <img
+                                key={photo.id}
+                                src={photo.image}
+                                alt="Kit"
+                                className="rounded gallery-img"
+                                onClick={() => setSelectedImage(photo.image)}
+                                style={{
+                                    minWidth: 'calc(25% - 2px)',
+                                    maxWidth: 'calc(25% - 2px)',
+                                    aspectRatio: '3 / 4',
+                                    objectFit: 'cover',
+                                    scrollSnapAlign: 'start'
+                                }}
+                            />
+                        ))
+                    ) : (
+                        <div className="bg-light d-flex align-items-center justify-content-center rounded"
                             style={{
                                 minWidth: 'calc(25% - 2px)',
                                 maxWidth: 'calc(25% - 2px)',
@@ -88,97 +102,104 @@ const KitCard = ({ item, onDeleteSuccess }) => {
                                 objectFit: 'cover',
                                 scrollSnapAlign: 'start'
                             }}
-                        />
-                    ))
-                ) : (
-                    <div className="bg-light d-flex align-items-center justify-content-center rounded"
-                        style={{
-                                minWidth: 'calc(25% - 2px)',
-                                maxWidth: 'calc(25% - 2px)',
-                                aspectRatio: '3 / 4',
-                                objectFit: 'cover',
-                                scrollSnapAlign: 'start'
-                            }}
                         >
-                        <small className="text-muted">No photo</small>
+                            <small className="text-muted">No photo</small>
+                        </div>
+                    )}
+                </div>
+
+                <div className="card-body">
+                    {/* Team Name && Estimated Value */}
+                    <div className="d-flex justify-content-between align-items-center mb-3 mt-0">
+                        <div className="d-flex align-items-center" style={{ gap: '8px' }}>
+                            {item.kit.team.logo && <img src={item.kit.team.logo} alt="Team Logo" style={{ height: '20px', marginTop: '2px' }} />}
+                            <h5 className="card-title mb-0" title="Team">{item.kit.team.name}</h5>
+                        </div>
+                        <span className="badge-outline" title="Estimated Value">${item.final_value}</span>
                     </div>
-                )}
-            </div>
 
-            <div className="card-body">
-                {/* Team Name && Estimated Value */}
-                <div className="d-flex justify-content-between align-items-center mb-3 mt-0">
-                    <div className="d-flex align-items-center" style={{ gap: '8px' }}>
-                        {item.kit.team.logo && <img src={item.kit.team.logo} alt="Team Logo" style={{ height: '20px', marginTop: '2px' }} />}
-                        <h5 className="card-title mb-0" title="Team">{item.kit.team.name}</h5>
+                    {/* Season & Kit Type */}
+                    <div className="d-flex justify-content-between text-muted small mb-1 mt-1">
+                        <span title="Season">{item.kit.season}</span>
+                        <span title="Kit Type">{item.kit.kit_type}</span>
                     </div>
-                    <span className="badge-outline" title="Estimated Value">${item.final_value}</span>
-                </div>
-                
-                {/* Season & Kit Type */}
-                <div className="d-flex justify-content-between text-muted small mb-1 mt-1">
-                    <span title="Season">{item.kit.season}</span>
-                    <span title="Kit Type">{item.kit.kit_type}</span>
-                </div>
 
-                {/* Technology & Size */}
-                <div className="d-flex justify-content-between text-muted small mb-1 mt-1">
-                    <span title="Technology">{item.technology_display}</span>
-                    <span title="Size">{item.size}</span>
-                </div>
+                    {/* Technology & Size */}
+                    <div className="d-flex justify-content-between text-muted small mb-1 mt-1">
+                        <span title="Technology">{item.technology_display}</span>
+                        <span title="Size">{item.size}</span>
+                    </div>
 
-                {/** Condition & FREE SPACE*/}
-                <div className="d-flex justify-content-between text-muted small mb-1 mt-1">
-                    <span title="Condition">{item.condition_display}</span>
-                </div>       
+                    {/** Condition & FREE SPACE*/}
+                    <div className="d-flex justify-content-between text-muted small mb-1 mt-1">
+                        <span title="Condition">{item.condition_display}</span>
+                    </div>
 
-                {/* Edit and Delete Buttons */}
-                <div className="d-flex justify-content-between mt-1 align-items-center">
-                    
-                    <div className="gap-2 d-flex">
-                        {item.is_owner && (
-                            <>
-                        {/* Edit Button */}
-                        <button
-                            className="btn btn-sm edit-button"
-                            onClick={handleEditClick}
-                            title="Edit Kit"
-                        >
-                            ✏
-                        </button>
+                    {/* Edit and Delete Buttons */}
+                    <div className="d-flex justify-content-between mt-1 align-items-center">
 
-                        {/* Delete Button */}
-                        <button
-                            className="btn btn-sm edit-button"
-                            onClick={handleDeleteClick}
-                            disabled={isDeleting} // Block button while deleting
-                            title="Delete Kit"
-                        >
-                            {isDeleting ? (
-                                <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                            ) : (
+                        <div className="gap-2 d-flex">
+                            {item.is_owner && (
                                 <>
-                                    🗑️
+                                    {/* Edit Button */}
+                                    <button
+                                        className="btn btn-sm edit-button"
+                                        onClick={handleEditClick}
+                                        title="Edit Kit"
+                                    >
+                                        ✏
+                                    </button>
+
+                                    {/* Delete Button */}
+                                    <button
+                                        className="btn btn-sm edit-button"
+                                        onClick={handleDeleteClick}
+                                        disabled={isDeleting} // Block button while deleting
+                                        title="Delete Kit"
+                                    >
+                                        {isDeleting ? (
+                                            <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                        ) : (
+                                            <>
+                                                🗑️
+                                            </>
+                                        )}
+                                    </button>
                                 </>
                             )}
-                        </button>
-                            </>
-                        )}
+                        </div>
+
+                        {/* Added At */}
+                        <small className="text-muted" style={{ fontSize: '0.75rem' }}>
+                            <i className="bi bi-clock me-1"></i>
+                            {new Date(item.added_at).toLocaleDateString('en-GB', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                            })}
+                        </small>
                     </div>
 
-                    {/* Added At */}
-                    <small className="text-muted" style={{ fontSize: '0.75rem' }}>
-                        <i className="bi bi-clock me-1"></i>
-                        {new Date(item.added_at).toLocaleDateString('en-GB', {
-                            day: 'numeric',
-                            month: 'short',
-                            year: 'numeric',
-                        })}
-                    </small>
                 </div>
-
             </div>
-        </div>
+
+            {/* Modal for selected image */}
+            {selectedImage && (
+                <div
+                    className="lightbox-backdrop"
+                    onClick={() => setSelectedImage(null)}
+                >
+                    <button className="lightbox-close-btn">&times;</button>
+
+                    <img
+                        src={selectedImage}
+                        alt="Enlarged view"
+                        className="lightbox-img"
+                        onClick={(e) => e.stopPropagation()}
+                    />
+                </div>
+            )}
+        </>
     );
 };
 

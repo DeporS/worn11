@@ -5,7 +5,8 @@
 }
 
 .edit-button:hover {
-    background-color: rgba(0, 0, 0, 0.03); /* neutralny hover */
+  background-color: rgba(0, 0, 0, 0.03);
+  /* neutralny hover */
 }
 
 .add-ghost {
@@ -22,7 +23,7 @@
 .add-ghost:hover {
   border-color: #198754;
   color: #198754;
-  background: rgba(25,135,84,0.05);
+  background: rgba(25, 135, 84, 0.05);
 }
 
 .badge-outline {
@@ -33,33 +34,113 @@
   font-size: 0.875rem;
   font-weight: 500;
   color: #198754;
-  border: 1px solid rgba(25,135,84,0.3);
-  background-color: rgba(25,135,84,0.05);
-  border-radius: 999px; /* pill shape */
+  border: 1px solid rgba(25, 135, 84, 0.3);
+  background-color: rgba(25, 135, 84, 0.05);
+  border-radius: 999px;
+  /* pill shape */
   vertical-align: middle;
 }
 
 /* CUSTOM SCROLLBAR */
 .custom-scrollbar {
-    /* For firefox */
-    scrollbar-width: thin; 
-    scrollbar-color: #dee2e6 transparent; /* Color of the scrollbar and background */
+  /* For firefox */
+  scrollbar-width: thin;
+  scrollbar-color: #dee2e6 transparent;
+  /* Color of the scrollbar and background */
 }
 
 /* For Chrome, Edge, Safari */
 .custom-scrollbar::-webkit-scrollbar {
-    height: 8px; /* Set a fixed, small height for the scrollbar */
+  height: 8px;
+  /* Set a fixed, small height for the scrollbar */
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
-    background: transparent; /* The scrollbar track is transparent */
+  background: transparent;
+  /* The scrollbar track is transparent */
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-    background-color: #dee2e6; /* Color of the scrollbar (light gray) */
-    border-radius: 4px; /* Rounded corners */
+  background-color: #dee2e6;
+  /* Color of the scrollbar (light gray) */
+  border-radius: 4px;
+  /* Rounded corners */
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background-color: #adb5bd; /* Darker on hover */
+  background-color: #adb5bd;
+  /* Darker on hover */
+}
+
+/* CUSTOM KITCARD PHOTOS */
+.gallery-img {
+  cursor: pointer;
+  transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+.gallery-img:hover {
+  transform: scale(1.02);
+  filter: brightness(0.9);
+  z-index: 9;
+  position: relative;
+}
+
+/* AFTER CLICKING ON PHOTO */
+.lightbox-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.85);
+  z-index: 9999;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: zoom-out;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.lightbox-img {
+  max-width: 90%;
+  max-height: 90%;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+  cursor: default;
+  animation: zoomIn 0.2s ease-out;
+}
+
+.lightbox-close-btn {
+  position: absolute;
+  top: 20px;
+  right: 30px;
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 2rem;
+  cursor: pointer;
+  z-index: 10000;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes zoomIn {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
