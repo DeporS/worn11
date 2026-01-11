@@ -76,7 +76,12 @@ class UserKitSerializer(serializers.ModelSerializer):
         kit_type = validated_data.pop('kit_type')
 
         # Get or create the Team
-        team, _ = Team.objects.get_or_create(name=team_name.title())
+        # team, _ = Team.objects.get_or_create(name=team_name.title()) - WRONG FC Barcelona -> Fc Barcelona
+        clean_team_name = team_name.strip()
+
+        team = Team.objects.filter(name__iexact=clean_team_name).first()
+        if not team:
+            team = Team.objects.create(name=clean_team_name)
 
         # Get or create the Kit
         kit, _ = Kit.objects.get_or_create(team=team, season=season, kit_type=kit_type, defaults={'estimated_price': 0})
@@ -95,6 +100,28 @@ class UserKitSerializer(serializers.ModelSerializer):
         return user_kit
     
     def update(self, instance, validated_data):
+        # Handling Kit update (team_name, season, kit_type)
+        team_name = validated_data.pop('team_name', None)
+        season = validated_data.pop('season', None)
+        kit_type = validated_data.pop('kit_type', None)
+
+        if team_name and season and kit_type:
+            
+            clean_name = team_name.strip()
+
+            team = Team.objects.filter(name__iexact=clean_name).first()
+
+            if not team:
+                team = Team.objects.create(name=clean_name)
+
+            kit, _ = Kit.objects.get_or_create(
+                team=team, 
+                season=season, 
+                kit_type=kit_type, 
+                defaults={'estimated_price': 0}
+            )
+            
+            instance.kit = kit
 
         images_order_json = validated_data.pop('images_order', None)
         # photos data
