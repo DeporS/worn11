@@ -396,8 +396,13 @@ const AddShirtFormPage = () => {
 
                         {/* Container for tiles */}
                         <div
-                            className="d-flex flex-wrap align-items-start"
-                            style={{ gap: '16px' }}
+                            className="p-2"
+                            style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(5, 1fr)',
+                                gap: '10px',
+                                maxWidth: '100%',
+                            }}
                         >
                             <AnimatePresence mode="popLayout">
                             
@@ -406,7 +411,6 @@ const AddShirtFormPage = () => {
                                     <motion.div 
                                         key={item.id} 
                                         layout
-
                                         draggable
                                         onDragStart={(e) => {
                                             dragItem.current = index;
@@ -427,21 +431,27 @@ const AddShirtFormPage = () => {
                                         animate={{ opacity: 1, scale: 1 }}   // Visible state
                                         exit={{ opacity: 0, scale: 0.5 }}    // End (removal)
                                         transition={{ duration: 0.3 }}       // Duration
-                                        className="photo-tile position-relative"
+                                        className="photo-tile position-relative rounded shadow-sm overflow-hidden"
                                         style={{ 
-                                            width: '100px', 
-                                            height: '100px', 
+                                            width: '100%',
+                                            aspectRatio: '3 / 4',
                                             cursor: 'grab',
-                                            border: dragOverIndex === index ? '2px solid #0d6efd' : 'none',
-                                            borderRadius: '0.375rem' 
+                                            border: dragOverIndex === index ? '3px solid #0d6efd' : '1px solid #dee2e6',
+                                            backgroundColor: '#f8f9fa'
                                         }}
                                         whileDrag={{ cursor: 'grabbing' }}
                                     >
-                                        <img 
-                                            src={item.preview} 
-                                            alt="preview" 
-                                            className="rounded border shadow-sm w-100 h-100"
-                                            style={{ objectFit: 'cover', pointerEvents: 'none' }}
+                                        <img
+                                            src={item.preview}
+                                            alt="preview"
+                                            className="w-100 h-100" 
+                                            style={{
+                                                position: 'absolute', 
+                                                top: 0,
+                                                left: 0,
+                                                objectFit: 'cover',   
+                                                pointerEvents: 'none' 
+                                            }}
                                         />
 
                                         <div className="hover-overlay position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-dark bg-opacity-10"
@@ -449,17 +459,27 @@ const AddShirtFormPage = () => {
                                             <i className="bi bi-arrows-move text-white fs-3 drop-shadow"></i>
                                         </div>
 
-                                        <button
-                                            type="button"
-                                            className="btn btn-danger btn-sm position-absolute top-0 end-0 rounded-circle p-0 d-flex align-items-center justify-content-center"
-                                            style={{ width: '20px', height: '20px', transform: 'translate(30%, -30%)', zIndex: 10 }}
+                                        <div
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                removePhotoById(item.id)
+                                                removePhotoById(item.id);
+                                            }}
+                                            style={{
+                                                position: 'absolute',
+                                                top: '1px',
+                                                right: '2px',
+                                                color: '#000000', 
+                                                fontWeight: 'bold',    
+                                                fontSize: '14px',
+                                                cursor: 'pointer',
+                                                zIndex: 10,
+                                                lineHeight: 1,
+                                                textShadow: '0 0 3px #fff'
                                             }}
                                         >
-                                            <span style={{ fontSize: '12px', lineHeight: 1 }}>&times;</span>
-                                        </button>
+                                            ✕
+                                        </div>
+                                            
 
                                         {/* Photo number */}
                                         <span className="position-absolute bottom-0 start-0 badge bg-dark bg-opacity-50" style={{fontSize: '9px', margin: '2px'}}>
@@ -474,9 +494,15 @@ const AddShirtFormPage = () => {
                                         layout
                                         key="add-photo-btn"
                                         onClick={triggerFileInput} 
-                                        className="rounded border border-2 d-flex flex-column align-items-center justify-content-center text-muted bg-light"
-                                        style={{ width: '100px', height: '100px', cursor: 'pointer', borderStyle: 'dashed' }}
-                                    > 
+                                        className="rounded border d-flex flex-column align-items-center justify-content-center text-muted bg-light"
+                                        style={{ 
+                                            width: '100%',
+                                            aspectRatio: '3 / 4',
+                                            cursor: 'pointer', 
+                                            borderStyle: 'dashed',
+                                            borderWidth: '2px'
+                                        }}
+                                    >
                                         <i className="bi bi-plus-lg fs-3"></i>
                                         <small style={{ fontSize: '10px' }}>Add Photo</small>
                                     </motion.div>
@@ -490,12 +516,19 @@ const AddShirtFormPage = () => {
                                         rel="noopener noreferrer"
                                         layout
                                         className="text-decoration-none"
+                                        style={{ width: '100%' }}
                                         >
                                         <motion.div 
                                             layout
                                             key="lock-photo-btn"
-                                            className="rounded border border-2 d-flex flex-column align-items-center justify-content-center text-muted bg-light opacity-50"
-                                            style={{ width: '100px', height: '100px', cursor: 'pointer', borderStyle: 'dashed' }}
+                                            className="rounded border d-flex flex-column align-items-center justify-content-center text-muted bg-light opacity-50"
+                                            style={{ 
+                                                width: '100%',
+                                                aspectRatio: '3 / 4',
+                                                cursor: 'pointer', 
+                                                borderStyle: 'dashed',
+                                                borderWidth: '2px'
+                                            }}
                                         >
                                             <i className="bi bi-lock-fill fs-3 text-warning"></i>
                                             <small style={{ fontSize: '10px' }}>Unlock PRO</small>

@@ -374,7 +374,15 @@ const EditShirtFormPage = () => {
 
                                     <input type="file" ref={fileInputRef} className="d-none" accept="image/*" multiple onChange={handleFileSelect} />
 
-                                    <div className="d-flex flex-wrap" style={{ gap: '16px' }}>
+                                    <div
+                                        className="p-2"
+                                        style={{
+                                            display: 'grid',
+                                            gridTemplateColumns: 'repeat(5, 1fr)',
+                                            gap: '10px',
+                                            maxWidth: '100%',
+                                        }}
+                                    >
                                         <AnimatePresence mode="popLayout">
                                             {galleryItems.map((item, index) => (
                                                 <motion.div
@@ -398,32 +406,54 @@ const EditShirtFormPage = () => {
                                                     animate={{ opacity: 1, scale: 1 }}
                                                     exit={{ opacity: 0, scale: 0.5 }}
                                                     transition={{ duration: 0.3 }}
-                                                    className="photo-tile position-relative"
-                                                    style={{
-                                                        width: '100px', height: '100px', cursor: 'grab',
-                                                        border: dragOverIndex === index ? '2px solid #0d6efd' : 'none',
-                                                        borderRadius: '0.375rem'
+                                                    className="photo-tile position-relative rounded shadow-sm overflow-hidden"
+                                                    style={{ 
+                                                        width: '100%',
+                                                        aspectRatio: '3 / 4',
+                                                        cursor: 'grab',
+                                                        border: dragOverIndex === index ? '3px solid #0d6efd' : '1px solid #dee2e6',
+                                                        backgroundColor: '#f8f9fa'
                                                     }}
                                                     whileDrag={{ cursor: 'grabbing' }}
                                                 >
-                                                    <img src={item.preview} alt="preview" className="rounded border shadow-sm w-100 h-100" style={{ objectFit: 'cover', pointerEvents: 'none' }} />
+                                                    <img
+                                                        src={item.preview}
+                                                        alt="preview"
+                                                        className="w-100 h-100" 
+                                                        style={{
+                                                            position: 'absolute', 
+                                                            top: 0,
+                                                            left: 0,
+                                                            objectFit: 'cover',   
+                                                            pointerEvents: 'none' 
+                                                        }}
+                                                    />
 
                                                     {/* OVERLAY */}
                                                     <div className="hover-overlay position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-dark bg-opacity-25" style={{ pointerEvents: 'none' }}>
                                                         <i className="bi bi-arrows-move text-white fs-3 drop-shadow"></i>
                                                     </div>
 
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-danger btn-sm position-absolute top-0 end-0 rounded-circle p-0 d-flex align-items-center justify-content-center"
-                                                        style={{ width: '20px', height: '20px', transform: 'translate(30%, -30%)', zIndex: 10 }}
+                                                    <div
+                                                        style={{
+                                                            position: 'absolute',
+                                                            top: '1px',
+                                                            right: '2px',
+                                                            color: '#000000', 
+                                                            fontWeight: 'bold',    
+                                                            fontSize: '14px',
+                                                            cursor: 'pointer',
+                                                            zIndex: 10,
+                                                            lineHeight: 1,
+                                                            textShadow: '0 0 3px #fff'
+                                                        }}
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             handleRemovePhoto(item.id)
                                                         }}
                                                     >
-                                                        <span style={{ fontSize: '12px', lineHeight: 1 }}>&times;</span>
-                                                    </button>
+                                                        ✕
+                                                    </div>
 
                                                     {/* Info old or new */}
                                                     <span
@@ -445,7 +475,14 @@ const EditShirtFormPage = () => {
                                             {galleryItems.length < MAX_PHOTOS && (
                                                 <motion.div layout key="add-btn" onClick={triggerFileInput}
                                                     className="rounded border border-2 d-flex flex-column align-items-center justify-content-center text-muted bg-light"
-                                                    style={{ width: '100px', height: '100px', cursor: 'pointer', borderStyle: 'dashed' }}>
+                                                    style={{ 
+                                                        width: '100%',
+                                                        aspectRatio: '3 / 4',
+                                                        cursor: 'pointer', 
+                                                        borderStyle: 'dashed',
+                                                        borderWidth: '2px'
+                                                    }}
+                                                >
                                                     <i className="bi bi-plus-lg fs-3"></i>
                                                     <small style={{ fontSize: '10px' }}>Add</small>
                                                 </motion.div>
