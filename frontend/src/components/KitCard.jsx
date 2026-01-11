@@ -59,6 +59,7 @@ const KitCard = ({ item, onDeleteSuccess }) => {
                 style={{
                     gap: '2px',
                     scrollSnapType: 'x mandatory',
+                    scrollPaddingLeft: '8px',
                     maxWidth: '100%',
                     scrollBehavior: 'smooth',
                     overflowX: 'scroll',
