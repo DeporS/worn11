@@ -40,27 +40,26 @@
 }
 
 /* CUSTOM SCROLLBAR */
-/* Nowoczesny pasek przewijania */
 .custom-scrollbar {
-    /* Dla Firefoxa */
+    /* For firefox */
     scrollbar-width: thin; 
-    scrollbar-color: #dee2e6 transparent; /* Kolor suwaka i tła */
+    scrollbar-color: #dee2e6 transparent; /* Color of the scrollbar and background */
 }
 
-/* Dla Chrome, Edge, Safari */
+/* For Chrome, Edge, Safari */
 .custom-scrollbar::-webkit-scrollbar {
-    height: 8px; /* Ustalamy stałą, małą wysokość scrolla */
+    height: 8px; /* Set a fixed, small height for the scrollbar */
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
-    background: transparent; /* Tło paska jest przezroczyste */
+    background: transparent; /* The scrollbar track is transparent */
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-    background-color: #dee2e6; /* Kolor suwaka (jasny szary) */
-    border-radius: 4px; /* Zaokrąglone rogi */
+    background-color: #dee2e6; /* Color of the scrollbar (light gray) */
+    border-radius: 4px; /* Rounded corners */
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background-color: #adb5bd; /* Ciemniejszy po najechaniu */
+    background-color: #adb5bd; /* Darker on hover */
 }

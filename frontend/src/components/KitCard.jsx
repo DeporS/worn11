@@ -57,7 +57,7 @@ const KitCard = ({ item, onDeleteSuccess }) => {
             <div
                 className="p-2 d-flex custom-scrollbar"
                 style={{
-                    gap: '6px',
+                    gap: '2px',
                     scrollSnapType: 'x mandatory',
                     maxWidth: '100%',
                     scrollBehavior: 'smooth',
@@ -81,8 +81,8 @@ const KitCard = ({ item, onDeleteSuccess }) => {
                             alt="Kit"
                             className="rounded"
                             style={{
-                                minWidth: '25%',
-                                maxWidth: '25%',
+                                minWidth: 'calc(25% - 2px)',
+                                maxWidth: 'calc(25% - 2px)',
                                 aspectRatio: '3 / 4',
                                 objectFit: 'cover',
                                 scrollSnapAlign: 'start'
@@ -92,8 +92,8 @@ const KitCard = ({ item, onDeleteSuccess }) => {
                 ) : (
                     <div className="bg-light d-flex align-items-center justify-content-center rounded"
                         style={{
-                                minWidth: '25%',
-                                maxWidth: '25%',
+                                minWidth: 'calc(25% - 2px)',
+                                maxWidth: 'calc(25% - 2px)',
                                 aspectRatio: '3 / 4',
                                 objectFit: 'cover',
                                 scrollSnapAlign: 'start'
