@@ -7,6 +7,7 @@ defusedxml==0.7.1
 dj-rest-auth==5.0.2
 Django==5.2.9
 django-allauth==0.57.2
+django-cleanup==9.0.0
 django-cors-headers==4.9.0
 djangorestframework==3.16.1
 djangorestframework_simplejwt==5.5.1

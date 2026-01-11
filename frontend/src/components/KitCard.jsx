@@ -54,7 +54,25 @@ const KitCard = ({ item, onDeleteSuccess }) => {
             )}
 
             {/* Gallery of photos */}
-            <div className="d-flex overflow-auto p-2" style={{ gap: '5px' }}>
+            <div
+                className="p-2 d-flex custom-scrollbar"
+                style={{
+                    gap: '6px',
+                    scrollSnapType: 'x mandatory',
+                    maxWidth: '100%',
+                    scrollBehavior: 'smooth',
+                    overflowX: 'scroll',
+                }}
+                onWheel={(e) => {
+                    const el = e.currentTarget;
+                    const canScrollHorizontally = el.scrollWidth > el.clientWidth;
+
+                    if (canScrollHorizontally) {
+                        e.preventDefault();
+                        el.scrollLeft += e.deltaY;
+                    }
+                }}
+            >
                 {item.images.length > 0 ? (
                     item.images.map(photo => (
                         <img
@@ -62,12 +80,25 @@ const KitCard = ({ item, onDeleteSuccess }) => {
                             src={photo.image}
                             alt="Kit"
                             className="rounded"
-                            style={{ width: '100px', height: '100px', objectFit: 'cover' }}
+                            style={{
+                                minWidth: '25%',
+                                maxWidth: '25%',
+                                aspectRatio: '3 / 4',
+                                objectFit: 'cover',
+                                scrollSnapAlign: 'start'
+                            }}
                         />
                     ))
                 ) : (
                     <div className="bg-light d-flex align-items-center justify-content-center rounded"
-                        style={{ width: '100px', height: '100px', minWidth: '100px' }}>
+                        style={{
+                                minWidth: '25%',
+                                maxWidth: '25%',
+                                aspectRatio: '3 / 4',
+                                objectFit: 'cover',
+                                scrollSnapAlign: 'start'
+                            }}
+                        >
                         <small className="text-muted">No photo</small>
                     </div>
                 )}

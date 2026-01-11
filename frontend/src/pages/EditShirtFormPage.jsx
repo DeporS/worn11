@@ -57,7 +57,7 @@ const EditShirtFormPage = () => {
         });
 
         api.get('/auth/user/').then(res => {
-            if (res.data.is_pro) setIsPro(true);
+            if (res.data.profile?.is_pro) setIsPro(true);
         });
     }, []);
 

@@ -53,6 +53,8 @@ INSTALLED_APPS = [
     'corsheaders', # to comunicate with react/expo
 
     'kits',  # Our kits app
+
+    'django_cleanup.apps.CleanupConfig', # Automatically deletes old files.
 ]
 
 SITE_ID = 1

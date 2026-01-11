@@ -132,7 +132,7 @@ const AddShirtFormPage = () => {
         api.get('/auth/user/')
             .then(res => {
                 // Check if user is pro
-                if (res.data.is_pro === true) {
+                if (res.data.profile?.is_pro === true) {
                     setIsPro(true);
                 }
             })
@@ -557,7 +557,7 @@ const AddShirtFormPage = () => {
                                 ? 'Uploading...'
                                 : 'Add to Collection'}
                         </button>
-                        <button type="button" className="btn btn-light" onClick={() => navigate('/profile')}>
+                        <button type="button" className="btn btn-light" onClick={() => navigate('/my-collection')}>
                             Cancel
                         </button>
                     </div>
