@@ -229,12 +229,15 @@ const KitCard = ({ item, onDeleteSuccess }) => {
                         </button>
                     )}
 
-                    <img
-                        src={activeImage.image}
-                        alt="Enlarged view"
-                        className="lightbox-img"
-                        onClick={(e) => e.stopPropagation()}
-                    />
+                    <div class="lightbox-frame">
+                        <img
+                            src={activeImage.image}
+                            alt="Enlarged view"
+                            className="lightbox-img"
+                            onClick={(e) => e.stopPropagation()}
+                        />
+                    </div>
+
 
                     {/* ARROW RIGHT IF MORE THAN ONE IMAGE, AND NOT LAST IMAGE */}
                     {item.images.length > 1 && selectedImageIndex !== item.images.length - 1 && (
@@ -243,6 +246,7 @@ const KitCard = ({ item, onDeleteSuccess }) => {
                         </button>
                     )}
                 </div>
+
             )}
         </>
     );
