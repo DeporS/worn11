@@ -144,3 +144,35 @@
     opacity: 1;
   }
 }
+
+/* LIGHTBOX NAV ARROWS */
+.lightbox-nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  /* Idealne wyśrodkowanie w pionie */
+  background: rgba(255, 255, 255, 0.1);
+  /* Lekko widoczne tło */
+  border: none;
+  color: white;
+  font-size: 3rem;
+  padding: 10px 20px;
+  cursor: pointer;
+  z-index: 10000;
+  transition: background 0.3s, transform 0.2s;
+  border-radius: 8px;
+}
+
+.lightbox-nav-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-50%) scale(1.1);
+  /* Lekkie powiększenie */
+}
+
+.nav-prev {
+  left: 20px;
+}
+
+.nav-next {
+  right: 20px;
+}

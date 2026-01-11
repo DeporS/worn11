@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { deleteKitFromCollection } from '../services/api';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
 
 import '../styles/profile.css';
@@ -9,7 +9,7 @@ import '../styles/profile.css';
 const KitCard = ({ item, onDeleteSuccess }) => {
     const navigate = useNavigate();
     const [isDeleting, setIsDeleting] = useState(false);
-    const [selectedImage, setSelectedImage] = useState(null);
+    const [selectedImageIndex, setSelectedImageIndex] = useState(null);
 
     const handleDeleteClick = async () => {
         Swal.fire({
@@ -45,6 +45,37 @@ const KitCard = ({ item, onDeleteSuccess }) => {
         navigate(`/edit-kit/${item.id}`); // navigate to /edit-kit/15
     };
 
+    const handleNext = (e) => {
+        e.stopPropagation(); // Dont close the modal when clicking next
+        setSelectedImageIndex((prevIndex) => {
+            return prevIndex + 1;
+        });
+    };
+
+    const handlePrev = (e) => {
+        e.stopPropagation();
+        setSelectedImageIndex((prevIndex) => {
+            return prevIndex - 1;
+        });
+    };
+
+    // Keyboard handling (arrows)
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (selectedImageIndex === null) return; // if modal is closed, do nothing
+
+            if (e.key === 'ArrowRight') handleNext(e);
+            if (e.key === 'ArrowLeft') handlePrev(e);
+            if (e.key === 'Escape') setSelectedImageIndex(null);
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [selectedImageIndex]); // Start listening when modal state changes
+
+    // Get the current image based on the index
+    const activeImage = selectedImageIndex !== null ? item.images[selectedImageIndex] : null;
+
     return (
         <>
             <div className="card h-100 shadow-sm border-0 kit-card-relative">
@@ -77,13 +108,13 @@ const KitCard = ({ item, onDeleteSuccess }) => {
                     }}
                 >
                     {item.images.length > 0 ? (
-                        item.images.map(photo => (
+                        item.images.map((photo, index) => (
                             <img
                                 key={photo.id}
                                 src={photo.image}
                                 alt="Kit"
                                 className="rounded gallery-img"
-                                onClick={() => setSelectedImage(photo.image)}
+                                onClick={() => setSelectedImageIndex(index)}
                                 style={{
                                     minWidth: 'calc(25% - 2px)',
                                     maxWidth: 'calc(25% - 2px)',
@@ -184,19 +215,33 @@ const KitCard = ({ item, onDeleteSuccess }) => {
             </div>
 
             {/* Modal for selected image */}
-            {selectedImage && (
+            {activeImage && (
                 <div
                     className="lightbox-backdrop"
-                    onClick={() => setSelectedImage(null)}
+                    onClick={() => setSelectedImageIndex(null)}
                 >
                     <button className="lightbox-close-btn">&times;</button>
 
+                    {/* ARROW LEFT IF MORE THAN ONE IMAGE, AND NOT FIRST IMAGE */}
+                    {item.images.length > 1 && selectedImageIndex > 0 && (
+                        <button className="lightbox-nav-btn nav-prev" onClick={handlePrev}>
+                            &#10094; {/* sign id < */}
+                        </button>
+                    )}
+
                     <img
-                        src={selectedImage}
+                        src={activeImage.image}
                         alt="Enlarged view"
                         className="lightbox-img"
                         onClick={(e) => e.stopPropagation()}
                     />
+
+                    {/* ARROW RIGHT IF MORE THAN ONE IMAGE, AND NOT LAST IMAGE */}
+                    {item.images.length > 1 && selectedImageIndex !== item.images.length - 1 && (
+                        <button className="lightbox-nav-btn nav-next" onClick={handleNext}>
+                            &#10095; {/* sign id > */}
+                        </button>
+                    )}
                 </div>
             )}
         </>
