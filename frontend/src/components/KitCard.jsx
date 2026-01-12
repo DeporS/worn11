@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { deleteKitFromCollection } from '../services/api';
+import { deleteKitFromCollection, toggleLike } from '../services/api';
 import { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
 
@@ -10,6 +10,40 @@ const KitCard = ({ item, onDeleteSuccess }) => {
     const navigate = useNavigate();
     const [isDeleting, setIsDeleting] = useState(false);
     const [selectedImageIndex, setSelectedImageIndex] = useState(null);
+
+    // Like state
+    const [isLiked, setIsLiked] = useState(item.is_liked);
+    const [likesCount, setLikesCount] = useState(item.likes_count);
+    const [likeLoading, setLikeLoading] = useState(false);
+
+    const handleLike = async (e) => {
+        e.stopPropagation(); // Dont go to kit details when clicking like
+        if (likeLoading) return; // Prevent spamming
+
+        // Optimistic Update (assuming success)
+        const previousLiked = isLiked;
+        const previousCount = likesCount;
+
+        setIsLiked(!isLiked);
+        setLikesCount(prev => isLiked ? prev - 1 : prev + 1);
+        
+        try {
+            setLikeLoading(true);
+            // API call
+            const data = await toggleLike(item.id);
+            
+            // Sync with server truth (for certainty)
+            setIsLiked(data.liked);
+            setLikesCount(data.likes_count);
+        } catch (error) {
+            // Rollback in case of error
+            setIsLiked(previousLiked);
+            setLikesCount(previousCount);
+            console.error("Like error", error);
+        } finally {
+            setLikeLoading(false);
+        }
+    };
 
     const handleDeleteClick = async () => {
         Swal.fire({
@@ -209,6 +243,22 @@ const KitCard = ({ item, onDeleteSuccess }) => {
                                 year: 'numeric',
                             })}
                         </small>
+                    </div>
+
+                    {/* Likes */}
+                    <div className="d-flex align-items-center" style={{ gap: '5px' }}>
+                        <button 
+                            className="btn btn-link p-0 text-decoration-none" 
+                            onClick={handleLike}
+                            style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
+                        >
+                            {isLiked ? (
+                                <i className="bi bi-heart-fill text-danger fs-5"></i> // Full heart
+                            ) : (
+                                <i className="bi bi-heart text-muted fs-5"></i> // Empty heart
+                            )}
+                        </button>
+                        <span className="small text-muted">{likesCount}</span>
                     </div>
 
                 </div>

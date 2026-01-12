@@ -34,6 +34,9 @@ class UserKitSerializer(serializers.ModelSerializer):
     condition_display = serializers.CharField(source='get_condition_display', read_only=True)
     technology_display = serializers.CharField(source='get_shirt_technology_display', read_only=True)
 
+    likes_count = serializers.IntegerField(source='likes.count', read_only=True)
+    is_liked = serializers.SerializerMethodField() # To check if the current user liked this UserKit
+
     # Write-only fields for creating/updating UserKit
     team_name = serializers.CharField(write_only=True)
     season = serializers.CharField(write_only=True)
@@ -54,19 +57,26 @@ class UserKitSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'user', 
             # Read-only fields
-            'kit', 'images', 'condition_display', 'technology_display', 'final_value', 'size_display', 'added_at', 'is_owner',
+            'kit', 'images', 'condition_display', 'technology_display', 'final_value', 'size_display', 'added_at', 'is_owner', 'likes_count', 'is_liked',
             # Write-only fields
             'team_name', 'season', 'kit_type', 'new_images', 'deleted_images', 'images_order',
             # Modifiable fields
             'condition', 'shirt_technology', 'size', 'for_sale', 'manual_value'
         ]
-        read_only_fields = ['user', 'final_value', 'kit', 'images', 'condition_display', 'technology_display', 'size_display', 'added_at', 'is_owner']
+        read_only_fields = ['user', 'final_value', 'kit', 'images', 'condition_display', 'technology_display', 'size_display', 'added_at', 'is_owner', 'likes_count', 'is_liked']
     
     # Getting is_owner field
     def get_is_owner(self, obj):
         request = self.context.get('request', None)
         if request and hasattr(request, 'user'):
             return obj.user == request.user
+        return False
+
+    # Getting is_liked field
+    def get_is_liked(self, obj):
+        user = self.context.get('request').user
+        if user.is_authenticated:
+            return obj.likes.filter(id=user.id).exists() # Check if the user is in the likes
         return False
 
     # Override create method to handle nested kit creation

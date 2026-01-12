@@ -125,3 +125,24 @@ class UpdateProfileView(generics.RetrieveUpdateAPIView):
     def get_object(self):
         # Return the profile of the currently authenticated user
         return self.request.user.profile
+
+
+class ToggleLikeAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        kit = get_object_or_404(UserKit, pk=pk)
+        user = request.user
+
+        liked = False
+        if kit.likes.filter(id=user.id).exists():
+            kit.likes.remove(user)
+            liked = False
+        else:
+            kit.likes.add(user)
+            liked = True
+        
+        return Response({
+            "liked": liked,
+            "total_likes": kit.likes.count()
+        }, status=status.HTTP_200_OK)

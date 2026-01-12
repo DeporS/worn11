@@ -12,6 +12,7 @@ from .views import (
     UserSearchAPI,
     UpdateProfileView,
     CurrentUserAPI,
+    ToggleLikeAPI,
 )
 from .views_auth import GoogleLogin
 
@@ -28,6 +29,7 @@ urlpatterns = [
     path('users/search/', UserSearchAPI.as_view(), name='user-search'),
     path('profile/update/', UpdateProfileView.as_view(), name='update-profile'),
     path('auth/user/', CurrentUserAPI.as_view(), name='current-user'),
+    path('kits/<int:pk>/like/', ToggleLikeAPI.as_view(), name='toggle-like'),
 ]
 
 if settings.DEBUG:

@@ -86,4 +86,14 @@ export const updateUserProfile = async (formData) => {
     }
 };
 
+// Toggle like on a kit
+export const toggleLike = async (id) => {
+    try {
+        const response = await api.post(`/kits/${id}/like/`);
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+};
+
 export default api;

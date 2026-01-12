@@ -113,8 +113,13 @@ class UserKit(models.Model):
     shirt_technology = models.CharField(max_length=20, choices=SHIRT_TECHNOLOGIES)
     condition = models.CharField(max_length=20, choices=CONDITION_CHOICES)
     size = models.CharField(max_length=10, choices=SIZE_CHOICES)
-    
     for_sale = models.BooleanField(default=False)
+
+    # How many users like this kit
+    likes = models.ManyToManyField(User, related_name='liked_kits', blank=True)
+
+    def total_likes(self):
+        return self.likes.count()
 
     # When was added to the collection
     added_at = models.DateTimeField(auto_now_add=True)
