@@ -34,7 +34,7 @@ class UserKitSerializer(serializers.ModelSerializer):
     condition_display = serializers.CharField(source='get_condition_display', read_only=True)
     technology_display = serializers.CharField(source='get_shirt_technology_display', read_only=True)
 
-    likes_count = serializers.IntegerField(source='likes.count', read_only=True)
+    likes_count = serializers.IntegerField(read_only=True)
     is_liked = serializers.SerializerMethodField() # To check if the current user liked this UserKit
 
     # Write-only fields for creating/updating UserKit
@@ -57,13 +57,13 @@ class UserKitSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'user', 
             # Read-only fields
-            'kit', 'images', 'condition_display', 'technology_display', 'final_value', 'size_display', 'added_at', 'is_owner', 'likes_count', 'is_liked',
+            'kit', 'images', 'condition_display', 'technology_display', 'final_value', 'size_display', 'added_at', 'is_owner',
             # Write-only fields
             'team_name', 'season', 'kit_type', 'new_images', 'deleted_images', 'images_order',
             # Modifiable fields
-            'condition', 'shirt_technology', 'size', 'for_sale', 'manual_value'
+            'condition', 'shirt_technology', 'size', 'for_sale', 'manual_value', 'likes_count', 'is_liked',
         ]
-        read_only_fields = ['user', 'final_value', 'kit', 'images', 'condition_display', 'technology_display', 'size_display', 'added_at', 'is_owner', 'likes_count', 'is_liked']
+        read_only_fields = ['user', 'final_value', 'kit', 'images', 'condition_display', 'technology_display', 'size_display', 'added_at', 'is_owner']
     
     # Getting is_owner field
     def get_is_owner(self, obj):
@@ -74,9 +74,9 @@ class UserKitSerializer(serializers.ModelSerializer):
 
     # Getting is_liked field
     def get_is_liked(self, obj):
-        user = self.context.get('request').user
-        if user.is_authenticated:
-            return obj.likes.filter(id=user.id).exists() # Check if the user is in the likes
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.likes.filter(id=request.user.id).exists()
         return False
 
     # Override create method to handle nested kit creation

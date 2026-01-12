@@ -12,34 +12,43 @@ const KitCard = ({ item, onDeleteSuccess }) => {
     const [selectedImageIndex, setSelectedImageIndex] = useState(null);
 
     // Like state
-    const [isLiked, setIsLiked] = useState(item.is_liked);
-    const [likesCount, setLikesCount] = useState(item.likes_count);
+    const [isLiked, setIsLiked] = useState(() => {
+        return !!item.is_liked;
+    });
+    const [likesCount, setLikesCount] = useState((item.likes_count) || 0);
     const [likeLoading, setLikeLoading] = useState(false);
 
     const handleLike = async (e) => {
-        e.stopPropagation(); // Dont go to kit details when clicking like
-        if (likeLoading) return; // Prevent spamming
+        e.stopPropagation();
+        if (likeLoading) return;
 
-        // Optimistic Update (assuming success)
-        const previousLiked = isLiked;
-        const previousCount = likesCount;
+        // Remember previous state
+        const prevLiked = isLiked;
+        const prevCount = likesCount;
 
-        setIsLiked(!isLiked);
-        setLikesCount(prev => isLiked ? prev - 1 : prev + 1);
-        
+        // Optimistic update - if like, increment count, else decrement
+        const newLiked = !prevLiked;
+        const newCount = newLiked ? prevCount + 1 : prevCount - 1;
+
+        setIsLiked(newLiked);
+        setLikesCount(newCount < 0 ? 0 : newCount); // Prevent negative count
+
         try {
             setLikeLoading(true);
-            // API call
             const data = await toggleLike(item.id);
             
-            // Sync with server truth (for certainty)
+            // Synchronize state with backend response
             setIsLiked(data.liked);
             setLikesCount(data.likes_count);
+            
+            // Debuging
+            // console.log("Odpowiedź serwera:", data);
+
         } catch (error) {
-            // Rollback in case of error
-            setIsLiked(previousLiked);
-            setLikesCount(previousCount);
-            console.error("Like error", error);
+            console.error("Błąd lajkowania:", error);
+            // Revert to previous state on error
+            setIsLiked(prevLiked);
+            setLikesCount(prevCount);
         } finally {
             setLikeLoading(false);
         }
@@ -258,7 +267,10 @@ const KitCard = ({ item, onDeleteSuccess }) => {
                                 <i className="bi bi-heart text-muted fs-5"></i> // Empty heart
                             )}
                         </button>
-                        <span className="small text-muted">{likesCount}</span>
+                        <span className="small text-muted">
+                            {/* ZABEZPIECZENIE: Jeśli to NaN lub null, pokaż 0 */}
+                            {Number.isNaN(likesCount) || likesCount === null ? 0 : likesCount}
+                        </span>
                     </div>
 
                 </div>

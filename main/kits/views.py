@@ -38,7 +38,11 @@ class MyCollectionDetailAPI(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return UserKit.objects.filter(user=self.request.user)
+        return UserKit.objects.filter(user=self.request.user)\
+            .select_related('kit', 'kit__team')\
+            .prefetch_related('images')\
+            .annotate(likes_count=Count('likes', distinct=True))\
+            .order_by('-added_at')
 
 # Endpoint: Show other user's collection
 class UserCollectionAPI(generics.ListAPIView):
@@ -50,7 +54,11 @@ class UserCollectionAPI(generics.ListAPIView):
         username = self.kwargs['username']
 
         # Return kits of the specified user
-        return UserKit.objects.filter(user__username=username).select_related('kit', 'kit__team').order_by('-added_at')
+        return UserKit.objects.filter(user__username=username)\
+            .select_related('kit', 'kit__team')\
+            .prefetch_related('images')\
+            .annotate(likes_count=Count('likes', distinct=True))\
+            .order_by('-added_at')
 
 # Endpoint: Catalog of all available kits (e.g., for selection when adding)
 class KitCatalogAPI(generics.ListAPIView):
@@ -126,7 +134,7 @@ class UpdateProfileView(generics.RetrieveUpdateAPIView):
         # Return the profile of the currently authenticated user
         return self.request.user.profile
 
-
+# Endpoint: Like/unlike a kit in user's collection
 class ToggleLikeAPI(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -144,5 +152,5 @@ class ToggleLikeAPI(APIView):
         
         return Response({
             "liked": liked,
-            "total_likes": kit.likes.count()
+            "likes_count": kit.likes.count()
         }, status=status.HTTP_200_OK)
