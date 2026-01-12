@@ -175,17 +175,19 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
                                 className="rounded gallery-img"
                                 onClick={() => setSelectedImageIndex(index)}
                                 style={{
+                                    width: 'calc(25% - 2px)',
                                     minWidth: 'calc(25% - 2px)',
                                     maxWidth: 'calc(25% - 2px)',
                                     aspectRatio: '3 / 4',
                                     objectFit: 'cover',
-                                    scrollSnapAlign: 'start'
+                                    scrollSnapAlign: 'start',
                                 }}
                             />
                         ))
                     ) : (
                         <div className="bg-light d-flex align-items-center justify-content-center rounded"
                             style={{
+                                width: 'calc(25% - 2px)',
                                 minWidth: 'calc(25% - 2px)',
                                 maxWidth: 'calc(25% - 2px)',
                                 aspectRatio: '3 / 4',
@@ -209,7 +211,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
                     </div>
 
                     {/* Kit Details */}
-                    <div className="kit-info p-1">
+                    <div className="kit-info p-2">
                         {/* Season & Kit Type */}
                         <div className="d-flex justify-content-between text-muted small mb-1">
                             <span title="Season">{item.kit.season}</span>

@@ -50,9 +50,9 @@ const ProfilePage = ({ user }) => {
     };
 
     return (
-        <div className="container py-5">
+        <div className="container-fluid py-5 px-3 px-md-5">
             {/* Profile headline */}
-            <div className="bg-white p-4 rounded shadow-sm mb-5 d-flex justify-content-between align-items-center">
+            <div className="container py-4 bg-white p-4 rounded shadow-sm mb-5 d-flex justify-content-between align-items-center">
                 <div>
                     <div className="d-flex align-items-center gap-1">
                         <h2 className="fw-bold mb-0">@{profileUsername}</h2>
@@ -93,7 +93,7 @@ const ProfilePage = ({ user }) => {
             ) : (
                 <div className="row g-4">
                     {myKits.map(item => (
-                        <div key={item.id} className="col-12 col-md-6 col-lg-4">
+                        <div key={item.id} className="col-12 col-sm-12 col-md-12 col-lg-6 col-xl-6 col-xxl-4 col-xxl-4">
                             <KitCard 
                                 item={item} 
                                 onDeleteSuccess={handleDeleteSuccess} 
