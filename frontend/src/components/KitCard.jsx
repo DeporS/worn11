@@ -6,7 +6,7 @@ import Swal from 'sweetalert2';
 
 import '../styles/profile.css';
 
-const KitCard = ({ item, onDeleteSuccess }) => {
+const KitCard = ({ item, onDeleteSuccess, user }) => {
     const navigate = useNavigate();
     const [isDeleting, setIsDeleting] = useState(false);
     const [selectedImageIndex, setSelectedImageIndex] = useState(null);
@@ -20,6 +20,22 @@ const KitCard = ({ item, onDeleteSuccess }) => {
 
     const handleLike = async (e) => {
         e.stopPropagation();
+
+        if (!user) {
+            Swal.fire({
+                title: 'You need to log in!',
+                text: 'Only logged-in users can like kits.',
+                icon: 'info',
+                confirmButtonColor: '#3085d6',
+                confirmButtonText: 'Ok'
+            }).then((result) => {
+                if (result.isConfirmed) {
+
+                }
+            });
+            return;
+        }
+
         if (likeLoading) return;
 
         // Remember previous state

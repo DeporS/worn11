@@ -94,7 +94,11 @@ const ProfilePage = ({ user }) => {
                 <div className="row g-4">
                     {myKits.map(item => (
                         <div key={item.id} className="col-12 col-md-6 col-lg-4">
-                            <KitCard item={item} onDeleteSuccess={handleDeleteSuccess} />
+                            <KitCard 
+                                item={item} 
+                                onDeleteSuccess={handleDeleteSuccess} 
+                                user={user}
+                            />
                         </div>
                     ))}
                     
