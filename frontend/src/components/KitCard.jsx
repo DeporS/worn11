@@ -225,9 +225,40 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
                         <span title="Condition">{item.condition_display}</span>
                     </div>
 
-                    {/* Edit and Delete Buttons */}
+                    {/* Contact Owner & View Offer + Edit/Delete Buttons */}
                     <div className="d-flex justify-content-between mt-1 align-items-center">
-
+                        {/*Contact Owner & View Offer Links*/}
+                        <div className="d-flex flex-column">
+                            {/* Contact Owner Link */}
+                            <a
+                                href={item.externalUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="minimal-offer-link"
+                            >
+                                <span>Contact Owner</span>
+                                <span className="arrow-icon">✉︎</span>
+                            </a>
+                            {/* View Offer Link */}
+                            {item.for_sale ? (
+                                <a
+                                    href={item.externalUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="minimal-offer-link"
+                                >
+                                    <span>View offer</span>
+                                    <span className="arrow-icon">➚</span>
+                                </a>
+                            ) : (
+                                <a className="minimal-not-for-sale-link">
+                                    <span>Not for sale</span>
+                                    <span className="arrow-icon">⨂</span>
+                                </a>
+                            )}
+                        </div>
+                        
+                        {/* Edit and Delete Buttons */}
                         <div className="gap-2 d-flex">
                             {item.is_owner && (
                                 <>
@@ -255,8 +286,41 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
                                             </>
                                         )}
                                     </button>
+
+                                    {/* Share Button */}
+                                    <button
+                                        className="btn btn-sm edit-button"
+                                        // onClick={handleShareClick}
+                                        title="Share Kit"
+                                    >
+                                        🔗
+                                    </button>
                                 </>
                             )}
+                        </div>
+                        
+                    </div>
+
+                    {/* Likes and Added At */}
+                    <div className="d-flex justify-content-between mt-1 align-items-center">
+
+                        {/* Likes */}
+                        <div className="d-flex align-items-center" style={{ gap: '5px' }}>
+                            <button 
+                                className="btn btn-link p-0 text-decoration-none" 
+                                onClick={handleLike}
+                                style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
+                            >
+                                {isLiked ? (
+                                    <i className="bi bi-heart-fill text-danger fs-5"></i> // Full heart
+                                ) : (
+                                    <i className="bi bi-heart text-muted fs-5"></i> // Empty heart
+                                )}
+                            </button>
+                            <span className="small text-muted">
+                                {/* If likesCount is NaN or null, show 0 */}
+                                {Number.isNaN(likesCount) || likesCount === null ? 0 : likesCount}
+                            </span>
                         </div>
 
                         {/* Added At */}
@@ -268,25 +332,6 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
                                 year: 'numeric',
                             })}
                         </small>
-                    </div>
-
-                    {/* Likes */}
-                    <div className="d-flex align-items-center" style={{ gap: '5px' }}>
-                        <button 
-                            className="btn btn-link p-0 text-decoration-none" 
-                            onClick={handleLike}
-                            style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
-                        >
-                            {isLiked ? (
-                                <i className="bi bi-heart-fill text-danger fs-5"></i> // Full heart
-                            ) : (
-                                <i className="bi bi-heart text-muted fs-5"></i> // Empty heart
-                            )}
-                        </button>
-                        <span className="small text-muted">
-                            {/* ZABEZPIECZENIE: Jeśli to NaN lub null, pokaż 0 */}
-                            {Number.isNaN(likesCount) || likesCount === null ? 0 : likesCount}
-                        </span>
                     </div>
 
                 </div>

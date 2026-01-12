@@ -53,24 +53,19 @@
 /* For Chrome, Edge, Safari */
 .custom-scrollbar::-webkit-scrollbar {
   height: 8px;
-  /* Set a fixed, small height for the scrollbar */
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
   background: transparent;
-  /* The scrollbar track is transparent */
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background-color: #dee2e6;
-  /* Color of the scrollbar (light gray) */
   border-radius: 4px;
-  /* Rounded corners */
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background-color: #adb5bd;
-  /* Darker on hover */
 }
 
 /* CUSTOM KITCARD PHOTOS */
@@ -182,4 +177,72 @@
 
 .nav-next {
   right: 20px;
+}
+
+
+/* VIEW OFFER BUTTON */
+.minimal-offer-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-decoration: none;
+  
+  color: #7e878f;
+  background: transparent;
+  border: none;
+  padding: 4px 0;
+
+  transition: color 0.2s ease;
+}
+
+.minimal-offer-link:hover {
+  color: #111111; 
+  cursor: pointer;
+}
+
+.minimal-offer-link .arrow-icon {
+  font-size: 14px;
+  transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.minimal-offer-link:hover .arrow-icon {
+  transform: translate(2px, -2px);
+}
+
+.minimal-not-for-sale-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-decoration: none;
+  
+  color: #7e878f;
+  background: transparent;
+  border: none;
+  padding: 4px 0;
+
+  transition: color 0.2s ease;
+}
+
+.minimal-not-for-sale-link:hover {
+  color: #c52525; 
+  cursor: default;
+}
+
+.minimal-not-for-sale-link .arrow-icon {
+  font-size: 14px;
+  transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.minimal-not-for-sale-link:hover .arrow-icon {
+  transform: translate(0px, 0px);
 }
