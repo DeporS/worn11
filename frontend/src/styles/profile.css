@@ -46,7 +46,8 @@
   /* For firefox */
   scrollbar-width: thin;
   scrollbar-color: #dee2e6 transparent;
-  /* Color of the scrollbar and background */
+  overscroll-behavior-x: contain;
+  overscroll-behavior-y: contain;
 }
 
 /* For Chrome, Edge, Safari */
@@ -100,26 +101,6 @@
   cursor: zoom-out;
   animation: fadeIn 0.2s ease-out;
 }
-
-/* .lightbox-img {
-  max-width: 90%;
-  max-height: 90%;
-  object-fit: contain;
-  border-radius: 8px;
-  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-  cursor: default;
-  animation: zoomIn 0.2s ease-out;
-} */
-
-/* .lightbox-img {
-  width: 80vw;
-  height: 80vh;
-  max-width: 700px;
-  max-height: 700px;
-  object-fit: contain;
-  background-color: rgba(0, 0, 0, 0.85);
-  border-radius: 8px;
-} */
 
 .lightbox-frame {
   width: 80vw;
