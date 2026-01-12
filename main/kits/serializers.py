@@ -61,7 +61,7 @@ class UserKitSerializer(serializers.ModelSerializer):
             # Write-only fields
             'team_name', 'season', 'kit_type', 'new_images', 'deleted_images', 'images_order',
             # Modifiable fields
-            'condition', 'shirt_technology', 'size', 'for_sale', 'manual_value', 'likes_count', 'is_liked',
+            'condition', 'shirt_technology', 'size', 'for_sale', 'manual_value', 'likes_count', 'is_liked', 'player_name', 'player_number'
         ]
         read_only_fields = ['user', 'final_value', 'kit', 'images', 'condition_display', 'technology_display', 'size_display', 'added_at', 'is_owner']
     

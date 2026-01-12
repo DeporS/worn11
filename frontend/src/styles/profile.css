@@ -246,3 +246,10 @@
 .minimal-not-for-sale-link:hover .arrow-icon {
   transform: translate(0px, 0px);
 }
+
+/* KIT DETAILS SECTION */
+.kit-info {
+  background-color: #fafafa;
+  border-radius: 10px; 
+  border: 1px solid #dee2e6; 
+}

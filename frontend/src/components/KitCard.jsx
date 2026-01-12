@@ -208,23 +208,27 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
                         <span className="badge-outline" title="Estimated Value">${item.final_value}</span>
                     </div>
 
-                    {/* Season & Kit Type */}
-                    <div className="d-flex justify-content-between text-muted small mb-1 mt-1">
-                        <span title="Season">{item.kit.season}</span>
-                        <span title="Kit Type">{item.kit.kit_type}</span>
-                    </div>
+                    {/* Kit Details */}
+                    <div className="kit-info p-1">
+                        {/* Season & Kit Type */}
+                        <div className="d-flex justify-content-between text-muted small mb-1">
+                            <span title="Season">{item.kit.season}</span>
+                            <span title="Kit Type">{item.kit.kit_type}</span>
+                        </div>
 
-                    {/* Technology & Size */}
-                    <div className="d-flex justify-content-between text-muted small mb-1 mt-1">
-                        <span title="Technology">{item.technology_display}</span>
-                        <span title="Size">{item.size}</span>
-                    </div>
+                        {/* Technology & Size */}
+                        <div className="d-flex justify-content-between text-muted small mb-1 mt-1">
+                            <span title="Technology">{item.technology_display}</span>
+                            <span title="Size">{item.size}</span>
+                        </div>
 
-                    {/** Condition & FREE SPACE*/}
-                    <div className="d-flex justify-content-between text-muted small mb-1 mt-1">
-                        <span title="Condition">{item.condition_display}</span>
+                        {/* Condition & Player */}
+                        <div className="d-flex justify-content-between text-muted small mt-1">
+                            <span title="Condition">{item.condition_display}</span>
+                            <span title="Player">{item.player_name} {item.player_number}</span>
+                        </div>
                     </div>
-
+                    
                     {/* Contact Owner & View Offer + Edit/Delete Buttons */}
                     <div className="d-flex justify-content-between mt-1 align-items-center">
                         {/*Contact Owner & View Offer Links*/}
@@ -266,7 +270,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
                                     <button
                                         className="btn btn-sm edit-button"
                                         onClick={handleEditClick}
-                                        title="Edit Kit"
+                                        title="Edit"
                                     >
                                         ✏
                                     </button>
@@ -276,7 +280,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
                                         className="btn btn-sm edit-button"
                                         onClick={handleDeleteClick}
                                         disabled={isDeleting} // Block button while deleting
-                                        title="Delete Kit"
+                                        title="Delete"
                                     >
                                         {isDeleting ? (
                                             <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -286,17 +290,17 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
                                             </>
                                         )}
                                     </button>
-
-                                    {/* Share Button */}
-                                    <button
-                                        className="btn btn-sm edit-button"
-                                        // onClick={handleShareClick}
-                                        title="Share Kit"
-                                    >
-                                        🔗
-                                    </button>
                                 </>
                             )}
+
+                            {/* Share Button */}
+                            <button
+                                className="btn btn-sm edit-button"
+                                // onClick={handleShareClick}
+                                title="Share"
+                            >
+                                🔗
+                            </button>
                         </div>
                         
                     </div>

@@ -26,6 +26,9 @@ const EditShirtFormPage = () => {
     const [technology, setTechnology] = useState('');
     const [forSale, setForSale] = useState(false);
     const [manualValue, setManualValue] = useState('');
+    const [playerName, setPlayerName] = useState('');
+    const [playerNumber, setPlayerNumber] = useState('');
+    const [printError, setPrintError] = useState(null);
 
     // Photos States
     const [galleryItems, setGalleryItems] = useState([]); // Existing photos
@@ -82,6 +85,8 @@ const EditShirtFormPage = () => {
                 setForSale(data.for_sale);
                 // Convert to string to prevent input from complaining about null
                 setManualValue(data.manual_value ? data.manual_value.toString() : '');
+                setPlayerName(data.player_name || '');
+                setPlayerNumber(data.player_number || '');
 
                 // Existing photos mapping
                 // data.images is an object table: [{ id: 1, image: "url..." }, ...]
@@ -163,6 +168,16 @@ const EditShirtFormPage = () => {
         e.preventDefault();
         setLoading(true);
         setError(null);
+        setPrintError(null);
+
+        const hasName = playerName.trim() !== "";
+        const hasNumber = playerNumber.trim() !== "";
+
+        if ((hasName && !hasNumber) || (!hasName && hasNumber)) {
+            setPrintError("Both Player Name and Number must be filled, or both empty.");
+            setLoading(false);
+            return;
+        }
 
         const formData = new FormData();
         // Send everything as in adding
@@ -173,6 +188,8 @@ const EditShirtFormPage = () => {
         formData.append('condition', condition);
         formData.append('shirt_technology', technology);
         formData.append('for_sale', forSale);
+        formData.append('player_name', playerName);
+        formData.append('player_number', playerNumber);
 
         // Manual value is sent only if something was entered, otherwise an empty string
         if (manualValue) {
@@ -350,6 +367,63 @@ const EditShirtFormPage = () => {
                                     <select className="form-select" value={condition} onChange={e => setCondition(e.target.value)}>
                                         {conditionOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                                     </select>
+                                </div>
+                                
+                                {/* Player Name & Number */}
+                                <div className={`mb-4 p-3 rounded border ${printError ? 'border-danger bg-danger bg-opacity-10' : 'bg-light border-light'}`} 
+                                     style={{ transition: 'all 0.3s ease' }}>
+                                    
+                                    <div className="d-flex align-items-center gap-2 mb-3 text-muted">
+                                        <i className="bi bi-person-badge fs-5"></i>
+                                        <span className="fw-bold text-uppercase" style={{ fontSize: '0.75rem', letterSpacing: '1px' }}>
+                                            Shirt Printing (Optional)
+                                        </span>
+                                    </div>
+
+                                    <div className="row g-2">
+                                        {/* Name */}
+                                        <div className="col-8">
+                                            <div className="form-floating">
+                                                <input 
+                                                    type="text" 
+                                                    className={`form-control ${printError ? 'is-invalid' : ''}`}
+                                                    id="floatingPlayerNameEdit"
+                                                    placeholder="Messi"
+                                                    value={playerName} 
+                                                    onChange={e => {
+                                                        setPlayerName(e.target.value);
+                                                        if(printError) setPrintError(null);
+                                                    }}
+                                                />
+                                                <label htmlFor="floatingPlayerNameEdit">Player Name</label>
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Number */}
+                                        <div className="col-4">
+                                            <div className="form-floating">
+                                                <input 
+                                                    type="text" 
+                                                    className={`form-control ${printError ? 'is-invalid' : ''}`}
+                                                    id="floatingPlayerNumEdit"
+                                                    placeholder="10"
+                                                    value={playerNumber} 
+                                                    onChange={e => {
+                                                        setPlayerNumber(e.target.value);
+                                                        if(printError) setPrintError(null);
+                                                    }}
+                                                />
+                                                <label htmlFor="floatingPlayerNumEdit">Number</label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {printError && (
+                                        <div className="text-danger mt-2 small d-flex align-items-center">
+                                            <i className="bi bi-exclamation-circle me-1"></i>
+                                            {printError}
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Photos */}

@@ -27,6 +27,9 @@ const AddShirtFormPage = () => {
     const [forSale, setForSale] = useState(false);
     const [manualValue, setManualValue] = useState('');
     const [selectedFiles, setSelectedFiles] = useState([]);
+    const [playerName, setPlayerName] = useState('');
+    const [playerNumber, setPlayerNumber] = useState('');
+    const [printError, setPrintError] = useState(null);
 
     // UI States
     const [loading, setLoading] = useState(false);
@@ -178,6 +181,14 @@ const AddShirtFormPage = () => {
         e.preventDefault();
         setLoading(true);
         setError(null);
+        setPrintError(null);
+
+        if ((playerName.trim() !== "" && playerNumber.trim() === "") || 
+            (playerName.trim() === "" && playerNumber.trim() !== "")) {
+            setPrintError("Both Player Name and Number must be filled, or both empty.");
+            setLoading(false);
+            return;
+        }
 
         const formData = new FormData();
         formData.append('team_name', teamName);
@@ -188,6 +199,8 @@ const AddShirtFormPage = () => {
         formData.append('shirt_technology', technology);
         formData.append('for_sale', forSale);
         formData.append('manual_value', manualValue);
+        formData.append('player_name', playerName);
+        formData.append('player_number', playerNumber);
         
         selectedFiles.forEach((item) => {
             formData.append('images', item.file); 
@@ -362,6 +375,64 @@ const AddShirtFormPage = () => {
                                 </option>
                             ))}
                         </select>
+                    </div>
+
+                    {/* Player Name and Number */}
+                    <div className={`mb-4 p-3 rounded border ${printError ? 'border-danger bg-danger bg-opacity-10' : 'bg-light border-light'}`} 
+                         style={{ transition: 'all 0.3s ease' }}>
+                        
+                        <div className="d-flex align-items-center gap-2 mb-3 text-muted">
+                            <i className="bi bi-person-badge fs-5"></i>
+                            <span className="fw-bold text-uppercase" style={{ fontSize: '0.75rem', letterSpacing: '1px' }}>
+                                Shirt Printing (Optional)
+                            </span>
+                        </div>
+
+                        <div className="row g-2">
+                            {/* Player Name */}
+                            <div className="col-8">
+                                <div className="form-floating">
+                                    <input 
+                                        type="text" 
+                                        className={`form-control ${printError ? 'is-invalid' : ''}`}
+                                        id="floatingPlayerName"
+                                        placeholder="Messi"
+                                        value={playerName} 
+                                        onChange={e => {
+                                            setPlayerName(e.target.value);
+                                            if(printError) setPrintError(null);
+                                        }}
+                                    />
+                                    <label htmlFor="floatingPlayerName">Player Name</label>
+                                </div>
+                            </div>
+                            
+                            {/* Player Number */}
+                            <div className="col-4">
+                                <div className="form-floating">
+                                    <input 
+                                        type="text" 
+                                        className={`form-control ${printError ? 'is-invalid' : ''}`}
+                                        id="floatingPlayerNum"
+                                        placeholder="10"
+                                        value={playerNumber} 
+                                        onChange={e => {
+                                            setPlayerNumber(e.target.value);
+                                            if(printError) setPrintError(null);
+                                        }}
+                                    />
+                                    <label htmlFor="floatingPlayerNum">Number</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Error */}
+                        {printError && (
+                            <div className="text-danger mt-2 small d-flex align-items-center">
+                                <i className="bi bi-exclamation-circle me-1"></i>
+                                {printError}
+                            </div>
+                        )}
                     </div>
 
                     {/* Photos */}
