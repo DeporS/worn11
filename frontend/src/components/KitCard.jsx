@@ -265,16 +265,23 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
                     <div className="d-flex justify-content-between mt-1 align-items-center">
                         {/*Contact Owner & View Offer Links*/}
                         <div className="d-flex flex-column">
-                            {/* Contact Owner Link */}
-                            <a
-                                href={item.externalUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="minimal-offer-link"
-                            >
-                                <span>Contact Owner</span>
-                                <span className="arrow-icon">✉︎</span>
-                            </a>
+                            {item.is_owner ? (
+                                <a className="minimal-not-for-sale-link">
+                                    <span>You are the owner</span>
+                                    <span className="arrow-icon">ツ</span>
+                                </a>
+                            ) : (
+                                <a
+                                    href={item.externalUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="minimal-offer-link"
+                                >
+                                    <span>Contact Owner</span>
+                                    <span className="arrow-icon">✉︎</span>
+                                </a>
+                            )}
+                                
                             {/* View Offer Link */}
                             {item.for_sale ? (
                                 <a

@@ -29,6 +29,15 @@ const AddShirtFormPage = () => {
     const [selectedFiles, setSelectedFiles] = useState([]);
     const [playerName, setPlayerName] = useState('');
     const [playerNumber, setPlayerNumber] = useState('');
+    const [offerLink, setOfferLink] = useState('');
+
+    // Error states
+    const [teamError, setTeamError] = useState(null);
+    const [seasonError, setSeasonError] = useState(null);
+    const [technologyError, setTechnologyError] = useState(null);
+    const [typeError, setTypeError] = useState(null);
+    const [sizeError, setSizeError] = useState(null);
+    const [conditionError, setConditionError] = useState(null);
     const [printError, setPrintError] = useState(null);
 
     // UI States
@@ -37,6 +46,13 @@ const AddShirtFormPage = () => {
     const [showSuggestions, setShowSuggestions] = useState(false);
     const isSelectionRef = useRef(false);
     const fileInputRef = useRef(null); // Ref for file input
+    const teamInputRef = useRef(null); // Ref for team name input
+    const seasonInputRef = useRef(null); // Ref for season input
+    const technologyInputRef = useRef(null); // Ref for technology input
+    const typeInputRef = useRef(null); // Ref for type input
+    const sizeInputRef = useRef(null); // Ref for size input
+    const conditionInputRef = useRef(null); // Ref for condition input
+    const printInputRef = useRef(null); // Ref for print input
     const [dragOverIndex, setDragOverIndex] = useState(null); // for drag and drop
 
     // User
@@ -169,6 +185,30 @@ const AddShirtFormPage = () => {
         return () => clearTimeout(timerId); // Cleanup on unmount or teamName change
     }, [teamName]); // Do when teamName changes
 
+    // Errors handling
+    useEffect(() => {
+        const fields = [
+            { error: teamError, ref: teamInputRef },
+            { error: seasonError, ref: seasonInputRef },
+            { error: technologyError, ref: technologyInputRef },
+            { error: typeError, ref: typeInputRef },
+            { error: sizeError, ref: sizeInputRef },
+            { error: conditionError, ref: conditionInputRef },
+            { error: printError, ref: printInputRef },
+        ];
+
+        const firstErrorField = fields.find(f => f.error && f.ref.current);
+
+        if (firstErrorField) {
+            firstErrorField.ref.current.scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'center'
+            });
+            firstErrorField.ref.current.focus();
+        }
+    }, [teamError, seasonError, technologyError, typeError, sizeError, conditionError, printError]);
+
+
     const handleSuggestionClick = (team) => {
         isSelectionRef.current = true; // Mark that a suggestion was selected
 
@@ -182,6 +222,42 @@ const AddShirtFormPage = () => {
         setLoading(true);
         setError(null);
         setPrintError(null);
+        setTeamError(null);
+        setSeasonError(null);
+        setTechnologyError(null);
+        setTypeError(null);
+        setSizeError(null);
+        setConditionError(null);
+
+        // Basic validation
+
+        if (!teamName.trim()) {
+            setTeamError("Team Name is required.");
+            setLoading(false);
+            return;
+        } else if (!season) {
+            setSeasonError("Season is required.");
+            setLoading(false);
+            return;
+        } else if (!technology) {
+            setTechnologyError("Technology is required.");
+            setLoading(false);
+            return;
+        } else if (!kitType) {
+            setTypeError("Kit Type is required.");
+            setLoading(false);
+            return;
+        } else if (!size) {
+            setSizeError("Size is required.");
+            setLoading(false);
+            return;
+        } else if (!condition) {
+            setConditionError("Condition is required.");
+            setLoading(false);
+            return;
+        }
+
+        // Validate Player Name and Number
 
         if ((playerName.trim() !== "" && playerNumber.trim() === "") || 
             (playerName.trim() === "" && playerNumber.trim() !== "")) {
@@ -201,6 +277,7 @@ const AddShirtFormPage = () => {
         formData.append('manual_value', manualValue);
         formData.append('player_name', playerName);
         formData.append('player_number', playerNumber);
+        formData.append('offer_link', offerLink);
         
         selectedFiles.forEach((item) => {
             formData.append('images', item.file); 
@@ -224,454 +301,600 @@ const AddShirtFormPage = () => {
       <div className="row justify-content-center">
         <div className="col-md-8 col-lg-6">
             
-          <div className="card shadow-sm border-0">
-            <div className="card-body p-4">
-                <h3 className="mb-4 fw-bold">Add New Kit to Collection ➕</h3>
-                
-                {error && <div className="alert alert-danger">{error}</div>}
+            <div className="card shadow border-0 overflow-hidden" style={{ borderRadius: '15px' }}>
 
-                <form onSubmit={handleSubmit}>
-                    {/* Team */}
-                    <div className="mb-3 position-relative">
-                        <label className="form-label">Team Name</label>
-                        <input 
-                            type="text" 
-                            className="form-control" 
-                            required
-                            placeholder=""
-                            value={teamName} 
-                            onChange={e => setTeamName(e.target.value)}
-                            autoComplete="off"
-                        />
-                        {/* Suggestions Dropdown */}
-                        {showSuggestions && suggestions.length > 0 && (
-                            <ul className="list-group position-absolute w-100 shadow" style={{ zIndex: 1000, top: '100%' }}>
-                                {suggestions.map((team) => (
-                                    <li 
-                                        key={team.id} 
-                                        className="list-group-item list-group-item-action d-flex align-items-center gap-3"
-                                        style={{ cursor: 'pointer' }}
-                                        onClick={() => handleSuggestionClick(team)}
-                                    >
-                                        {/* LOGO */}
-                                        {team.logo ? (
-                                            <img 
-                                                src={team.logo} 
-                                                alt={team.name} 
-                                                style={{ width: '30px', height: '30px', objectFit: 'contain' }} 
-                                            />
-                                        ) : (
-                                            <div style={{width: '30px', height: '30px', background: '#eee', borderRadius: '50%'}}></div>
-                                        )}
-                                        
-                                        {/* TEAM NAME */}
-                                        <span>{team.name}</span>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </div>
+                <div className="bg-primary bg-gradient" style={{ height: '8px' }}></div>
 
-                    {/* Season */}
-                    <div className="mb-3">
-                        <label className="form-label">Season</label>
-                        <select
-                            className="form-select"
-                            required
-                            value={season}
-                            onChange={e => setSeason(e.target.value)}
-                        >
-                            <option value=""></option>
-                            {Array.from({ length: 2026 - 1960 }, (_, i) => {
-                            const start = 2026 - i
-                            return (
-                                <option key={start} value={`${start - 1}/${start}`}>
-                                {start - 1}/{start}
-                                </option>
-                            )
-                            })}
-                        </select>
-                    </div>
-
-                    {/* Technology */}
-                    <div className="mb-3">
-                        <label className="form-label">Shirt Technology</label>
-                        <select 
-                            className="form-select" 
-                            required
-                            value={technology} 
-                            onChange={e => setTechnology(e.target.value)}
-                            disabled={technologyOptions.length === 0} // Disable before options load
-                        >
-                            <option value="" disabled hidden/>
-
-                            {technologyOptions.map(option => (
-                                <option key={option.value} value={option.value}>
-                                    {option.label}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-
-                    {/* Type and Size (in one row) */}
-                    <div className="row">
-
-                        {/* Type */}
-                        <div className="col-6 mb-3">
-                            <label className="form-label">Type</label>
-                            <select 
-                                className="form-select" 
-                                required
-                                value={kitType} 
-                                onChange={e => setKitType(e.target.value)}
-                                disabled={typeOptions.length === 0} // Disable before options load
-                            >
-                                <option value="" disabled hidden/>
-
-                                {typeOptions.map(option => (
-                                    <option key={option.value} value={option.value}>
-                                        {option.label}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
+                    <div className="card-body p-4">
                         
-                        {/* Size */}
-                        <div className="col-6 mb-3">
-                            <label className="form-label">Size</label>
-                            <select 
-                                className="form-select" 
-                                required
-                                value={size} 
-                                onChange={e => setSize(e.target.value)}
-                                disabled={sizeOptions.length === 0} // Disable before options load
+                        <div className="text-center mb-5 mt-2">
+                            <div 
+                                className="d-inline-flex align-items-center justify-content-center bg-light rounded-circle mb-3 shadow-sm" 
+                                style={{ width: '70px', height: '70px' }}
                             >
-                                <option value="" disabled hidden/>
-
-                                {sizeOptions.map(option => (
-                                    <option key={option.value} value={option.value}>
-                                        {option.label}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
-
-                    {/* Condition */}
-                    <div className="mb-3">
-                        <label className="form-label">Condition</label>
-                        <select 
-                            className="form-select" 
-                            required
-                            value={condition} 
-                            onChange={e => setCondition(e.target.value)}
-                            disabled={conditionOptions.length === 0} // Disable before options load
-                        >
-                            <option value="" disabled hidden/>
-
-                            {conditionOptions.map(option => (
-                                <option key={option.value} value={option.value}>
-                                    {option.label}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-
-                    {/* Player Name and Number */}
-                    <div className={`mb-4 p-3 rounded border ${printError ? 'border-danger bg-danger bg-opacity-10' : 'bg-light border-light'}`} 
-                         style={{ transition: 'all 0.3s ease' }}>
-                        
-                        <div className="d-flex align-items-center gap-2 mb-3 text-muted">
-                            <i className="bi bi-person-badge fs-5"></i>
-                            <span className="fw-bold text-uppercase" style={{ fontSize: '0.75rem', letterSpacing: '1px' }}>
-                                Shirt Printing (Optional)
-                            </span>
-                        </div>
-
-                        <div className="row g-2">
-                            {/* Player Name */}
-                            <div className="col-8">
-                                <div className="form-floating">
-                                    <input 
-                                        type="text" 
-                                        className={`form-control ${printError ? 'is-invalid' : ''}`}
-                                        id="floatingPlayerName"
-                                        placeholder="Messi"
-                                        value={playerName} 
-                                        onChange={e => {
-                                            setPlayerName(e.target.value);
-                                            if(printError) setPrintError(null);
-                                        }}
-                                    />
-                                    <label htmlFor="floatingPlayerName">Player Name</label>
-                                </div>
+                                <i className="bi bi-plus-lg fs-2 text-primary"></i>
                             </div>
                             
-                            {/* Player Number */}
-                            <div className="col-4">
-                                <div className="form-floating">
-                                    <input 
-                                        type="text" 
-                                        className={`form-control ${printError ? 'is-invalid' : ''}`}
-                                        id="floatingPlayerNum"
-                                        placeholder="10"
-                                        value={playerNumber} 
-                                        onChange={e => {
-                                            setPlayerNumber(e.target.value);
-                                            if(printError) setPrintError(null);
-                                        }}
-                                    />
-                                    <label htmlFor="floatingPlayerNum">Number</label>
-                                </div>
-                            </div>
+                            <h3 className="fw-bold mb-1">Add New Kit</h3>
+                            <p className="text-muted small">
+                                Fill in the details to expand your collection 👕
+                            </p>
                         </div>
 
-                        {/* Error */}
-                        {printError && (
-                            <div className="text-danger mt-2 small d-flex align-items-center">
-                                <i className="bi bi-exclamation-circle me-1"></i>
-                                {printError}
+                        {error && (
+                            <div className="alert alert-danger d-flex align-items-center rounded-3 mb-4" role="alert">
+                                <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                                <div>{error}</div>
                             </div>
                         )}
-                    </div>
 
-                    {/* Photos */}
-                    <div className="mb-4">
-                        <div className="d-flex justify-content-between align-items-center mb-2">
-                            <label className="form-label fw-bold m-0">Photos ({selectedFiles.length}/{MAX_PHOTOS})</label>
-                            {!isPro && (
-                                <small
-                                    className="text-primary"
-                                >
-                                    <a 
-                                        href="/get-pro" 
-                                        target="_blank" 
-                                        rel="noopener noreferrer"
-                                        className="pro-link"
-                                    >
-                                        Need more? Go PRO 💎
-                                    </a>
-                                </small>
-                            )}
-                        </div>
+                        <form onSubmit={handleSubmit} noValidate>
+                            {/* Basic Info */}
+                            <div className="mb-4 p-3 rounded border bg-light border-light" style={{ transition: 'all 0.3s ease' }}>
+            
+                                <div className="d-flex align-items-center gap-2 mb-3 text-muted">
+                                    <i className="bi bi-info-circle fs-5"></i>
+                                    <span className="fw-bold text-uppercase" style={{ fontSize: '0.75rem', letterSpacing: '1px' }}>
+                                        Basic Info
+                                    </span>
+                                </div>
 
-                        {/* Hidden input */}
-                        <input 
-                            type="file" 
-                            ref={fileInputRef}
-                            className="d-none" 
-                            accept="image/*"
-                            multiple
-                            onChange={handleFileSelect} 
-                        />
-
-                        {/* Container for tiles */}
-                        <div
-                            className="p-2"
-                            style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'repeat(5, 1fr)',
-                                gap: '10px',
-                                maxWidth: '100%',
-                            }}
-                        >
-                            <AnimatePresence mode="popLayout">
-                            
-                                {/* Mapping added photos */}
-                                {selectedFiles.map((item, index) => (
-                                    <motion.div 
-                                        key={item.id} 
-                                        layout
-                                        draggable
-                                        onDragStart={(e) => {
-                                            dragItem.current = index;
-                                            e.dataTransfer.effectAllowed = "move"; // Show move cursor
-                                            e.dataTransfer.setData("text/html", e.target.parentNode);
-                                        }}
-                                        onDragEnter={(e) => {
-                                            dragOverItem.current = index;
-                                            setDragOverIndex(index);
-                                        }}
-                                        onDragEnd={() => {
-                                            handleSort();
-                                            setDragOverIndex(null);
-                                        }}
-                                        onDragOver={(e) => e.preventDefault()} // Necessary to allow drop
-
-                                        initial={{ opacity: 0, scale: 0.8 }} // Start 
-                                        animate={{ opacity: 1, scale: 1 }}   // Visible state
-                                        exit={{ opacity: 0, scale: 0.5 }}    // End (removal)
-                                        transition={{ duration: 0.3 }}       // Duration
-                                        className="photo-tile position-relative rounded shadow-sm overflow-hidden"
-                                        style={{ 
-                                            width: '100%',
-                                            aspectRatio: '3 / 4',
-                                            cursor: 'grab',
-                                            border: dragOverIndex === index ? '3px solid #0d6efd' : '1px solid #dee2e6',
-                                            backgroundColor: '#f8f9fa'
-                                        }}
-                                        whileDrag={{ cursor: 'grabbing' }}
-                                    >
-                                        <img
-                                            src={item.preview}
-                                            alt="preview"
-                                            className="w-100 h-100" 
-                                            style={{
-                                                position: 'absolute', 
-                                                top: 0,
-                                                left: 0,
-                                                objectFit: 'cover',   
-                                                pointerEvents: 'none' 
-                                            }}
+                                {/* Team Name (Full Width) */}
+                                <div className="mb-3 position-relative">
+                                    <div className="form-floating">
+                                        <input 
+                                            ref={teamInputRef}
+                                            type="text" 
+                                            className={`form-control ${teamError ? 'is-invalid' : ''}`}
+                                            id="floatingTeamName"
+                                            required
+                                            placeholder="FC Barcelona"
+                                            value={teamName} 
+                                            onChange={e => setTeamName(e.target.value)}
+                                            autoComplete="off"
                                         />
+                                        <label htmlFor="floatingTeamName">Team Name</label>
+                                    </div>
 
-                                        <div className="hover-overlay position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-dark bg-opacity-10"
-                                            style={{ pointerEvents: 'none' }}>
-                                            <i className="bi bi-arrows-move text-white fs-3 drop-shadow"></i>
+                                    {/* Suggestions Dropdown */}
+                                    {showSuggestions && suggestions.length > 0 && (
+                                        <ul className="list-group position-absolute w-100 shadow mt-1" style={{ zIndex: 1000 }}>
+                                            {suggestions.map((team) => (
+                                                <li 
+                                                    key={team.id} 
+                                                    className="list-group-item list-group-item-action d-flex align-items-center gap-3"
+                                                    style={{ cursor: 'pointer' }}
+                                                    onClick={() => handleSuggestionClick(team)}
+                                                >
+                                                    {team.logo ? (
+                                                        <img src={team.logo} alt={team.name} style={{ width: '30px', height: '30px', objectFit: 'contain' }} />
+                                                    ) : (
+                                                        <div style={{width: '30px', height: '30px', background: '#eee', borderRadius: '50%'}}></div>
+                                                    )}
+                                                    <span>{team.name}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+
+                                    {/* Error */}
+                                    {teamError && (
+                                        <div className="text-danger mt-2 small d-flex align-items-center">
+                                            <i className="bi bi-exclamation-circle me-1"></i>
+                                            {teamError}
                                         </div>
+                                    )}
+                                </div>
 
-                                        <div
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                removePhotoById(item.id);
-                                            }}
-                                            style={{
-                                                position: 'absolute',
-                                                top: '1px',
-                                                right: '2px',
-                                                color: '#000000', 
-                                                fontWeight: 'bold',    
-                                                fontSize: '14px',
-                                                cursor: 'pointer',
-                                                zIndex: 10,
-                                                lineHeight: 1,
-                                                textShadow: '0 0 3px #fff'
-                                            }}
-                                        >
-                                            ✕
+                                {/* Season & Technology (Row) */}
+                                <div className="row g-2">
+                                    <div className="col-6">
+                                        <div className="form-floating">
+                                            <select
+                                                ref={seasonInputRef}
+                                                className={`form-select ${seasonError ? 'is-invalid' : ''}`}
+                                                id="floatingSeason"
+                                                required
+                                                value={season}
+                                                onChange={e => setSeason(e.target.value)}
+                                            >
+                                                <option value=""></option>
+                                                {Array.from({ length: 2026 - 1940 }, (_, i) => {
+                                                    const start = 2026 - i
+                                                    return <option key={start} value={`${start - 1}/${start}`}>{start - 1}/{start}</option>
+                                                })}
+                                            </select>
+                                            <label htmlFor="floatingSeason">Season</label>
                                         </div>
-                                            
+                                        {/* Error */}
+                                        {seasonError && (
+                                            <div className="text-danger mt-2 small d-flex align-items-center">
+                                                <i className="bi bi-exclamation-circle me-1"></i>
+                                                {seasonError}
+                                            </div>
+                                        )}
+                                    </div>
 
-                                        {/* Photo number */}
-                                        <span className="position-absolute bottom-0 start-0 badge bg-dark bg-opacity-50" style={{fontSize: '9px', margin: '2px'}}>
-                                            {index + 1}
-                                        </span>
-                                    </motion.div>
-                                ))}
+                                    <div className="col-6">
+                                        <div className="form-floating">
+                                            <select 
+                                                ref={technologyInputRef}
+                                                className={`form-select ${technologyError ? 'is-invalid' : ''}`}
+                                                id="floatingTech"
+                                                required
+                                                value={technology} 
+                                                onChange={e => setTechnology(e.target.value)}
+                                                disabled={technologyOptions.length === 0}
+                                            >
+                                                <option value="" disabled hidden/>
+                                                {technologyOptions.map(opt => (
+                                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                                ))}
+                                            </select>
+                                            <label htmlFor="floatingTech">Technology</label>
+                                        </div>
+                                        {/* Error */}
+                                        {technologyError && (
+                                            <div className="text-danger mt-2 small d-flex align-items-center">
+                                                <i className="bi bi-exclamation-circle me-1"></i>
+                                                {technologyError}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
 
-                                {/* PLUS Button */}
-                                {selectedFiles.length < MAX_PHOTOS && (
-                                    <motion.div 
-                                        layout
-                                        key="add-photo-btn"
-                                        onClick={triggerFileInput} 
-                                        className="rounded border d-flex flex-column align-items-center justify-content-center text-muted bg-light"
-                                        style={{ 
-                                            width: '100%',
-                                            aspectRatio: '3 / 4',
-                                            cursor: 'pointer', 
-                                            borderStyle: 'dashed',
-                                            borderWidth: '2px'
+                            {/* Photos */}
+                            <div className={`mb-4 p-3 rounded border ${printError ? 'border-danger bg-danger bg-opacity-10' : 'bg-light border-light'}`} 
+                                style={{ transition: 'all 0.3s ease' }}>
+                                <div className="mb-4">
+                                    <div className="d-flex justify-content-between align-items-center mb-3">
+                                        {/* <label className="form-label fw-bold m-0">Photos ({selectedFiles.length}/{MAX_PHOTOS})</label> */}
+                                        <div className="d-flex align-items-center gap-2 text-muted">
+                                            <i className="bi bi-camera fs-5"></i>
+                                            <span className="fw-bold text-uppercase" style={{ fontSize: '0.75rem', letterSpacing: '1px' }}>
+                                                Photos ({selectedFiles.length}/{MAX_PHOTOS})
+                                            </span>
+                                        </div>
+                                        
+                                        {!isPro && (
+                                            <small
+                                                className="text-primary"
+                                            >
+                                                <a 
+                                                    href="/get-pro" 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer"
+                                                    className="pro-link"
+                                                >
+                                                    Need more? Go PRO 💎
+                                                </a>
+                                            </small>
+                                        )}
+                                    </div>
+
+                                    {/* Hidden input */}
+                                    <input 
+                                        type="file" 
+                                        ref={fileInputRef}
+                                        className="d-none" 
+                                        accept="image/*"
+                                        multiple
+                                        onChange={handleFileSelect} 
+                                    />
+
+                                    {/* Container for tiles */}
+                                    <div
+                                        className="p-2"
+                                        style={{
+                                            display: 'grid',
+                                            gridTemplateColumns: 'repeat(5, 1fr)',
+                                            gap: '10px',
+                                            maxWidth: '100%',
                                         }}
                                     >
-                                        <i className="bi bi-plus-lg fs-3"></i>
-                                        <small style={{ fontSize: '10px' }}>Add Photo</small>
-                                    </motion.div>
-                                )}
+                                        <AnimatePresence mode="popLayout">
+                                        
+                                            {/* Mapping added photos */}
+                                            {selectedFiles.map((item, index) => (
+                                                <motion.div 
+                                                    key={item.id} 
+                                                    layout
+                                                    draggable
+                                                    onDragStart={(e) => {
+                                                        dragItem.current = index;
+                                                        e.dataTransfer.effectAllowed = "move"; // Show move cursor
+                                                        e.dataTransfer.setData("text/html", e.target.parentNode);
+                                                    }}
+                                                    onDragEnter={(e) => {
+                                                        dragOverItem.current = index;
+                                                        setDragOverIndex(index);
+                                                    }}
+                                                    onDragEnd={() => {
+                                                        handleSort();
+                                                        setDragOverIndex(null);
+                                                    }}
+                                                    onDragOver={(e) => e.preventDefault()} // Necessary to allow drop
 
-                                {/* Locked slots for FREE users */}
-                                {!isPro && selectedFiles.length >= 5 && (
-                                    <motion.a
-                                        href="/get-pro"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        layout
-                                        className="text-decoration-none"
-                                        style={{ width: '100%' }}
-                                        >
-                                        <motion.div 
-                                            layout
-                                            key="lock-photo-btn"
-                                            className="rounded border d-flex flex-column align-items-center justify-content-center text-muted bg-light opacity-50"
-                                            style={{ 
-                                                width: '100%',
-                                                aspectRatio: '3 / 4',
-                                                cursor: 'pointer', 
-                                                borderStyle: 'dashed',
-                                                borderWidth: '2px'
-                                            }}
-                                        >
-                                            <i className="bi bi-lock-fill fs-3 text-warning"></i>
-                                            <small style={{ fontSize: '10px' }}>Unlock PRO</small>
-                                        </motion.div>
-                                    </motion.a>
-                                )}
+                                                    initial={{ opacity: 0, scale: 0.8 }} // Start 
+                                                    animate={{ opacity: 1, scale: 1 }}   // Visible state
+                                                    exit={{ opacity: 0, scale: 0.5 }}    // End (removal)
+                                                    transition={{ duration: 0.3 }}       // Duration
+                                                    className="photo-tile position-relative rounded shadow-sm overflow-hidden"
+                                                    style={{ 
+                                                        width: '100%',
+                                                        aspectRatio: '3 / 4',
+                                                        cursor: 'grab',
+                                                        border: dragOverIndex === index ? '3px solid #0d6efd' : '1px solid #dee2e6',
+                                                        backgroundColor: '#f8f9fa'
+                                                    }}
+                                                    whileDrag={{ cursor: 'grabbing' }}
+                                                >
+                                                    <img
+                                                        src={item.preview}
+                                                        alt="preview"
+                                                        className="w-100 h-100" 
+                                                        style={{
+                                                            position: 'absolute', 
+                                                            top: 0,
+                                                            left: 0,
+                                                            objectFit: 'cover',   
+                                                            pointerEvents: 'none' 
+                                                        }}
+                                                    />
 
-                            </AnimatePresence>
+                                                    <div className="hover-overlay position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-dark bg-opacity-10"
+                                                        style={{ pointerEvents: 'none' }}>
+                                                        <i className="bi bi-arrows-move text-white fs-3 drop-shadow"></i>
+                                                    </div>
 
-                        </div>
-                        
-                        <div className="form-text mt-2">
-                            {!isPro
-                                ? `You can add up to ${MAX_PHOTOS} photos.`
-                                : `As a PRO member, enjoy adding up to ${MAX_PHOTOS} photos!`
-                            }
-                        </div>
-                    </div>
-                    
-                    {/* Price and For Sale (in one row) */}
-                    <div className="row">
+                                                    <div
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            removePhotoById(item.id);
+                                                        }}
+                                                        style={{
+                                                            position: 'absolute',
+                                                            top: '1px',
+                                                            right: '2px',
+                                                            color: '#000000', 
+                                                            fontWeight: 'bold',    
+                                                            fontSize: '14px',
+                                                            cursor: 'pointer',
+                                                            zIndex: 10,
+                                                            lineHeight: 1,
+                                                            textShadow: '0 0 3px #fff'
+                                                        }}
+                                                    >
+                                                        ✕
+                                                    </div>
+                                                        
 
-                        {/* Price */}
-                        <div className="col-6 mb-3">
-                            <label className="form-label">Price ($)</label>
-                            <input 
-                                type="text" className="form-control"
-                                placeholder="Leave blank to auto-calculate"
-                                value={manualValue} onChange={e => setManualValue(e.target.value)}
-                            />
-                        </div>
+                                                    {/* Photo number */}
+                                                    <span className="position-absolute bottom-0 start-0 badge bg-dark bg-opacity-50" style={{fontSize: '9px', margin: '2px'}}>
+                                                        {index + 1}
+                                                    </span>
+                                                </motion.div>
+                                            ))}
 
-                        {/* For Sale */}
-                        <div className="col-6 mb-3 form-check">
-                            <label className="form-label d-block">&nbsp;</label> 
-    
-                            <div className="form-check form-switch fs-4 d-flex align-items-center justify-content-center ps-0">
-                                <input 
-                                    className="form-check-input my-0" 
-                                    type="checkbox" 
-                                    role="switch" 
-                                    id="forSaleCheck"
-                                    style={{ cursor: 'pointer' }}
-                                    checked={forSale} 
-                                    onChange={e => setForSale(e.target.checked)} 
-                                />
-                                <label className="form-check-label ms-3 fs-6" htmlFor="forSaleCheck">
-                                    {forSale ? <b>For sale</b> : 'Not for sale'}
-                                </label>
+                                            {/* PLUS Button */}
+                                            {selectedFiles.length < MAX_PHOTOS && (
+                                                <motion.div 
+                                                    layout
+                                                    key="add-photo-btn"
+                                                    onClick={triggerFileInput} 
+                                                    className="rounded border d-flex flex-column align-items-center justify-content-center text-muted bg-white"
+                                                    style={{ 
+                                                        width: '100%',
+                                                        aspectRatio: '3 / 4',
+                                                        cursor: 'pointer', 
+                                                        borderStyle: 'dashed',
+                                                        borderWidth: '2px'
+                                                    }}
+                                                >
+                                                    <i className="bi bi-plus-lg fs-3"></i>
+                                                    <small style={{ fontSize: '10px' }}>Add Photo</small>
+                                                </motion.div>
+                                            )}
+
+                                            {/* Locked slots for FREE users */}
+                                            {!isPro && selectedFiles.length >= 5 && (
+                                                <motion.a
+                                                    href="/get-pro"
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    layout
+                                                    className="text-decoration-none"
+                                                    style={{ width: '100%' }}
+                                                    >
+                                                    <motion.div 
+                                                        layout
+                                                        key="lock-photo-btn"
+                                                        className="rounded border d-flex flex-column align-items-center justify-content-center text-muted bg-light opacity-50"
+                                                        style={{ 
+                                                            width: '100%',
+                                                            aspectRatio: '3 / 4',
+                                                            cursor: 'pointer', 
+                                                            borderStyle: 'dashed',
+                                                            borderWidth: '2px'
+                                                        }}
+                                                    >
+                                                        <i className="bi bi-lock-fill fs-3 text-warning"></i>
+                                                        <small style={{ fontSize: '10px' }}>Unlock PRO</small>
+                                                    </motion.div>
+                                                </motion.a>
+                                            )}
+
+                                        </AnimatePresence>
+
+                                    </div>
+                                </div>
+                                
+                                <div className="form-text mt-2">
+                                    {!isPro
+                                        ? `You can add up to ${MAX_PHOTOS} photos.`
+                                        : `As a PRO member, enjoy adding up to ${MAX_PHOTOS} photos!`
+                                    }
+                                </div>
                             </div>
-                        </div>
-                    </div>
-                    
+                            
+                            {/* Type, Size & Condition */}
+                            <div className="mb-4 p-3 rounded border bg-light border-light" style={{ transition: 'all 0.3s ease' }}>
+                                
+                                <div className="d-flex align-items-center gap-2 mb-3 text-muted">
+                                    <i className="bi bi-tags fs-5"></i> 
+                                    <span className="fw-bold text-uppercase" style={{ fontSize: '0.75rem', letterSpacing: '1px' }}>
+                                        Kit Details
+                                    </span>
+                                </div>
 
-                    {/* Buttons */}
-                    <div className="d-grid gap-2">
-                        <button type="submit" className="btn btn-primary btn-lg" disabled={loading}>
-                            {loading
-                                ? 'Uploading...'
-                                : 'Add to Collection'}
-                        </button>
-                        <button type="button" className="btn btn-light" onClick={() => navigate('/my-collection')}>
-                            Cancel
-                        </button>
-                    </div>
+                                <div className="row g-2">
+                                    {/* Type */}
+                                    <div className="col-6">
+                                        <div className="form-floating">
+                                            <select
+                                                className={`form-select ${typeError ? 'is-invalid' : ''}`}
+                                                id="floatingType"
+                                                required
+                                                value={kitType} 
+                                                onChange={e => setKitType(e.target.value)}
+                                                disabled={typeOptions.length === 0}
+                                                ref={typeInputRef}
+                                            >
+                                                <option value="" disabled hidden/>
+                                                {typeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                            </select>
+                                            <label htmlFor="floatingType">Type</label>
+                                        </div>
+                                        {/* Error */}
+                                        {typeError && (
+                                            <div className="text-danger mt-2 small d-flex align-items-center">
+                                                <i className="bi bi-exclamation-circle me-1"></i>
+                                                {typeError}
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    {/* Size */}
+                                    <div className="col-6">
+                                        <div className="form-floating">
+                                            <select 
+                                                className={`form-select ${sizeError ? 'is-invalid' : ''}`}
+                                                id="floatingSize"
+                                                required
+                                                value={size} 
+                                                onChange={e => setSize(e.target.value)}
+                                                disabled={sizeOptions.length === 0}
+                                                ref={sizeInputRef}
+                                            >
+                                                <option value="" disabled hidden/>
+                                                {sizeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                            </select>
+                                            <label htmlFor="floatingSize">Size</label>
+                                        </div>
+                                        {/* Error */}
+                                        {sizeError && (
+                                            <div className="text-danger mt-2 small d-flex align-items-center">
+                                                <i className="bi bi-exclamation-circle me-1"></i>
+                                                {sizeError}
+                                            </div>
+                                        )}
+                                    </div>
 
-                </form>
+                                    {/* Condition (Full Width below) */}
+                                    <div className="col-12">
+                                        <div className="form-floating">
+                                            <select 
+                                                className={`form-select ${conditionError ? 'is-invalid' : ''}`}
+                                                id="floatingCondition"
+                                                required
+                                                value={condition} 
+                                                onChange={e => setCondition(e.target.value)}
+                                                disabled={conditionOptions.length === 0}
+                                                ref={conditionInputRef}
+                                            >
+                                                <option value="" disabled hidden/>
+                                                {conditionOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                            </select>
+                                            <label htmlFor="floatingCondition">Condition</label>
+                                        </div>
+                                        {/* Error */}
+                                        {conditionError && (
+                                            <div className="text-danger mt-2 small d-flex align-items-center">
+                                                <i className="bi bi-exclamation-circle me-1"></i>
+                                                {conditionError}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Player Name and Number */}
+                            <div className={`mb-4 p-3 rounded border ${printError ? 'border-danger bg-danger bg-opacity-10' : 'bg-light border-light'}`} 
+                                style={{ transition: 'all 0.3s ease' }}>
+                                
+                                <div className="d-flex align-items-center gap-2 mb-3 text-muted">
+                                    <i className="bi bi-person-badge fs-5"></i>
+                                    <span className="fw-bold text-uppercase" style={{ fontSize: '0.75rem', letterSpacing: '1px' }}>
+                                        Shirt Printing (Optional)
+                                    </span>
+                                </div>
+
+                                <div className="row g-2">
+                                    {/* Player Name */}
+                                    <div className="col-8">
+                                        <div className="form-floating">
+                                            <input 
+                                                type="text" 
+                                                className={`form-control ${printError ? 'is-invalid' : ''}`}
+                                                id="floatingPlayerName"
+                                                placeholder="Messi"
+                                                value={playerName} 
+                                                onChange={e => {
+                                                    setPlayerName(e.target.value);
+                                                    if(printError) setPrintError(null);
+                                                }}
+                                            />
+                                            <label htmlFor="floatingPlayerName">Player Name</label>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Player Number */}
+                                    <div className="col-4">
+                                        <div className="form-floating">
+                                            <input 
+                                                type="text" 
+                                                className={`form-control ${printError ? 'is-invalid' : ''}`}
+                                                id="floatingPlayerNum"
+                                                placeholder="10"
+                                                value={playerNumber} 
+                                                onChange={e => {
+                                                    setPlayerNumber(e.target.value);
+                                                    if(printError) setPrintError(null);
+                                                }}
+                                            />
+                                            <label htmlFor="floatingPlayerNum">Number</label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Error */}
+                                {printError && (
+                                    <div className="text-danger mt-2 small d-flex align-items-center">
+                                        <i className="bi bi-exclamation-circle me-1"></i>
+                                        {printError}
+                                    </div>
+                                )}
+                            </div>
+                            
+                            {/* Value and For Sale */}
+                            <div className="mb-4 p-3 rounded border bg-light border-light" style={{ transition: 'all 0.3s ease' }}>
+                                
+                                <div className="d-flex align-items-center gap-2 mb-3 text-muted">
+                                    <i className="bi bi-cash-coin fs-5"></i>
+                                    <span className="fw-bold text-uppercase" style={{ fontSize: '0.75rem', letterSpacing: '1px' }}>
+                                        Estimated Value
+                                    </span>
+                                </div>
+
+                                <div className="row g-2 align-items-center">
+                                    {/* Price Input */}
+                                    <div className="col-7">
+                                        <div className="form-floating">
+                                            <input 
+                                                type="number"
+                                                className="form-control"
+                                                id="floatingPrice"
+                                                placeholder="Auto"
+                                                value={manualValue} 
+                                                onChange={e => setManualValue(e.target.value)}
+                                            />
+                                            <label htmlFor="floatingPrice">Value ($)</label>
+                                        </div>
+                                    </div>
+
+                                    {/* For Sale Switch */}
+                                    <div className="col-5">
+                                        <div className="h-100 d-flex align-items-center justify-content-center p-2 rounded bg-white border">
+                                            <div className="form-check form-switch d-flex align-items-center gap-2 m-0">
+                                                <input 
+                                                    className="form-check-input my-0" 
+                                                    type="checkbox" 
+                                                    role="switch" 
+                                                    id="forSaleCheck"
+                                                    style={{ cursor: 'pointer', width: '3em', height: '1.5em' }}
+                                                    checked={forSale} 
+                                                    onChange={e => setForSale(e.target.checked)} 
+                                                />
+                                                <label className="form-check-label small fw-bold text-muted cursor-pointer" htmlFor="forSaleCheck">
+                                                    {forSale ? <span className="text-success">FOR SALE</span> : "NOT FOR SALE"}
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div className="form-text mt-2 small">
+                                    Leave value blank to auto-calculate.
+                                </div>
+                            </div>
+                            
+                            
+                            {/* Offer Link */}
+                            <div className={`mb-4 p-3 rounded border ${printError ? 'border-danger bg-danger bg-opacity-10' : 'bg-light border-light'}`} 
+                                style={{ transition: 'all 0.3s ease' }}>
+                                
+                                <div className="d-flex align-items-center gap-2 mb-3 text-muted">
+                                    <i className="bi bi-link-45deg fs-4"></i>
+                                    <span className="fw-bold text-uppercase" style={{ fontSize: '0.75rem', letterSpacing: '1px' }}>
+                                        Offer link (Optional)
+                                    </span>
+                                </div>
+
+                                <div className="row g-2">
+                                    <div className="">
+                                        <div className="form-floating">
+                                            <input 
+                                                type="url" 
+                                                className={`form-control ${printError ? 'is-invalid' : ''}`}
+                                                id="floatingOfferLink"
+                                                placeholder="https://example.com/offer"
+                                                value={offerLink} 
+                                                onChange={e => setOfferLink(e.target.value)}
+                                            />
+                                            <label htmlFor="floatingOfferLink">Full URL to where your kit is listed</label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Error */}
+                                {printError && (
+                                    <div className="text-danger mt-2 small d-flex align-items-center">
+                                        <i className="bi bi-exclamation-circle me-1"></i>
+                                        {printError}
+                                    </div>
+                                )}
+                            </div>
+                            
+
+                            {/* Buttons */}
+                            <div className="d-grid gap-2">
+                                <button type="submit" className="btn btn-primary btn-lg" disabled={loading}>
+                                    {loading
+                                        ? 'Uploading...'
+                                        : 'Add to Collection'}
+                                </button>
+                                <button type="button" className="btn btn-light" onClick={() => navigate('/my-collection')}>
+                                    Cancel
+                                </button>
+                            </div>
+
+                        </form>
+                    </div>
+                </div>
+
             </div>
-          </div>
-
         </div>
-      </div>
     </div>
   );
 };

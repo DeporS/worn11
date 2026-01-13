@@ -116,6 +116,7 @@ class UserKit(models.Model):
     player_name = models.CharField(max_length=100, null=True, blank=True)
     player_number = models.CharField(max_length=10, null=True, blank=True)
     for_sale = models.BooleanField(default=False)
+    offer_link = models.URLField(max_length=500, null=True, blank=True)
 
     # How many users like this kit
     likes = models.ManyToManyField(User, related_name='liked_kits', blank=True)
