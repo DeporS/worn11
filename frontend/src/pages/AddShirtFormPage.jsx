@@ -317,7 +317,7 @@ const AddShirtFormPage = () => {
                             
                             <h3 className="fw-bold mb-1">Add New Kit</h3>
                             <p className="text-muted small">
-                                Fill in the details to expand your collection 👕
+                                Fill in the details to expand your collection
                             </p>
                         </div>
 

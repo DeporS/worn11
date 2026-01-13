@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { deleteKitFromCollection, toggleLike } from '../services/api';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Swal from 'sweetalert2';
 
 import '../styles/profile.css';
@@ -10,6 +10,34 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
     const navigate = useNavigate();
     const [isDeleting, setIsDeleting] = useState(false);
     const [selectedImageIndex, setSelectedImageIndex] = useState(null);
+
+    const galleryRef = useRef(null);
+    useEffect(() => {
+        const el = galleryRef.current;
+        if (!el) return;
+
+        const handleWheel = (e) => {
+            const canScrollHorizontally = el.scrollWidth > el.clientWidth;
+
+            if (!canScrollHorizontally) return;
+
+            const atStart = el.scrollLeft === 0;
+            const atEnd = Math.abs(el.scrollWidth - el.scrollLeft - el.clientWidth) < 2;
+
+            if ((atStart && e.deltaY < 0) || (atEnd && e.deltaY > 0)) {
+                return;
+            }
+
+            e.preventDefault(); 
+            el.scrollLeft += e.deltaY;
+        };
+
+        el.addEventListener('wheel', handleWheel, { passive: false });
+
+        return () => {
+            el.removeEventListener('wheel', handleWheel);
+        };
+    }, []);
 
     // Like state
     const [isLiked, setIsLiked] = useState(() => {
@@ -147,6 +175,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 
                 {/* Gallery of photos */}
                 <div
+                    ref={galleryRef}
                     className="p-2 d-flex custom-scrollbar"
                     style={{
                         gap: '2px',
@@ -156,15 +185,15 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
                         scrollBehavior: 'smooth',
                         overflowX: 'scroll',
                     }}
-                    onWheel={(e) => {
-                        const el = e.currentTarget;
-                        const canScrollHorizontally = el.scrollWidth > el.clientWidth;
+                    // onWheel={(e) => {
+                    //     const el = e.currentTarget;
+                    //     const canScrollHorizontally = el.scrollWidth > el.clientWidth;
 
-                        if (canScrollHorizontally) {
-                            e.preventDefault();
-                            el.scrollLeft += e.deltaY;
-                        }
-                    }}
+                    //     if (canScrollHorizontally) {
+                    //         e.preventDefault();
+                    //         el.scrollLeft += e.deltaY;
+                    //     }
+                    // }}
                 >
                     {item.images.length > 0 ? (
                         item.images.map((photo, index) => (
@@ -284,15 +313,22 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
                                 
                             {/* View Offer Link */}
                             {item.for_sale ? (
-                                <a
-                                    href={item.externalUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="minimal-offer-link"
-                                >
-                                    <span>View offer</span>
-                                    <span className="arrow-icon">➚</span>
-                                </a>
+                                item.offer_link ? (
+                                    <a
+                                        href={item.offer_link}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="minimal-offer-link"
+                                    >
+                                        <span>View offer</span>
+                                        <span className="arrow-icon">➚</span>
+                                    </a>
+                                ) : (
+                                    <a className="minimal-not-for-sale-link">
+                                        <span>No link provided</span>
+                                        <span className="arrow-icon">⨂</span>
+                                    </a>
+                                )
                             ) : (
                                 <a className="minimal-not-for-sale-link">
                                     <span>Not for sale</span>
@@ -395,7 +431,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
                         </button>
                     )}
 
-                    <div class="lightbox-frame">
+                    <div className="lightbox-frame">
                         <img
                             src={activeImage.image}
                             alt="Enlarged view"
