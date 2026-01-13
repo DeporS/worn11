@@ -214,20 +214,47 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
                     <div className="kit-info p-2">
                         {/* Season & Kit Type */}
                         <div className="d-flex justify-content-between text-muted small mb-1">
-                            <span title="Season">{item.kit.season}</span>
-                            <span title="Kit Type">{item.kit.kit_type}</span>
+                            <span title="Season" className="d-flex align-items-center">
+                                <i className="bi bi-calendar3 me-1"></i>
+                                {item.kit.season}
+                            </span>
+                            <span title="Kit Type" className="d-flex align-items-center">
+                                <span className="me-2">{item.kit.kit_type}</span>
+                                <i className="bi bi-palette2"></i>
+                            </span>
                         </div>
 
                         {/* Technology & Size */}
                         <div className="d-flex justify-content-between text-muted small mb-1 mt-1">
-                            <span title="Technology">{item.technology_display}</span>
-                            <span title="Size">{item.size}</span>
+                            <span title="Technology" className="d-flex align-items-center">
+                                <i className="bi-layers me-1"></i>
+                                {item.technology_display}
+                            </span>
+                            <span title="Size" className="d-flex align-items-center">
+                                <span className="me-2">{item.size}</span>
+                                <i className="bi bi-arrows-angle-expand"></i>
+                            </span>
                         </div>
 
                         {/* Condition & Player */}
                         <div className="d-flex justify-content-between text-muted small mt-1">
-                            <span title="Condition">{item.condition_display}</span>
-                            <span title="Player">{item.player_name} {item.player_number}</span>
+                            <span title="Condition" className="d-flex align-items-center">
+                                <i className="bi bi-gem me-1"></i>
+                                {item.condition_display}
+                            </span>
+                            <span title="Player" className="d-flex align-items-center">
+                                {(item.player_name || item.player_number) ? (
+                                    <>
+                                        <span className="me-2">{item.player_number} {item.player_name}</span>
+                                        <i className="bi bi-person-fill"></i>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span className="opacity-50 me-2">-</span>
+                                        <i className="bi bi-person-fill"></i>
+                                    </>
+                                )}
+                            </span>
                         </div>
                     </div>
                     
