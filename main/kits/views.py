@@ -9,7 +9,7 @@ from django.db.models import Sum, Count
 from django.contrib.auth.models import User
 
 from .models import UserKit, Kit, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile
-from .serializers import UserKitSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer
+from .serializers import UserKitSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer
 
 # Current user
 class CurrentUserAPI(generics.RetrieveAPIView):
@@ -91,22 +91,28 @@ class TeamSearchAPI(generics.ListAPIView):
             is_verified=True
         )[:5] # Limit to 5 results
 
-# Endpoint: User's collection statistics
+# Endpoint: User collection statistics
 class UserCollectionStatsAPI(APIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request, username):
-        queryset = UserKit.objects.filter(user__username=username)
+        # Get user if exists or return 404
+        user = get_object_or_404(User, username=username)
 
-        stats = queryset.aggregate(
-            total_value=Sum('final_value'), # Total collection value
-            total_kits=Count('id')  # Shirt count
+        # Calculate stats
+        stats = UserKit.objects.filter(user=user).aggregate(
+            total_value=Sum('final_value'), # Sum the value of all kits
+            total_kits=Count('id')          # Count the number of kits
         )
 
-        return Response({
-            "total_value": stats['total_value'] or 0,
-            "total_kits": stats['total_kits'] or 0
-        })
+        # 3Assign calculated data to the user object
+        user.total_value = stats['total_value'] or 0
+        user.total_kits = stats['total_kits'] or 0
+
+        # Pass the user to the new serializer
+        serializer = UserStatsProfileSerializer(user, context={'request': request})
+
+        return Response(serializer.data)
 
 # Endpoint: User search
 class UserSearchAPI(generics.ListAPIView):

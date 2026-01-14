@@ -1,5 +1,6 @@
 import React from 'react';
 import LoginButton from './LoginButton';
+import UserAvatar from './UserAvatar';
 import { Link } from 'react-router-dom';
 
 const API_URL = 'http://127.0.0.1:8000';
@@ -25,25 +26,11 @@ const NavBar = ({user, onLoginSuccess, onLogout}) => {
                         {user ? (
                             // LOGGED IN
                             <div className="d-flex align-items-center gap-3">
-                                <Link 
-                                    to="/my-collection" 
+                                <Link
+                                    to="/my-collection"
                                     className="text-decoration-none text-dark fw-bold d-flex align-items-center gap-2"
                                 >
-                                    {user.profile?.avatar ? (
-                                        <img 
-                                            src={getAvatarUrl(user.profile.avatar)}
-                                            alt="Avatar" 
-                                            className="rounded-circle border" 
-                                            style={{width: '35px', height: '35px', objectFit: 'cover'}}
-                                        />
-                                    ) : (
-                                        <div 
-                                            className="bg-primary text-white rounded-circle d-flex justify-content-center align-items-center fw-bold" 
-                                            style={{width: '35px', height: '35px', fontSize: '14px'}}
-                                        >
-                                            {user.username.charAt(0).toUpperCase()}
-                                        </div>
-                                    )}
+                                    <UserAvatar user={user} />
                                     {user.username}
                                 </Link>
                                 <button 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { deleteKitFromCollection, toggleLike } from '../services/api';
 import { useState, useEffect, useRef } from 'react';
 import Swal from 'sweetalert2';
@@ -401,16 +401,30 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
                                 {Number.isNaN(likesCount) || likesCount === null ? 0 : likesCount}
                             </span>
                         </div>
-
-                        {/* Added At */}
-                        <small className="text-muted" style={{ fontSize: '0.75rem' }}>
-                            <i className="bi bi-clock me-1"></i>
-                            {new Date(item.added_at).toLocaleDateString('en-GB', {
-                                day: 'numeric',
-                                month: 'short',
-                                year: 'numeric',
-                            })}
-                        </small>
+                        
+                        <div>
+                            {/* Owner */}
+                            <small className="me-2" style={{ fontSize: '0.75rem' }}>
+                                <Link 
+                                    to={`/profile/${item.owner_username}`} 
+                                    className="text-muted text-decoration-none"
+                                    onClick={(e) => e.stopPropagation()}
+                                >
+                                    <i className="bi bi-person me-1"></i>
+                                    {item.owner_username}
+                                </Link>
+                            </small>
+                            {/* Added At */}
+                            <small className="text-muted" style={{ fontSize: '0.75rem' }}>
+                                <i className="bi bi-clock me-1"></i>
+                                {new Date(item.added_at).toLocaleDateString('en-GB', {
+                                    day: 'numeric',
+                                    month: 'short',
+                                    year: 'numeric',
+                                })}
+                            </small>
+                        </div>
+                        
                     </div>
 
                 </div>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { getUserCollection, getUserStats } from '../services/api';
 import { Link, useParams } from 'react-router-dom';
 import KitCard from '../components/KitCard';
+import UserAvatar from '../components/UserAvatar';
 
 import '../styles/profile.css';
 
@@ -14,6 +15,8 @@ const ProfilePage = ({ user }) => {
 
     const [myKits, setMyKits] = useState([]);
     const [stats, setStats] = useState({ total_value: 0, total_kits: 0 });
+
+    const [profileData, setProfileData] = useState(null);
 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -31,6 +34,7 @@ const ProfilePage = ({ user }) => {
         .then(([kitsData, statsData]) => {
             setMyKits(kitsData);
             setStats(statsData);
+            setProfileData(statsData);
         })
         .catch(err => {
             console.error("Failed to load profile", err);
@@ -50,31 +54,46 @@ const ProfilePage = ({ user }) => {
     };
 
     return (
-        <div className="container-fluid py-5 px-3 px-md-5">
+        <div className="container py-5 px-3 px-md-1">
             {/* Profile headline */}
-            <div className="container py-4 bg-white p-4 rounded shadow-sm mb-5 d-flex justify-content-between align-items-center">
-                <div>
-                    <div className="d-flex align-items-center gap-1">
-                        <h2 className="fw-bold mb-0">@{profileUsername}</h2>
-                        {isOwner && (
-                            <Link to="/profile/edit" className="btn edit-button" title="Edit Profile">
-                                ✏️
-                            </Link>
-                        )}
+            <div className="container bg-white p-4 rounded shadow-sm mb-5">
+                <div className="d-flex justify-content-between align-items-center">
+                    <div className="d-flex align-items-center gap-4">
+                        {/* Profile avatar */}
+                        <UserAvatar user={profileData} size={80} />
+                        <div>
+                            <div className="d-flex align-items-center gap-1">
+                                {/* Username and edit button */}
+                                <h2 className="fw-bold mb-0">{profileUsername}</h2>
+                                {isOwner && (
+                                    <Link to="/profile/edit" className="btn edit-button" title="Edit Profile">
+                                        ✏️
+                                    </Link>
+                                )}
+                            </div>
+                            
+                            {isOwner && profileData?.email && (
+                                <p className="text-muted mb-0">{profileData.email}</p>
+                            )}
+                        </div>
                     </div>
-                    
-                    {isOwner && user?.email && (
-                        <p className="text-muted mb-0">{user.email}</p>
-                    )}
-                </div>
-                <div className="text-end">
-                    <h3 className="text-primary fw-bold mb-0">{stats.total_kits}</h3>
-                    <span className="small text-muted d-block">Kits in collection</span>
+                    <div className="text-end">
+                        <h3 className="text-primary fw-bold mb-0">{stats.total_kits}</h3>
+                        <span className="small text-muted d-block">Kits in collection</span>
 
-                    <h4 className="text-success fw-bold mb-0 mt-2">
-                        ${stats.total_value.toLocaleString()} 
-                    </h4>
-                    <span className="small text-muted">Total Value</span>
+                        <h4 className="text-success fw-bold mb-0 mt-2">
+                            ${stats.total_value.toLocaleString()} 
+                        </h4>
+                        <span className="small text-muted">Total Value</span>
+                    </div>
+                </div>
+                <div>
+                    {/* BIO */}
+                    {profileData?.bio && (
+                        <p className="mt-2 mb-0 text-secondary" style={{ maxWidth: '500px' }}>
+                            {profileData.bio}
+                        </p>
+                    )}
                 </div>
             </div>
 
@@ -109,6 +128,7 @@ const ProfilePage = ({ user }) => {
                     )}
                 </div>
             )}
+            
         </div>
     );
 };

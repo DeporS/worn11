@@ -41,50 +41,53 @@ function App() {
 
   return (
     <Router>
-      <div>
-        <NavBar 
-          user={user} 
-          onLoginSuccess={handleLoginSuccess} 
-          onLogout={handleLogout} 
-          refreshUser={fetchUserData} 
-        />
+        <div>
+            <div className="sticky-top">
+                <NavBar 
+                    user={user} 
+                    onLoginSuccess={handleLoginSuccess} 
+                    onLogout={handleLogout} 
+                    refreshUser={fetchUserData} 
+                />
+            </div>
+            
 
-        <Routes>
-          {/* Landing Page */}
-          <Route path="/" element={<CollectionPage user={user} />} />
-    
-          {/* My Collection Page */}  
-          <Route path="/my-collection"
-            element={user ? <ProfilePage user={user} /> : <Navigate to="/" />} 
-          />
-
-          {/* User Profile Page */}
-          <Route path="/profile/:username" 
-            element={<ProfilePage user={user} />} 
-          />
-
-          {/* Edit Profile Page */}
-          <Route 
-                path="/profile/edit" 
-                element={
-                    <EditProfilePage 
-                        user={user} // User logged in
-                        setUser={setUser} // Function to update user state
-                    />
-                } 
+            <Routes>
+            {/* Landing Page */}
+            <Route path="/" element={<CollectionPage user={user} />} />
+        
+            {/* My Collection Page */}  
+            <Route path="/my-collection"
+                element={user ? <ProfilePage user={user} /> : <Navigate to="/" />} 
             />
 
-          {/* Add Shirt Form Page */}
-          <Route path="/add-kit"
-            element={user ? <AddShirtFormPage /> : <Navigate to="/" />} 
-          />
+            {/* User Profile Page */}
+            <Route path="/profile/:username" 
+                element={<ProfilePage user={user} />} 
+            />
 
-          {/* Edit Shirt Form Page */}
-          <Route path="/edit-kit/:id"
-            element={user ? <EditShirtFormPage user={user} /> : <Navigate to="/" />} 
-          />
-        </Routes>
-      </div>
+            {/* Edit Profile Page */}
+            <Route 
+                    path="/profile/edit" 
+                    element={
+                        <EditProfilePage 
+                            user={user} // User logged in
+                            setUser={setUser} // Function to update user state
+                        />
+                    } 
+                />
+
+            {/* Add Shirt Form Page */}
+            <Route path="/add-kit"
+                element={user ? <AddShirtFormPage /> : <Navigate to="/" />} 
+            />
+
+            {/* Edit Shirt Form Page */}
+            <Route path="/edit-kit/:id"
+                element={user ? <EditShirtFormPage user={user} /> : <Navigate to="/" />} 
+            />
+            </Routes>
+        </div>
     </Router>
   )
 }

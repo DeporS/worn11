@@ -52,18 +52,20 @@ class UserKitSerializer(serializers.ModelSerializer):
     # Not in the model
     is_owner = serializers.SerializerMethodField()
 
+    owner_username = serializers.ReadOnlyField(source='user.username')
+
     class Meta:
         model = UserKit
         fields = [
             'id', 'user', 
             # Read-only fields
-            'kit', 'images', 'condition_display', 'technology_display', 'final_value', 'size_display', 'added_at', 'is_owner',
+            'kit', 'images', 'condition_display', 'technology_display', 'final_value', 'size_display', 'added_at', 'is_owner', 'owner_username',
             # Write-only fields
             'team_name', 'season', 'kit_type', 'new_images', 'deleted_images', 'images_order',
             # Modifiable fields
             'condition', 'shirt_technology', 'size', 'for_sale', 'manual_value', 'likes_count', 'is_liked', 'player_name', 'player_number', 'offer_link'
         ]
-        read_only_fields = ['user', 'final_value', 'kit', 'images', 'condition_display', 'technology_display', 'size_display', 'added_at', 'is_owner']
+        read_only_fields = ['user', 'final_value', 'kit', 'images', 'condition_display', 'technology_display', 'size_display', 'added_at', 'is_owner', 'owner_username', 'likes_count', 'is_liked']
     
     # Getting is_owner field
     def get_is_owner(self, obj):
@@ -222,3 +224,16 @@ class UserSearchSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'kits_count', 'avatar']
+
+# User Stats Profile Serializer
+class UserStatsProfileSerializer(serializers.ModelSerializer):
+    avatar = serializers.ImageField(source='profile.avatar', read_only=True)
+    bio = serializers.CharField(source='profile.bio', read_only=True)
+    date_joined = serializers.DateTimeField(read_only=True)
+    
+    total_kits = serializers.IntegerField(read_only=True)
+    total_value = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = User
+        fields = ['username', 'email', 'date_joined', 'avatar', 'bio', 'total_kits', 'total_value']

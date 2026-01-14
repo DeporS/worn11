@@ -76,7 +76,7 @@ class Profile(models.Model):
     # pro_expiration_date = models.DateTimeField(null=True, blank=True)
 
     avatar = models.ImageField(upload_to='profile_avatars/', null=True, blank=True)
-    bio = models.TextField(max_length=500, blank=True)
+    bio = models.TextField(max_length=1000, blank=True)
 
     def __str__(self):
         return f"{self.user.username} Profile"
