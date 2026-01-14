@@ -185,15 +185,6 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
                         scrollBehavior: 'smooth',
                         overflowX: 'scroll',
                     }}
-                    // onWheel={(e) => {
-                    //     const el = e.currentTarget;
-                    //     const canScrollHorizontally = el.scrollWidth > el.clientWidth;
-
-                    //     if (canScrollHorizontally) {
-                    //         e.preventDefault();
-                    //         el.scrollLeft += e.deltaY;
-                    //     }
-                    // }}
                 >
                     {item.images.length > 0 ? (
                         item.images.map((photo, index) => (
