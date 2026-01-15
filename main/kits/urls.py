@@ -13,6 +13,9 @@ from .views import (
     UpdateProfileView,
     CurrentUserAPI,
     ToggleLikeAPI,
+    LeagueListAPI,
+    TeamsByLeagueAPI,
+    TopKitsByTeamAPI,
 )
 from .views_auth import GoogleLogin
 
@@ -30,6 +33,9 @@ urlpatterns = [
     path('profile/update/', UpdateProfileView.as_view(), name='update-profile'),
     path('auth/user/', CurrentUserAPI.as_view(), name='current-user'),
     path('kits/<int:pk>/like/', ToggleLikeAPI.as_view(), name='toggle-like'),
+    path('leagues/', LeagueListAPI.as_view(), name='league-list'),
+    path('teams/league/<int:league_id>/', TeamsByLeagueAPI.as_view(), name='teams-by-league'),
+    path('kits/team/<int:team_id>/best/', TopKitsByTeamAPI.as_view(), name='top-kits-by-team'),
 ]
 
 if settings.DEBUG:

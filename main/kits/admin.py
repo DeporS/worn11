@@ -6,7 +6,7 @@ from django.db.models import Count
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.models import User
 
-from .models import Team, Kit, UserKit, UserKitImage, Profile
+from .models import Team, Kit, UserKit, UserKitImage, Profile, Country, League
 from .forms import MergeTeamForm
 
 class UserKitImageInline(admin.TabularInline):
@@ -115,9 +115,22 @@ class CustomUserAdmin(UserAdmin):
     get_is_moderator.short_description = 'Is Moderator'
     get_is_moderator.boolean = True
 
+# Country Admin
+class CountryAdmin(admin.ModelAdmin):
+    list_display = ('name', 'flag')
+    search_fields = ('name',)
+
+# League Admin
+class LeagueAdmin(admin.ModelAdmin):
+    list_display = ('name', 'country', 'hex_color', 'order', 'logo')
+    list_filter = ('country',)
+    search_fields = ('name', 'country__name')
+
 
 admin.site.register(Team, TeamAdmin)
 admin.site.register(Kit, KitAdmin)
 admin.site.register(UserKit, UserKitAdmin)
 admin.site.unregister(User)
 admin.site.register(User, CustomUserAdmin)
+admin.site.register(Country, CountryAdmin)
+admin.site.register(League, LeagueAdmin)

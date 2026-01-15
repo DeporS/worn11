@@ -81,10 +81,36 @@ class Profile(models.Model):
     def __str__(self):
         return f"{self.user.username} Profile"
 
+# Countries Model
+class Country(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    flag = models.ImageField(upload_to='country_flags/', null=True, blank=True)
+
+    class Meta:
+        verbose_name_plural = "Countries"
+
+    def __str__(self):
+        return self.name
+
+# League Model (ex. Premier League, La Liga, etc.)
+class League(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    country = models.ForeignKey(Country, on_delete=models.SET_NULL, null=True, blank=True, related_name='leagues')
+    logo = models.ImageField(upload_to='league_logos/', null=True, blank=True)
+
+    hex_color = models.CharField(max_length=7, default="#333333", help_text="Hex color code for the league (e.g., #FF0000)")
+    order = models.PositiveIntegerField(default=0)
+
+    def __str__(self):
+        return f"{self.name} ({self.country.name if self.country else 'No Country'})"
+
+
 # Football Teams (ex. Barcelona, Real Madrid, etc.)
 class Team(models.Model):
     name = models.CharField(max_length=100, unique=True)
     logo = models.ImageField(upload_to='team_logos/', null=True, blank=True)
+
+    league = models.ForeignKey(League, on_delete=models.SET_NULL, null=True, blank=True, related_name='teams')
 
     is_verified = models.BooleanField(default=False) # Admin can verify teams to avoid duplicates
 

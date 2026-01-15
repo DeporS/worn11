@@ -5,6 +5,7 @@ import ProfilePage from './pages/ProfilePage';
 import AddShirtFormPage from './pages/AddShirtFormPage';
 import EditShirtFormPage from './pages/EditShirtFormPage';
 import EditProfilePage from './pages/EditProfilePage';
+import HistoryPage from './pages/HistoryPage';
 import NavBar from './components/NavBar';
 import api from './services/api';
 import './index.css';
@@ -85,6 +86,11 @@ function App() {
             {/* Edit Shirt Form Page */}
             <Route path="/edit-kit/:id"
                 element={user ? <EditShirtFormPage user={user} /> : <Navigate to="/" />} 
+            />
+
+            {/* History Page */}
+            <Route path="/history"
+                element={<HistoryPage user={user} />} 
             />
             </Routes>
         </div>

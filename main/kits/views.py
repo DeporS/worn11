@@ -4,12 +4,14 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 
+from rest_framework.pagination import PageNumberPagination
+
 from django.shortcuts import get_object_or_404
 from django.db.models import Sum, Count
 from django.contrib.auth.models import User
 
-from .models import UserKit, Kit, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile
-from .serializers import UserKitSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer
+from .models import League, UserKit, Kit, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile
+from .serializers import LeagueSerializer, UserKitSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer
 
 # Current user
 class CurrentUserAPI(generics.RetrieveAPIView):
@@ -18,6 +20,12 @@ class CurrentUserAPI(generics.RetrieveAPIView):
 
     def get_object(self):
         return self.request.user
+
+# Pagination configuration
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 12
+    page_size_query_param = 'page_size'
+    max_page_size = 100
 
 # Endpoint: My collection + adding new kits
 class MyCollectionAPI(generics.ListCreateAPIView):
@@ -160,3 +168,33 @@ class ToggleLikeAPI(APIView):
             "liked": liked,
             "likes_count": kit.likes.count()
         }, status=status.HTTP_200_OK)
+
+# Endpoint: List of leagues
+class LeagueListAPI(generics.ListAPIView):
+    queryset = League.objects.all().select_related('country').order_by('order', 'name')
+    serializer_class = LeagueSerializer
+    permission_classes = [permissions.AllowAny]
+
+# Endpoint: Teams by League
+class TeamsByLeagueAPI(generics.ListAPIView):
+    serializer_class = TeamSerializer
+    permission_classes = [permissions.AllowAny]
+
+    def get_queryset(self):
+        league_id = self.kwargs['league_id']
+        return Team.objects.filter(league_id=league_id).order_by('name')
+
+# Endpoint: Top liked kits for a specific team
+class TopKitsByTeamAPI(generics.ListAPIView):
+    serializer_class = UserKitSerializer
+    permission_classes = [permissions.AllowAny]
+    pagination_class = StandardResultsSetPagination
+
+    def get_queryset(self):
+        team_id = self.kwargs['team_id']
+        
+        return UserKit.objects.filter(kit__team_id=team_id)\
+            .select_related('kit', 'kit__team', 'user')\
+            .prefetch_related('images', 'likes')\
+            .annotate(likes_total=Count('likes'))\
+            .order_by('-likes_total', '-added_at')

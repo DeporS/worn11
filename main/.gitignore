@@ -6,4 +6,6 @@ db.sqlite3
 media/user_kits/
 media/team_logos/
 media/profile_avatars/
+media/league_logos/
+media/country_flags/
 .env

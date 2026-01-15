@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Team, Kit, UserKit, UserKitImage, User, Profile
+from .models import Country, League, Team, Kit, UserKit, UserKitImage, User, Profile
 from django.contrib.auth.models import User
 from dj_rest_auth.serializers import UserDetailsSerializer
 import json
@@ -8,7 +8,7 @@ import json
 class TeamSerializer(serializers.ModelSerializer):
     class Meta:
         model = Team
-        fields = ['id', 'name', 'logo']
+        fields = ['id', 'name', 'logo', 'league']
 
 # Kit Serializer
 class KitSerializer(serializers.ModelSerializer):
@@ -237,3 +237,17 @@ class UserStatsProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['username', 'email', 'date_joined', 'avatar', 'bio', 'total_kits', 'total_value']
+
+# Country Serializer
+class CountrySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Country
+        fields = ['id', 'name', 'flag']
+
+# League Serializer
+class LeagueSerializer(serializers.ModelSerializer):
+    country = CountrySerializer(read_only=True)
+
+    class Meta:
+        model = League
+        fields = ['id', 'name', 'hex_color', 'country', 'logo']
