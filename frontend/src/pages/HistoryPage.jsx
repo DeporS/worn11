@@ -112,67 +112,102 @@ const HistoryPage = ({ user }) => {
 
             {/* --- LEAGUES GRID --- */}
             {step === 1 && (
-                <div className="row g-4">
-                    {loading && <div className="text-center w-100"><div className="spinner-border text-primary"></div></div>}
+                <div>
+                    {loading && <div className="text-center w-100 py-5"><div className="spinner-border text-primary"></div></div>}
                     
-                    {!loading && leagues.map((league) => (
-                        <div key={league.id} className="col-12 col-md-6 col-lg-4 col-xl-3">
-                            <div 
-                                className="card h-100 shadow-sm border-0 text-white p-4 league-card position-relative overflow-hidden"
-                                style={{ 
-                                    backgroundColor: league.hex_color || '#6c757d', 
-                                    cursor: 'pointer', 
-                                    transition: 'transform 0.2s',
-                                    minHeight: '160px'
-                                }}
-                                onClick={() => {
-                                    setSelectedLeague(league);
-                                    setStep(2);
-                                }}
-                                onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.03)"}
-                                onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
-                            >
-                                {/* Watermark Flag (Background) */}
-                                {league.country?.flag && (
-                                    <img 
-                                        src={league.logo || league.country.flag} 
-                                        alt="" 
-                                        style={{
-                                            position: 'absolute',
-                                            right: '-20px',
-                                            bottom: '-20px',
-                                            width: '120px',
-                                            opacity: 0.2,
-                                            transform: 'rotate(-15deg)',
-                                            pointerEvents: 'none',
-                                        }} 
-                                    />
-                                )}
+                    {!loading && (() => {
+                        // Grouping leagues by country
+                        const groupedLeagues = leagues.reduce((acc, league) => {
+                            // If a league doesn't have a country, group it under "International / Other"
+                            const countryName = league.country?.name || "International / Other";
+                            
+                            if (!acc[countryName]) {
+                                acc[countryName] = {
+                                    leagues: [],
+                                    flag: league.country?.flag // Remember country flag for header
+                                };
+                            }
+                            acc[countryName].leagues.push(league);
+                            return acc;
+                        }, {});
 
-                                <div className="d-flex flex-column h-100 justify-content-between position-relative z-1">
-                                    {/* Country on top */}
-                                    <div className="d-flex align-items-center gap-2 mb-3">
-                                        {league.country?.flag && (
+                        // SORTING COUNTRIES ALPHABETICALLY
+                        const sortedCountries = Object.keys(groupedLeagues).sort();
+
+                        // RENDERING GROUPS
+                        return sortedCountries.map((countryName) => {
+                            const group = groupedLeagues[countryName];
+
+                            return (
+                                <div key={countryName} className="mb-5">
+                                    {/* --- COUNTRY HEADER --- */}
+                                    <div className="d-flex align-items-center gap-3 mb-3 border-bottom pb-2">
+                                        {group.flag ? (
                                             <img 
-                                                src={league.country.flag} 
-                                                alt={league.country.name} 
-                                                className="rounded-circle border border-white"
-                                                style={{ width: '24px', height: '24px', objectFit: 'cover' }} 
+                                                src={group.flag} 
+                                                alt={countryName} 
+                                                className="rounded-circle shadow-sm border"
+                                                style={{ width: '40px', height: '40px', objectFit: 'cover' }}
                                             />
+                                        ) : (
+                                            <div className="bg-light rounded-circle d-flex align-items-center justify-content-center border" style={{ width: '40px', height: '40px' }}>
+                                                🌍
+                                            </div>
                                         )}
-                                        <small className="text-uppercase fw-bold" style={{ fontSize: '0.75rem', opacity: 0.9, letterSpacing: '1px' }}>
-                                            {league.country?.name}
-                                        </small>
+                                        <h2 className="fw-bold m-0 text-dark">{countryName}</h2>
                                     </div>
 
-                                    {/* League Name */}
-                                    <h3 className="fw-bold m-0 text-truncate" title={league.name}>
-                                        {league.name}
-                                    </h3>
+                                    {/* --- LEAGUES GRID FOR THIS COUNTRY --- */}
+                                    <div className="row g-4">
+                                        {group.leagues.map((league) => (
+                                            <div key={league.id} className="col-12 col-md-6 col-lg-4 col-xl-3">
+                                                <div 
+                                                    className="card h-100 shadow-sm border-0 text-white p-4 league-card position-relative overflow-hidden"
+                                                    style={{ 
+                                                        backgroundColor: league.hex_color || '#6c757d', 
+                                                        cursor: 'pointer', 
+                                                        transition: 'transform 0.2s',
+                                                        minHeight: '140px'
+                                                    }}
+                                                    onClick={() => {
+                                                        setSelectedLeague(league);
+                                                        setStep(2);
+                                                    }}
+                                                    onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.03)"}
+                                                    onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
+                                                >
+                                                    {/* Watermark Logo */}
+                                                    {league.logo && (
+                                                        <img 
+                                                            src={league.logo} 
+                                                            alt="" 
+                                                            style={{
+                                                                position: 'absolute',
+                                                                right: '-20px',
+                                                                bottom: '-20px',
+                                                                width: '120px',
+                                                                opacity: 0.15,
+                                                                transform: 'rotate(-15deg)',
+                                                                pointerEvents: 'none'
+                                                            }} 
+                                                        />
+                                                    )}
+
+                                                    <div className="d-flex flex-column h-100 justify-content-center position-relative z-1 text-center">
+                                                        <h3 className="fw-bold m-0 text-shadow">{league.name}</h3>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
-                        </div>
-                    ))}
+                            );
+                        });
+                    })()}
+                    
+                    {!loading && leagues.length === 0 && (
+                        <div className="text-center text-muted">No leagues found.</div>
+                    )}
                 </div>
             )}
 
