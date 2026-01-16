@@ -52,3 +52,79 @@
     height: 40px;
     font-size: 1.5rem;
 }
+
+/* KITS GRID */
+.season-row-scroll {
+    display: flex;
+    gap: 1rem;
+    overflow-x: auto;
+    padding-bottom: 1rem;
+    padding-top: 0.5rem;
+    
+    scrollbar-width: thin;
+    scrollbar-color: #dee2e6 transparent;
+}
+
+/* Scrollbar styling for Chrome/Safari */
+.season-row-scroll::-webkit-scrollbar {
+    height: 8px;
+}
+.season-row-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+.season-row-scroll::-webkit-scrollbar-thumb {
+    background-color: #dee2e6;
+    border-radius: 4px;
+}
+
+/* SLOT IN ALBUM */
+.album-slot {
+    /* Fixed width to prevent shrinking */
+    min-width: 200px; 
+    max-width: 200px;
+    flex: 0 0 auto; /* Prevent shrinking */
+}
+
+/* EMPTY SLOT - Styling */
+.empty-kit-slot {
+    border: 2px dashed #e9ecef;
+    border-radius: 12px;
+    height: 100%;
+    min-height: 280px; /* Match height to KitCard */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: #adb5bd;
+    background-color: #f8f9fa;
+    transition: all 0.2s;
+}
+
+.empty-kit-slot:hover {
+    border-color: #ced4da;
+    background-color: #e9ecef;
+    color: #6c757d;
+    text-decoration: none;
+    transform: translateY(-2px);
+}
+
+.season-divider {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin: 3rem 0 1.5rem 0;
+}
+
+.season-divider hr {
+    flex-grow: 1;
+    border-top: 1px solid #dee2e6;
+    opacity: 1;
+}
+
+.season-year {
+    font-weight: 800;
+    font-size: 1.5rem;
+    color: #343a40;
+    font-family: monospace;
+}
