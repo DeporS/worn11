@@ -5,11 +5,12 @@ import KitCard from '../../components/KitCard';
 const SHIRT_TYPES = [
     { value: 'Home', label: 'Home' },
     { value: 'Away', label: 'Away' },
+    { value: 'GK', label: 'Goalkeeper' },
     { value: 'Third', label: 'Third' },
     { value: 'Fourth', label: 'Fourth' },
     { value: 'Cup', label: 'Cup' },
     { value: 'Training', label: 'Training' },
-    { value: 'GK', label: 'Goalkeeper' },
+    { value: 'Special', label: 'Special' },
 ];
 
 const KitsGrid = ({ kits, loading, selectedTeamName, user }) => {

@@ -19,6 +19,7 @@ SHIRT_TYPES = [
     ('Cup', 'Cup'),
     ('Training', 'Training'),
     ('GK', 'Goalkeeper'),
+    ('Special', 'Special Edition'),
 ]
 
 SIZE_CHOICES = [
