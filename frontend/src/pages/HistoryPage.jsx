@@ -135,7 +135,7 @@ const HistoryPage = ({ user }) => {
                                 {/* Watermark Flag (Background) */}
                                 {league.country?.flag && (
                                     <img 
-                                        src={league.country.flag} 
+                                        src={league.logo || league.country.flag} 
                                         alt="" 
                                         style={{
                                             position: 'absolute',
@@ -144,7 +144,7 @@ const HistoryPage = ({ user }) => {
                                             width: '120px',
                                             opacity: 0.2,
                                             transform: 'rotate(-15deg)',
-                                            pointerEvents: 'none'
+                                            pointerEvents: 'none',
                                         }} 
                                     />
                                 )}
