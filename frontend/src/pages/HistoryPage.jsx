@@ -3,20 +3,19 @@ import api from '../services/api';
 import KitCard from '../components/KitCard';
 
 const HistoryPage = ({ user }) => {
-    // --- STANY UI ---
-    const [step, setStep] = useState(1); // 1: Wybór Ligi, 2: Wybór Zespołu, 3: Lista Koszulek
+    const [step, setStep] = useState(1); // 1: Leagues, 2: Teams, 3: Kits
     const [loading, setLoading] = useState(false);
 
-    // --- DANE ---
+    // --- DATA ---
     const [leagues, setLeagues] = useState([]);
     const [teams, setTeams] = useState([]);
     const [kits, setKits] = useState([]);
 
-    // --- WYBRANE ELEMENTY ---
+    // --- SELECTED ITEMS ---
     const [selectedLeague, setSelectedLeague] = useState(null);
     const [selectedTeam, setSelectedTeam] = useState(null);
 
-    // KROK 1: Pobierz Ligi na start
+    // Fetch Leagues on start
     useEffect(() => {
         setLoading(true);
         api.get('/leagues/')
@@ -30,7 +29,7 @@ const HistoryPage = ({ user }) => {
             });
     }, []);
 
-    // KROK 2: Pobierz Zespoły po wybraniu Ligi
+    // Fetch Teams after selecting a League
     useEffect(() => {
         if (selectedLeague && step === 2) {
             setLoading(true);
@@ -43,13 +42,13 @@ const HistoryPage = ({ user }) => {
         }
     }, [selectedLeague, step]);
 
-    // KROK 3: Pobierz Koszulki po wybraniu Zespołu
+    // Fetch Kits after selecting a Team
     useEffect(() => {
         if (selectedTeam && step === 3) {
             setLoading(true);
             api.get(`/kits/team/${selectedTeam.id}/best/`)
                 .then(res => {
-                    // Obsługa paginacji: backend zwraca { results: [...] } lub samą listę [...]
+                    // Handling pagination: backend returns { results: [...] } or just a list [...]
                     setKits(res.data.results || res.data);
                     setLoading(false);
                 })
@@ -57,7 +56,7 @@ const HistoryPage = ({ user }) => {
         }
     }, [selectedTeam, step]);
 
-    // Funkcja resetująca widok (kliknięcie w Breadcrumbs)
+    // Function to reset view (clicking on Breadcrumbs)
     const handleReset = (targetStep) => {
         setStep(targetStep);
         if (targetStep === 1) {
@@ -73,11 +72,11 @@ const HistoryPage = ({ user }) => {
             
             {/* HEADER & BREADCRUMBS */}
             <div className="mb-5">
-                <h1 className="fw-bold display-5 mb-3">Football History 🏆</h1>
+                <h1 className="fw-bold display-5 mb-3">Football Shirts History 🏆</h1>
                 
                 <nav aria-label="breadcrumb">
                     <ol className="breadcrumb fs-5 align-items-center">
-                        {/* Krok 1: Leagues */}
+                        {/* Leagues */}
                         <li className={`breadcrumb-item ${step === 1 ? 'active' : ''}`}>
                             <span 
                                 role="button" 
@@ -88,7 +87,7 @@ const HistoryPage = ({ user }) => {
                             </span>
                         </li>
 
-                        {/* Krok 2: Selected League Name */}
+                        {/* Selected League Name */}
                         {step > 1 && selectedLeague && (
                             <li className={`breadcrumb-item ${step === 2 ? 'active' : ''}`}>
                                 <span 
@@ -101,7 +100,7 @@ const HistoryPage = ({ user }) => {
                             </li>
                         )}
 
-                        {/* Krok 3: Selected Team Name */}
+                        {/* Selected Team Name */}
                         {step > 2 && selectedTeam && (
                             <li className="breadcrumb-item active" aria-current="page">
                                 {selectedTeam.name}
@@ -111,7 +110,7 @@ const HistoryPage = ({ user }) => {
                 </nav>
             </div>
 
-            {/* --- VIEW 1: LEAGUES GRID --- */}
+            {/* --- LEAGUES GRID --- */}
             {step === 1 && (
                 <div className="row g-4">
                     {loading && <div className="text-center w-100"><div className="spinner-border text-primary"></div></div>}
@@ -133,7 +132,7 @@ const HistoryPage = ({ user }) => {
                                 onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.03)"}
                                 onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
                             >
-                                {/* Watermark Flag (Tło) */}
+                                {/* Watermark Flag (Background) */}
                                 {league.country?.flag && (
                                     <img 
                                         src={league.country.flag} 
@@ -151,7 +150,7 @@ const HistoryPage = ({ user }) => {
                                 )}
 
                                 <div className="d-flex flex-column h-100 justify-content-between position-relative z-1">
-                                    {/* Kraj na górze */}
+                                    {/* Country on top */}
                                     <div className="d-flex align-items-center gap-2 mb-3">
                                         {league.country?.flag && (
                                             <img 
@@ -166,7 +165,7 @@ const HistoryPage = ({ user }) => {
                                         </small>
                                     </div>
 
-                                    {/* Nazwa Ligi */}
+                                    {/* League Name */}
                                     <h3 className="fw-bold m-0 text-truncate" title={league.name}>
                                         {league.name}
                                     </h3>
@@ -177,7 +176,7 @@ const HistoryPage = ({ user }) => {
                 </div>
             )}
 
-            {/* --- VIEW 2: TEAMS GRID --- */}
+            {/* --- TEAMS GRID --- */}
             {step === 2 && (
                 <div>
                     {loading ? (
@@ -220,7 +219,7 @@ const HistoryPage = ({ user }) => {
                 </div>
             )}
 
-            {/* --- VIEW 3: KITS GRID --- */}
+            {/* --- KITS GRID --- */}
             {step === 3 && (
                 <div>
                     {loading ? (
@@ -237,7 +236,7 @@ const HistoryPage = ({ user }) => {
                                     <KitCard 
                                         item={item} 
                                         user={user}
-                                        // Opcjonalnie: funkcja usuwania, jeśli admin ma to robić
+                                        // Optionally: delete function if admin should do it
                                     />
                                 </div>
                             ))}

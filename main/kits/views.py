@@ -196,5 +196,5 @@ class TopKitsByTeamAPI(generics.ListAPIView):
         return UserKit.objects.filter(kit__team_id=team_id)\
             .select_related('kit', 'kit__team', 'user')\
             .prefetch_related('images', 'likes')\
-            .annotate(likes_total=Count('likes'))\
-            .order_by('-likes_total', '-added_at')
+            .annotate(likes_count=Count('likes', distinct=True))\
+            .order_by('-likes_count', '-added_at')
