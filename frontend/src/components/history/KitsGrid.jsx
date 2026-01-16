@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import KitCard from '../../components/KitCard';
+import KitCard from '../history/KitCardHistory';
 
 const SHIRT_TYPES = [
     { value: 'Home', label: 'Home' },

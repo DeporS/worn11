@@ -296,3 +296,24 @@
   border-radius: 10px; 
   border: 1px solid #dee2e6; 
 }
+
+/* Ebay button */
+.ebay-btn {
+    background-color: #f1f3f5;
+    color: #495057;
+    border: 1px solid transparent;
+    transition: all 0.2s ease-in-out;
+    font-size: 0.85rem;
+}
+
+.ebay-btn:hover {
+    background-color: #e9ecef;
+    color: #000; 
+    transform: translateY(-1px);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.ebay-btn:active {
+    transform: translateY(0);
+    background-color: #dee2e6;
+}
