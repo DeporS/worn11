@@ -128,3 +128,31 @@
     color: #343a40;
     font-family: monospace;
 }
+
+/* KITS GRID USING CSS GRID */
+
+.kits-grid {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 240px;
+    align-items: start;
+    gap: 1rem;
+}
+
+/* Add missing kit button */
+.add-missing {
+  border: 1px dashed #ced4da;
+  color: #6c757d;
+  padding: 0.6rem 1.2rem;
+  border-radius: 999px;
+  text-decoration: none;
+  font-weight: 500;
+
+  transition: all 0.15s ease;
+}
+
+.add-missing:hover {
+  border-color: #198754;
+  color: #198754;
+  background: rgba(25, 135, 84, 0.05);
+}

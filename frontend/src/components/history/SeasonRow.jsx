@@ -1,0 +1,137 @@
+import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import KitCardHistory from './KitCardHistory';
+
+import '../../styles/history.css';
+
+const SHIRT_TYPES = [
+    { value: 'Home', label: 'Home' },
+    { value: 'Away', label: 'Away' },
+    { value: 'GK', label: 'Goalkeeper' },
+    { value: 'Third', label: 'Third' },
+    { value: 'Fourth', label: 'Fourth' },
+    { value: 'Cup', label: 'Cup' },
+    { value: 'Training', label: 'Training' },
+    { value: 'Special', label: 'Special' },
+];
+
+const SeasonRow = ({ season, organizedKits, showEmpty, selectedTeamName, user }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+
+    // Default items per row
+    const [itemsPerRow, setItemsPerRow] = useState(4); 
+
+    // Responsiveness
+    useEffect(() => {
+        const handleResize = () => {
+            const width = window.innerWidth;
+            
+            if (width < 576) {
+                setItemsPerRow(1); 
+            } else if (width < 768) {
+                setItemsPerRow(2);
+            } else if (width < 992) {
+                setItemsPerRow(3);
+            } else {
+                setItemsPerRow(4);
+            }
+        };
+
+        // Run on load
+        handleResize();
+
+        // Listen for window resize
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+
+    // DISPLAY LOGIC 
+    const hasAnyKit = SHIRT_TYPES.some(t => organizedKits[season]?.[t.value]);
+    if (!showEmpty && !hasAnyKit) return null;
+
+    // Slice the array depending on the screen size
+    const visibleTypes = isExpanded ? SHIRT_TYPES : SHIRT_TYPES.slice(0, itemsPerRow);
+    
+    // Show the button only if there are more types than fit in one row
+    const hasMore = SHIRT_TYPES.length > itemsPerRow;
+
+    return (
+        <div className="mb-5">
+            {/* Season headline */}
+            <div className="d-flex align-items-center gap-3 mb-3">
+                <h3 className="m-0 fw-bold text-secondary" style={{ fontFamily: 'monospace', letterSpacing: '-1px' }}>
+                    {season}
+                </h3>
+                <div className="flex-grow-1 border-bottom"></div>
+            </div>
+
+            {/* Kits Grid */}
+            <div className="row g-3">
+                {visibleTypes.map((typeObj) => {
+                    const bestKit = organizedKits[season]?.[typeObj.value];
+
+                    // If we hide empty and this specific kit is missing -> skip slot
+                    if (!showEmpty && !bestKit) return null;
+
+                    return (
+                        <div key={`${season}-${typeObj.value}`} className="col-12 col-sm-6 col-md-4 col-lg-3 col-xl-3 justify-content-center d-flex">
+                            <div 
+                                key={`${season}-${typeObj.value}`} 
+                                className="d-flex flex-column h-100"
+                                style={{ minWidth: '240px', width: '240px', minHeight: '240px', flex: '0 0 auto' }}
+                            >
+                                <div className="text-center mb-2">
+                                    <span className={`badge rounded-pill ${bestKit ? 'bg-primary' : 'bg-light text-muted border'}`}>
+                                        {typeObj.label}
+                                    </span>
+                                </div>
+
+                                {bestKit ? (
+                                    <div className="">
+                                        <KitCardHistory item={bestKit} user={user} />
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="d-flex flex-grow-1 align-items-center justify-content-center">
+                                            <Link 
+                                                to="/add-kit" 
+                                                className="add-missing"
+                                                title={`Add ${season} ${typeObj.label}`}
+                                                state={{ prefill: { season, type: typeObj.value, team: selectedTeamName } }}
+                                            >
+                                                + Add missing kit
+                                            </Link>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+
+            {/* Show More / Less */}
+            {hasMore && (
+                <div className="text-center mt-3">
+                    <button 
+                        onClick={() => setIsExpanded(!isExpanded)}
+                        className="btn btn-sm btn-outline-secondary rounded-pill px-4"
+                    >
+                        {isExpanded ? (
+                            <>
+                                Hide <i className="bi bi-chevron-up ms-1"></i>
+                            </>
+                        ) : (
+                            <>
+                                Show More ({SHIRT_TYPES.length - itemsPerRow} types) <i className="bi bi-chevron-down ms-1"></i>
+                            </>
+                        )}
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default SeasonRow;
