@@ -227,7 +227,7 @@ const KitCardHistory = ({ item, onDeleteSuccess, user }) => {
                     
                     {/* Voting */}
                     <div>
-                        <span className="fw-bold">👎</span>
+                        <span className="fw-bold"></span>
                     </div>
 
                     {/* EBAY Button */}

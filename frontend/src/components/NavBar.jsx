@@ -40,7 +40,7 @@ const NavBar = ({ user, onLoginSuccess, onLogout }) => {
                                     `nav-link px-3 fw-bold ${isActive ? 'text-primary' : 'text-dark'}`
                                 }
                             >
-                                Kit History
+                                Kit Museum
                             </NavLink>
                         </li>
                     </ul>
