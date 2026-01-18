@@ -139,20 +139,27 @@
     gap: 1rem;
 }
 
-/* Add missing kit button */
-.add-missing {
-  border: 1px dashed #ced4da;
-  color: #6c757d;
-  padding: 0.6rem 1.2rem;
-  border-radius: 999px;
+/* Add missing card button */
+.add-missing-card {
+  width: 100%;
+  height: 100%;
+
+  border: 3px dashed #ced4da;
+  border-radius: 16px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
   text-decoration: none;
+  color: #6c757d;
   font-weight: 500;
 
   transition: all 0.15s ease;
 }
 
-.add-missing:hover {
-  border-color: #198754;
-  color: #198754;
-  background: rgba(25, 135, 84, 0.05);
+.add-missing-card:hover {
+  border-color: #6e65f0;
+  background: rgba(110, 101, 240, 0.04);
+  color: #6e65f0;
 }

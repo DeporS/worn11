@@ -92,18 +92,18 @@ const SeasonRow = ({ season, organizedKits, showEmpty, selectedTeamName, user })
                                         <KitCardHistory item={bestKit} user={user} />
                                     </div>
                                 ) : (
-                                    <>
-                                        <div className="d-flex flex-grow-1 align-items-center justify-content-center">
-                                            <Link 
-                                                to="/add-kit" 
-                                                className="add-missing"
-                                                title={`Add ${season} ${typeObj.label}`}
-                                                state={{ prefill: { season, type: typeObj.value, team: selectedTeamName } }}
+                                    <div className="d-flex flex-grow-1 align-items-center justify-content-center p-3">
+                                        <Link
+                                            to="/add-kit"
+                                            className="add-missing-card"
+                                            title={`Add ${season} ${typeObj.label}`}
+                                            state={{ prefill: { season, type: typeObj.value, team: selectedTeamName } }}
                                             >
+                                            <span className="add-missing-text">
                                                 + Add missing kit
-                                            </Link>
-                                        </div>
-                                    </>
+                                            </span>
+                                        </Link>
+                                    </div>
                                 )}
                             </div>
                         </div>
