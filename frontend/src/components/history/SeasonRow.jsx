@@ -19,7 +19,7 @@ const SeasonRow = ({ season, organizedKits, showEmpty, selectedTeamName, user })
     const [isExpanded, setIsExpanded] = useState(false);
 
     // Default items per row
-    const [itemsPerRow, setItemsPerRow] = useState(4); 
+    const [itemsPerRow, setItemsPerRow] = useState(5); 
 
     // Responsiveness
     useEffect(() => {
@@ -27,13 +27,15 @@ const SeasonRow = ({ season, organizedKits, showEmpty, selectedTeamName, user })
             const width = window.innerWidth;
             
             if (width < 576) {
-                setItemsPerRow(1); 
+                setItemsPerRow(2); // Mobile
             } else if (width < 768) {
-                setItemsPerRow(2);
+                setItemsPerRow(2); // Small devices
             } else if (width < 992) {
-                setItemsPerRow(3);
+                setItemsPerRow(3); // Tablet
+            } else if (width < 1200) {
+                setItemsPerRow(4); // Laptop
             } else {
-                setItemsPerRow(4);
+                setItemsPerRow(5); // Desktop
             }
         };
 
@@ -67,7 +69,7 @@ const SeasonRow = ({ season, organizedKits, showEmpty, selectedTeamName, user })
             </div>
 
             {/* Kits Grid */}
-            <div className="row g-3">
+            <div className="row g-2 g-md-3 row-cols-2 row-cols-md-3 row-cols-lg-4 row-cols-xl-5">
                 {visibleTypes.map((typeObj) => {
                     const bestKit = organizedKits[season]?.[typeObj.value];
 
@@ -75,11 +77,11 @@ const SeasonRow = ({ season, organizedKits, showEmpty, selectedTeamName, user })
                     if (!showEmpty && !bestKit) return null;
 
                     return (
-                        <div key={`${season}-${typeObj.value}`} className="col-12 col-sm-6 col-md-4 col-lg-3 col-xl-3 justify-content-center d-flex">
+                        <div key={`${season}-${typeObj.value}`} className="col d-flex justify-content-center">
                             <div 
                                 key={`${season}-${typeObj.value}`} 
-                                className="d-flex flex-column h-100"
-                                style={{ minWidth: '240px', width: '240px', minHeight: '240px', flex: '0 0 auto' }}
+                                className="d-flex flex-column h-100 w-100"
+                                style={{ minHeight: '240px'}}
                             >
                                 <div className="text-center mb-2">
                                     <span className={`badge rounded-pill ${bestKit ? 'bg-primary' : 'bg-light text-muted border'}`}>
@@ -98,6 +100,7 @@ const SeasonRow = ({ season, organizedKits, showEmpty, selectedTeamName, user })
                                             className="add-missing-card"
                                             title={`Add ${season} ${typeObj.label}`}
                                             state={{ prefill: { season, type: typeObj.value, team: selectedTeamName } }}
+                                            style= {{ minHeight: '100%' }}
                                             >
                                             <span className="add-missing-text">
                                                 + Add missing kit
