@@ -317,3 +317,8 @@
     transform: translateY(0);
     background-color: #dee2e6;
 }
+
+/* Username */
+.username {
+  font-weight: 600;
+}

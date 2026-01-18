@@ -8,6 +8,8 @@ import EditProfilePage from './pages/EditProfilePage';
 import HistoryPage from './pages/HistoryPage';
 import NavBar from './components/NavBar';
 import api from './services/api';
+
+import ScrollToTop from "./components/utils/ScrollTop";
 import './index.css';
 
 function App() {
@@ -52,6 +54,7 @@ function App() {
                 />
             </div>
             
+            <ScrollToTop />
 
             <Routes>
             {/* Landing Page */}

@@ -395,24 +395,28 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
                         
                         <div>
                             {/* Owner */}
-                            <small className="me-2" style={{ fontSize: '0.75rem' }}>
+                            <small className="me-3" style={{ fontSize: '0.75rem' }}>
                                 <Link 
                                     to={`/profile/${item.owner_username}`} 
                                     className="text-muted text-decoration-none"
                                     onClick={(e) => e.stopPropagation()}
                                 >
                                     <i className="bi bi-person me-1"></i>
-                                    {item.owner_username}
+                                    <span className="username">
+                                        {item.owner_username}
+                                    </span>
                                 </Link>
                             </small>
                             {/* Added At */}
                             <small className="text-muted" style={{ fontSize: '0.75rem' }}>
                                 <i className="bi bi-clock me-1"></i>
-                                {new Date(item.added_at).toLocaleDateString('en-GB', {
-                                    day: 'numeric',
-                                    month: 'short',
-                                    year: 'numeric',
-                                })}
+                                <span className="username">
+                                    {new Date(item.added_at).toLocaleDateString('en-GB', {
+                                        day: 'numeric',
+                                        month: 'short',
+                                        year: 'numeric',
+                                    })}
+                                </span>
                             </small>
                         </div>
                         
