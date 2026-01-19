@@ -407,8 +407,9 @@ const EditShirtFormPage = () => {
                                     )}
                                 </div>
 
-                                {/* Season & Technology (Row) */}
+                                {/* Season & Type (Row) */}
                                 <div className="row g-2">
+                                    {/* Season */}
                                     <div className="col-6">
                                         <div className="form-floating">
                                             <select
@@ -436,29 +437,28 @@ const EditShirtFormPage = () => {
                                         )}
                                     </div>
 
+                                    {/* Type */}
                                     <div className="col-6">
                                         <div className="form-floating">
-                                            <select 
-                                                ref={technologyInputRef}
-                                                className={`form-select ${technologyError ? 'is-invalid' : ''}`}
-                                                id="floatingTech"
+                                            <select
+                                                className={`form-select ${typeError ? 'is-invalid' : ''}`}
+                                                id="floatingType"
                                                 required
-                                                value={technology} 
-                                                onChange={e => setTechnology(e.target.value)}
-                                                disabled={technologyOptions.length === 0}
+                                                value={kitType} 
+                                                onChange={e => setKitType(e.target.value)}
+                                                disabled={typeOptions.length === 0}
+                                                ref={typeInputRef}
                                             >
                                                 <option value="" disabled hidden/>
-                                                {technologyOptions.map(opt => (
-                                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                                ))}
+                                                {typeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                                             </select>
-                                            <label htmlFor="floatingTech">Technology</label>
+                                            <label htmlFor="floatingType">Type</label>
                                         </div>
                                         {/* Error */}
-                                        {technologyError && (
+                                        {typeError && (
                                             <div className="text-danger mt-2 small d-flex align-items-center">
                                                 <i className="bi bi-exclamation-circle me-1"></i>
-                                                {technologyError}
+                                                {typeError}
                                             </div>
                                         )}
                                     </div>
@@ -670,33 +670,7 @@ const EditShirtFormPage = () => {
                                     </span>
                                 </div>
 
-                                <div className="row g-2">
-                                    {/* Type */}
-                                    <div className="col-6">
-                                        <div className="form-floating">
-                                            <select
-                                                className={`form-select ${typeError ? 'is-invalid' : ''}`}
-                                                id="floatingType"
-                                                required
-                                                value={kitType} 
-                                                onChange={e => setKitType(e.target.value)}
-                                                disabled={typeOptions.length === 0}
-                                                ref={typeInputRef}
-                                            >
-                                                <option value="" disabled hidden/>
-                                                {typeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                                            </select>
-                                            <label htmlFor="floatingType">Type</label>
-                                        </div>
-                                        {/* Error */}
-                                        {typeError && (
-                                            <div className="text-danger mt-2 small d-flex align-items-center">
-                                                <i className="bi bi-exclamation-circle me-1"></i>
-                                                {typeError}
-                                            </div>
-                                        )}
-                                    </div>
-                                    
+                                <div className="row g-2">                                    
                                     {/* Size */}
                                     <div className="col-6">
                                         <div className="form-floating">
@@ -719,6 +693,34 @@ const EditShirtFormPage = () => {
                                             <div className="text-danger mt-2 small d-flex align-items-center">
                                                 <i className="bi bi-exclamation-circle me-1"></i>
                                                 {sizeError}
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    {/* Technology */}
+                                    <div className="col-6">
+                                        <div className="form-floating">
+                                            <select 
+                                                ref={technologyInputRef}
+                                                className={`form-select ${technologyError ? 'is-invalid' : ''}`}
+                                                id="floatingTech"
+                                                required
+                                                value={technology} 
+                                                onChange={e => setTechnology(e.target.value)}
+                                                disabled={technologyOptions.length === 0}
+                                            >
+                                                <option value="" disabled hidden/>
+                                                {technologyOptions.map(opt => (
+                                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                                ))}
+                                            </select>
+                                            <label htmlFor="floatingTech">Technology</label>
+                                        </div>
+                                        {/* Error */}
+                                        {technologyError && (
+                                            <div className="text-danger mt-2 small d-flex align-items-center">
+                                                <i className="bi bi-exclamation-circle me-1"></i>
+                                                {technologyError}
                                             </div>
                                         )}
                                     </div>

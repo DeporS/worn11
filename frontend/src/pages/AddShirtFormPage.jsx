@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, use } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { addKitToCollection } from '../services/api';
 import api from '../services/api';
@@ -9,6 +9,7 @@ import '../styles/photos.css';
 
 const AddShirtFormPage = () => {
     const navigate = useNavigate();
+    const location = useLocation();
 
     // States from Backend
     const [sizeOptions, setSizeOptions] = useState([]);
@@ -58,6 +59,10 @@ const AddShirtFormPage = () => {
     // User
     const [isPro, setIsPro] = useState(false);
     const MAX_PHOTOS = isPro ? 20 : 5;
+
+    // Current year for season options
+    const currentYear = new Date().getFullYear();
+    const maxYear = currentYear + 1;
 
     // Refs for drag and drop
     const dragItem = useRef(null);
@@ -177,8 +182,14 @@ const AddShirtFormPage = () => {
         const timerId = setTimeout(() => {
             api.get(`teams/search/?q=${teamName}`)
                 .then(res => {
-                    setSuggestions(res.data);
-                    setShowSuggestions(true);
+                    const results = res.data;
+                    setSuggestions(results);
+                    
+                    if (results.length === 1 && results[0].name.toLowerCase() === teamName.toLowerCase()) {
+                        setShowSuggestions(false);
+                    } else {
+                        setShowSuggestions(true);
+                    }
                 })
         }, 300); // 300ms debounce
 
@@ -207,6 +218,19 @@ const AddShirtFormPage = () => {
             firstErrorField.ref.current.focus();
         }
     }, [teamError, seasonError, technologyError, typeError, sizeError, conditionError, printError]);
+
+    // Prefill form if data is in location state (comes from museum missing kit link)
+    useEffect(() => {
+        if (location.state && location.state.prefill) {
+            const { season, type, team } = location.state.prefill;
+
+            // console.log("Prefilling form with:", season, type, team);
+
+            if (season) setSeason(season);
+            if (type) setKitType(type);
+            if (team) setTeamName(team);
+        }
+    }, [location]);
 
 
     const handleSuggestionClick = (team) => {
@@ -386,8 +410,9 @@ const AddShirtFormPage = () => {
                                     )}
                                 </div>
 
-                                {/* Season & Technology (Row) */}
+                                {/* Season & Type (Row) */}
                                 <div className="row g-2">
+                                    {/* Season */}
                                     <div className="col-6">
                                         <div className="form-floating">
                                             <select
@@ -399,8 +424,8 @@ const AddShirtFormPage = () => {
                                                 onChange={e => setSeason(e.target.value)}
                                             >
                                                 <option value=""></option>
-                                                {Array.from({ length: 2026 - 1940 }, (_, i) => {
-                                                    const start = 2026 - i
+                                                {Array.from({ length: maxYear - 1940 }, (_, i) => {
+                                                    const start = maxYear - i;
                                                     return <option key={start} value={`${start - 1}/${start}`}>{start - 1}/{start}</option>
                                                 })}
                                             </select>
@@ -415,32 +440,33 @@ const AddShirtFormPage = () => {
                                         )}
                                     </div>
 
+                                    {/* Type */}
                                     <div className="col-6">
                                         <div className="form-floating">
-                                            <select 
-                                                ref={technologyInputRef}
-                                                className={`form-select ${technologyError ? 'is-invalid' : ''}`}
-                                                id="floatingTech"
+                                            <select
+                                                className={`form-select ${typeError ? 'is-invalid' : ''}`}
+                                                id="floatingType"
                                                 required
-                                                value={technology} 
-                                                onChange={e => setTechnology(e.target.value)}
-                                                disabled={technologyOptions.length === 0}
+                                                value={kitType} 
+                                                onChange={e => setKitType(e.target.value)}
+                                                disabled={typeOptions.length === 0}
+                                                ref={typeInputRef}
                                             >
                                                 <option value="" disabled hidden/>
-                                                {technologyOptions.map(opt => (
-                                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                                ))}
+                                                {typeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                                             </select>
-                                            <label htmlFor="floatingTech">Technology</label>
+                                            <label htmlFor="floatingType">Type</label>
                                         </div>
                                         {/* Error */}
-                                        {technologyError && (
+                                        {typeError && (
                                             <div className="text-danger mt-2 small d-flex align-items-center">
                                                 <i className="bi bi-exclamation-circle me-1"></i>
-                                                {technologyError}
+                                                {typeError}
                                             </div>
                                         )}
                                     </div>
+
+                                    
                                 </div>
                             </div>
 
@@ -648,33 +674,7 @@ const AddShirtFormPage = () => {
                                     </span>
                                 </div>
 
-                                <div className="row g-2">
-                                    {/* Type */}
-                                    <div className="col-6">
-                                        <div className="form-floating">
-                                            <select
-                                                className={`form-select ${typeError ? 'is-invalid' : ''}`}
-                                                id="floatingType"
-                                                required
-                                                value={kitType} 
-                                                onChange={e => setKitType(e.target.value)}
-                                                disabled={typeOptions.length === 0}
-                                                ref={typeInputRef}
-                                            >
-                                                <option value="" disabled hidden/>
-                                                {typeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                                            </select>
-                                            <label htmlFor="floatingType">Type</label>
-                                        </div>
-                                        {/* Error */}
-                                        {typeError && (
-                                            <div className="text-danger mt-2 small d-flex align-items-center">
-                                                <i className="bi bi-exclamation-circle me-1"></i>
-                                                {typeError}
-                                            </div>
-                                        )}
-                                    </div>
-                                    
+                                <div className="row g-2">                                    
                                     {/* Size */}
                                     <div className="col-6">
                                         <div className="form-floating">
@@ -697,6 +697,34 @@ const AddShirtFormPage = () => {
                                             <div className="text-danger mt-2 small d-flex align-items-center">
                                                 <i className="bi bi-exclamation-circle me-1"></i>
                                                 {sizeError}
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    {/* Technology */}
+                                    <div className="col-6">
+                                        <div className="form-floating">
+                                            <select 
+                                                ref={technologyInputRef}
+                                                className={`form-select ${technologyError ? 'is-invalid' : ''}`}
+                                                id="floatingTech"
+                                                required
+                                                value={technology} 
+                                                onChange={e => setTechnology(e.target.value)}
+                                                disabled={technologyOptions.length === 0}
+                                            >
+                                                <option value="" disabled hidden/>
+                                                {technologyOptions.map(opt => (
+                                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                                ))}
+                                            </select>
+                                            <label htmlFor="floatingTech">Technology</label>
+                                        </div>
+                                        {/* Error */}
+                                        {technologyError && (
+                                            <div className="text-danger mt-2 small d-flex align-items-center">
+                                                <i className="bi bi-exclamation-circle me-1"></i>
+                                                {technologyError}
                                             </div>
                                         )}
                                     </div>
