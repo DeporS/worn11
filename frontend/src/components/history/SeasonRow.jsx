@@ -62,7 +62,7 @@ const SeasonRow = ({ season, organizedKits, showEmpty, selectedTeamName, user })
         <div className="mb-5">
             {/* Season headline */}
             <div className="d-flex align-items-center gap-3 mb-3">
-                <h3 className="m-0 fw-bold text-secondary" style={{ fontFamily: 'monospace', letterSpacing: '-1px' }}>
+                <h3 className="m-0 fw-bold text-dark" style={{ fontFamily: 'monospace', letterSpacing: '-1px' }}>
                     {season}
                 </h3>
                 <div className="flex-grow-1 border-bottom"></div>
