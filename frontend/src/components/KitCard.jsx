@@ -13,6 +13,8 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 
     const galleryRef = useRef(null);
 
+    const mainImage = item.images.length > 0 ? item.images[0].image : null;
+
     // Like state
     const [isLiked, setIsLiked] = useState(() => {
         return !!item.is_liked;
@@ -54,11 +56,11 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
         try {
             setLikeLoading(true);
             const data = await toggleLike(item.id);
-            
+
             // Synchronize state with backend response
             setIsLiked(data.liked);
             setLikesCount(data.likes_count);
-            
+
             // Debuging
             // console.log("Odpowiedź serwera:", data);
 
@@ -123,13 +125,13 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
     // Helper function to sanitize link (Cybsersecurity)
     const getSafeLink = (url) => {
         if (!url) return null;
-        
+
         // Basic check for http or https
         if (url.match(/^(http|https):\/\//)) {
             return url;
         }
 
-        return null; 
+        return null;
     };
 
     // Horizontal scroll handling
@@ -149,7 +151,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
                 return;
             }
 
-            e.preventDefault(); 
+            e.preventDefault();
             el.scrollLeft += e.deltaY;
         };
 
@@ -188,7 +190,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
                 )}
 
                 {/* Gallery of photos */}
-                <div
+                {/* <div
                     ref={galleryRef}
                     className="p-2 d-flex custom-scrollbar"
                     style={{
@@ -232,6 +234,47 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
                             <small className="text-muted">No photo</small>
                         </div>
                     )}
+                </div> */}
+                {/* Main photo */}
+                <div
+                    className="p-2"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => {
+                        if (item.images.length > 0) setSelectedImageIndex(0);
+                    }}
+                >
+                    {mainImage ? (
+                        <div className="position-relative">
+                            <img
+                                src={mainImage}
+                                alt="Kit"
+                                className="rounded"
+                                style={{
+                                    width: '100%',
+                                    aspectRatio: '3 / 4',
+                                    objectFit: 'cover',
+                                    display: 'block'
+                                }}
+                            />
+                            {/* Badge showing number of photos if more than 1 */}
+                            {item.images.length > 1 && (
+                                <div
+                                    className="position-absolute bottom-0 end-0 m-2 badge bg-dark bg-opacity-75"
+                                    style={{ fontSize: '0.7rem' }}
+                                >
+                                    <i className="bi bi-images me-1"></i>
+                                    {item.images.length}
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div
+                            className="bg-light d-flex align-items-center justify-content-center rounded text-muted"
+                            style={{ width: '100%', aspectRatio: '3 / 4' }}
+                        >
+                            <small>No photo</small>
+                        </div>
+                    )}
                 </div>
 
                 <div className="card-body">
@@ -267,7 +310,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
                             <span title="Size" className="d-flex align-items-center">
                                 <i className="bi bi-arrows-angle-expand me-2"></i>
                                 <span className="">{item.size}</span>
-                                
+
                             </span>
                         </div>
 
@@ -282,19 +325,19 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
                                     <>
                                         <i className="bi bi-person-fill me-2"></i>
                                         <span className="">{item.player_name} {item.player_number}</span>
-                                        
+
                                     </>
                                 ) : (
                                     <>
                                         <i className="bi bi-person-fill me-2"></i>
                                         <span className="opacity-50">-</span>
-                                        
+
                                     </>
                                 )}
                             </span>
                         </div>
                     </div>
-                    
+
                     {/* Contact Owner & View Offer + Edit/Delete Buttons */}
                     <div className="d-flex justify-content-between mt-1 align-items-center">
                         {/*Contact Owner & View Offer Links*/}
@@ -315,7 +358,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
                                     <span className="arrow-icon">✉︎</span>
                                 </a>
                             )}
-                                
+
                             {/* View Offer Link */}
                             {item.for_sale ? (
                                 item.offer_link && getSafeLink(item.offer_link) ? (
@@ -341,7 +384,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
                                 </a>
                             )}
                         </div>
-                        
+
                         {/* Edit and Delete Buttons */}
                         <div className="gap-2 d-flex">
                             {item.is_owner && (
@@ -382,7 +425,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
                                 🔗
                             </button>
                         </div>
-                        
+
                     </div>
 
                     {/* Likes and Added At */}
@@ -390,8 +433,8 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 
                         {/* Likes */}
                         <div className="d-flex align-items-center" style={{ gap: '5px' }}>
-                            <button 
-                                className="btn btn-link p-0 text-decoration-none" 
+                            <button
+                                className="btn btn-link p-0 text-decoration-none"
                                 onClick={handleLike}
                                 style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
                             >
@@ -406,12 +449,12 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
                                 {Number.isNaN(likesCount) || likesCount === null ? 0 : likesCount}
                             </span>
                         </div>
-                        
+
                         <div>
                             {/* Owner */}
                             <small className="me-3" style={{ fontSize: '0.75rem' }}>
-                                <Link 
-                                    to={`/profile/${item.owner_username}`} 
+                                <Link
+                                    to={`/profile/${item.owner_username}`}
                                     className="text-muted text-decoration-none"
                                     onClick={(e) => e.stopPropagation()}
                                 >
@@ -433,7 +476,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
                                 </span>
                             </small>
                         </div>
-                        
+
                     </div>
 
                 </div>
