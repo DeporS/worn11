@@ -12,32 +12,6 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
     const [selectedImageIndex, setSelectedImageIndex] = useState(null);
 
     const galleryRef = useRef(null);
-    useEffect(() => {
-        const el = galleryRef.current;
-        if (!el) return;
-
-        const handleWheel = (e) => {
-            const canScrollHorizontally = el.scrollWidth > el.clientWidth;
-
-            if (!canScrollHorizontally) return;
-
-            const atStart = el.scrollLeft === 0;
-            const atEnd = Math.abs(el.scrollWidth - el.scrollLeft - el.clientWidth) < 2;
-
-            if ((atStart && e.deltaY < 0) || (atEnd && e.deltaY > 0)) {
-                return;
-            }
-
-            e.preventDefault(); 
-            el.scrollLeft += e.deltaY;
-        };
-
-        el.addEventListener('wheel', handleWheel, { passive: false });
-
-        return () => {
-            el.removeEventListener('wheel', handleWheel);
-        };
-    }, []);
 
     // Like state
     const [isLiked, setIsLiked] = useState(() => {
@@ -145,6 +119,46 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
             return prevIndex - 1;
         });
     };
+
+    // Helper function to sanitize link (Cybsersecurity)
+    const getSafeLink = (url) => {
+        if (!url) return null;
+        
+        // Basic check for http or https
+        if (url.match(/^(http|https):\/\//)) {
+            return url;
+        }
+
+        return null; 
+    };
+
+    // Horizontal scroll handling
+    useEffect(() => {
+        const el = galleryRef.current;
+        if (!el) return;
+
+        const handleWheel = (e) => {
+            const canScrollHorizontally = el.scrollWidth > el.clientWidth;
+
+            if (!canScrollHorizontally) return;
+
+            const atStart = el.scrollLeft === 0;
+            const atEnd = Math.abs(el.scrollWidth - el.scrollLeft - el.clientWidth) < 2;
+
+            if ((atStart && e.deltaY < 0) || (atEnd && e.deltaY > 0)) {
+                return;
+            }
+
+            e.preventDefault(); 
+            el.scrollLeft += e.deltaY;
+        };
+
+        el.addEventListener('wheel', handleWheel, { passive: false });
+
+        return () => {
+            el.removeEventListener('wheel', handleWheel);
+        };
+    }, []);
 
     // Keyboard handling (arrows)
     useEffect(() => {
@@ -292,7 +306,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
                                 </a>
                             ) : (
                                 <a
-                                    href={item.externalUrl}
+                                    href={getSafeLink(item.externalUrl)}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="minimal-offer-link"
@@ -304,9 +318,9 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
                                 
                             {/* View Offer Link */}
                             {item.for_sale ? (
-                                item.offer_link ? (
+                                item.offer_link && getSafeLink(item.offer_link) ? (
                                     <a
-                                        href={item.offer_link}
+                                        href={getSafeLink(item.offer_link)}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="minimal-offer-link"

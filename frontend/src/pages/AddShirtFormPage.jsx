@@ -40,6 +40,7 @@ const AddShirtFormPage = () => {
     const [sizeError, setSizeError] = useState(null);
     const [conditionError, setConditionError] = useState(null);
     const [printError, setPrintError] = useState(null);
+    const [linkError, setLinkError] = useState(null);
 
     // UI States
     const [loading, setLoading] = useState(false);
@@ -54,6 +55,7 @@ const AddShirtFormPage = () => {
     const sizeInputRef = useRef(null); // Ref for size input
     const conditionInputRef = useRef(null); // Ref for condition input
     const printInputRef = useRef(null); // Ref for print input
+    const linkInputRef = useRef(null); // Ref for link input
     const [dragOverIndex, setDragOverIndex] = useState(null); // for drag and drop
 
     // User
@@ -206,6 +208,7 @@ const AddShirtFormPage = () => {
             { error: sizeError, ref: sizeInputRef },
             { error: conditionError, ref: conditionInputRef },
             { error: printError, ref: printInputRef },
+            { error: linkError, ref: linkInputRef },
         ];
 
         const firstErrorField = fields.find(f => f.error && f.ref.current);
@@ -217,7 +220,7 @@ const AddShirtFormPage = () => {
             });
             firstErrorField.ref.current.focus();
         }
-    }, [teamError, seasonError, technologyError, typeError, sizeError, conditionError, printError]);
+    }, [teamError, seasonError, technologyError, typeError, sizeError, conditionError, printError, linkError]);
 
     // Prefill form if data is in location state (comes from museum missing kit link)
     useEffect(() => {
@@ -252,6 +255,7 @@ const AddShirtFormPage = () => {
         setTypeError(null);
         setSizeError(null);
         setConditionError(null);
+        setLinkError(null);
 
         // Basic validation
 
@@ -282,10 +286,17 @@ const AddShirtFormPage = () => {
         }
 
         // Validate Player Name and Number
-
         if ((playerName.trim() !== "" && playerNumber.trim() === "") || 
             (playerName.trim() === "" && playerNumber.trim() !== "")) {
             setPrintError("Both Player Name and Number must be filled, or both empty.");
+            setLoading(false);
+            return;
+        }
+
+        // Validate offer link - prevent malicious strings
+        const urlPattern = /^(http|https):\/\/[^ "]+$/;
+        if (offerLink && !urlPattern.test(offerLink)) {
+            setLinkError("Link must start with http:// or https://");
             setLoading(false);
             return;
         }
@@ -869,7 +880,7 @@ const AddShirtFormPage = () => {
                             
                             
                             {/* Offer Link */}
-                            <div className={`mb-4 p-3 rounded border ${printError ? 'border-danger bg-danger bg-opacity-10' : 'bg-light border-light'}`} 
+                            <div className={`mb-4 p-3 rounded border ${linkError ? 'border-danger bg-danger bg-opacity-10' : 'bg-light border-light'}`} 
                                 style={{ transition: 'all 0.3s ease' }}>
                                 
                                 <div className="d-flex align-items-center gap-2 mb-3 text-muted">
@@ -884,7 +895,7 @@ const AddShirtFormPage = () => {
                                         <div className="form-floating">
                                             <input 
                                                 type="url" 
-                                                className={`form-control ${printError ? 'is-invalid' : ''}`}
+                                                className={`form-control ${linkError ? 'is-invalid' : ''}`}
                                                 id="floatingOfferLink"
                                                 placeholder="https://example.com/offer"
                                                 value={offerLink} 
@@ -896,10 +907,10 @@ const AddShirtFormPage = () => {
                                 </div>
 
                                 {/* Error */}
-                                {printError && (
+                                {linkError && (
                                     <div className="text-danger mt-2 small d-flex align-items-center">
                                         <i className="bi bi-exclamation-circle me-1"></i>
-                                        {printError}
+                                        {linkError}
                                     </div>
                                 )}
                             </div>

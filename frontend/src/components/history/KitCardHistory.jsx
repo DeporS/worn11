@@ -122,7 +122,7 @@ const KitCardHistory = ({ item, onDeleteSuccess, user }) => {
         
         const finalUrl = `${affiliateBaseUrl}${encodedQuery}`;
 
-        window.open(finalUrl, '_blank');
+        window.open(finalUrl, '_blank', 'noopener,noreferrer'); // noopener for security
     };
 
     // Get the current image based on the index

@@ -42,6 +42,7 @@ const EditShirtFormPage = () => {
     const [sizeError, setSizeError] = useState(null);
     const [conditionError, setConditionError] = useState(null);
     const [printError, setPrintError] = useState(null);
+    const [linkError, setLinkError] = useState(null);
 
     // UI States
     const [loading, setLoading] = useState(false);
@@ -58,6 +59,7 @@ const EditShirtFormPage = () => {
     const sizeInputRef = useRef(null);
     const conditionInputRef = useRef(null);
     const printInputRef = useRef(null);
+    const linkInputRef = useRef(null);
     const [dragOverIndex, setDragOverIndex] = useState(null);
 
     // User
@@ -218,13 +220,14 @@ const EditShirtFormPage = () => {
             { error: sizeError, ref: sizeInputRef },
             { error: conditionError, ref: conditionInputRef },
             { error: printError, ref: printInputRef },
+            { error: linkError, ref: linkInputRef },
         ];
         const firstErrorField = fields.find(f => f.error && f.ref.current);
         if (firstErrorField) {
             firstErrorField.ref.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
             firstErrorField.ref.current.focus();
         }
-    }, [teamError, seasonError, technologyError, typeError, sizeError, conditionError, printError]);
+    }, [teamError, seasonError, technologyError, typeError, sizeError, conditionError, printError, linkError]);
 
     const handleSuggestionClick = (team) => {
         isSelectionRef.current = true;
@@ -245,6 +248,7 @@ const EditShirtFormPage = () => {
         setTypeError(null);
         setSizeError(null);
         setConditionError(null);
+        setLinkError(null);
 
         // Basic validation
         if (!teamName.trim()) { setTeamError("Team Name is required."); setLoading(false); return; }
@@ -257,6 +261,13 @@ const EditShirtFormPage = () => {
         if ((playerName.trim() !== "" && playerNumber.trim() === "") || 
             (playerName.trim() === "" && playerNumber.trim() !== "")) {
             setPrintError("Both Player Name and Number must be filled, or both empty.");
+            setLoading(false);
+            return;
+        }
+
+        const urlPattern = /^(http|https):\/\/[^ "]+$/;
+        if (offerLink && !urlPattern.test(offerLink)) {
+            setLinkError("Link must start with http:// or https://");
             setLoading(false);
             return;
         }
@@ -864,7 +875,7 @@ const EditShirtFormPage = () => {
                             </div>
                             
                             {/* Offer Link */}
-                            <div className={`mb-4 p-3 rounded border ${printError ? 'border-danger bg-danger bg-opacity-10' : 'bg-light border-light'}`} 
+                            <div className={`mb-4 p-3 rounded border ${linkError ? 'border-danger bg-danger bg-opacity-10' : 'bg-light border-light'}`} 
                                 style={{ transition: 'all 0.3s ease' }}>
                                 
                                 <div className="d-flex align-items-center gap-2 mb-3 text-muted">
@@ -879,7 +890,7 @@ const EditShirtFormPage = () => {
                                         <div className="form-floating">
                                             <input 
                                                 type="url" 
-                                                className={`form-control ${printError ? 'is-invalid' : ''}`}
+                                                className={`form-control ${linkError ? 'is-invalid' : ''}`}
                                                 id="floatingOfferLink"
                                                 placeholder="https://example.com/offer"
                                                 value={offerLink} 
@@ -889,6 +900,14 @@ const EditShirtFormPage = () => {
                                         </div>
                                     </div>
                                 </div>
+                                
+                                {/* Error */}
+                                {linkError && (
+                                    <div className="text-danger mt-2 small d-flex align-items-center">
+                                        <i className="bi bi-exclamation-circle me-1"></i>
+                                        {linkError}
+                                    </div>
+                                )}
                             </div>
                             
 
