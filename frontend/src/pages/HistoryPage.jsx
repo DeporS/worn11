@@ -81,19 +81,19 @@ const HistoryPage = ({ user }) => {
 
     return (
         <div className="container py-5" style={{ maxWidth: '1400px' }}>
-            
+
             {/* HEADER & BREADCRUMBS */}
             <div className="mb-5">
                 <nav aria-label="breadcrumb">
                     <ol className="breadcrumb fs-5 align-items-center">
                         <li className={`breadcrumb-item ${step === 1 ? 'active' : ''}`}>
-                            <span role="button" className={step > 1 ? "text-primary text-decoration-underline fw-bold" : "fw-bold"} onClick={() => handleReset(1)}>
+                            <span role="button" className={step > 1 ? "breadcrumb-link" : "fw-semibold"} onClick={() => handleReset(1)}>
                                 Leagues
                             </span>
                         </li>
                         {step > 1 && selectedLeague && (
                             <li className={`breadcrumb-item ${step === 2 ? 'active' : ''}`}>
-                                <span role="button" className={step > 2 ? "text-primary text-decoration-underline" : ""} onClick={() => handleReset(2)}>
+                                <span role="button" className={step > 2 ? "breadcrumb-link" : "breadcrumb-item active"} onClick={() => handleReset(2)}>
                                     {selectedLeague.name}
                                 </span>
                             </li>
@@ -107,28 +107,28 @@ const HistoryPage = ({ user }) => {
 
             {/* --- VIEW SWITCHER --- */}
             {step === 1 && (
-                <LeaguesGrid 
-                    leagues={leagues} 
-                    loading={loading} 
-                    onSelectLeague={handleSelectLeague} 
+                <LeaguesGrid
+                    leagues={leagues}
+                    loading={loading}
+                    onSelectLeague={handleSelectLeague}
                 />
             )}
 
             {step === 2 && (
-                <TeamsGrid 
-                    teams={teams} 
-                    loading={loading} 
+                <TeamsGrid
+                    teams={teams}
+                    loading={loading}
                     selectedLeagueName={selectedLeague?.name}
                     onSelectTeam={handleSelectTeam}
                 />
             )}
 
             {step === 3 && (
-                <KitsGrid 
-                    kits={kits} 
-                    loading={loading} 
-                    selectedTeamName={selectedTeam?.name} 
-                    user={user} 
+                <KitsGrid
+                    kits={kits}
+                    loading={loading}
+                    selectedTeamName={selectedTeam?.name}
+                    user={user}
                 />
             )}
 

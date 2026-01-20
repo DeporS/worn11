@@ -1,15 +1,16 @@
 .league-card {
-    background-color: #6c757d; /* Fallback */
+    background-color: #6c757d;
+    /* Fallback */
     min-height: 160px;
     cursor: pointer;
     transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94), box-shadow 0.3s ease;
     will-change: transform;
-    
+
 }
 
 .league-card:hover {
     transform: scale(1.03);
-    box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important;
+    box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .15) !important;
 }
 
 /* Watermark (flag in the background) */
@@ -25,7 +26,7 @@
 
 /* Text for League */
 .league-title {
-    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 /* TEAM CARDS */
@@ -37,18 +38,18 @@
 
 .team-card:hover {
     transform: translateY(-5px);
-    box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important;
+    box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .15) !important;
 }
 
 /* COUNTRY HEADER */
 .country-flag-icon {
-    width: 40px; 
-    height: 40px; 
+    width: 40px;
+    height: 40px;
     object-fit: cover;
 }
 
 .country-flag-placeholder {
-    width: 40px; 
+    width: 40px;
     height: 40px;
     font-size: 1.5rem;
 }
@@ -60,7 +61,7 @@
     overflow-x: auto;
     padding-bottom: 1rem;
     padding-top: 0.5rem;
-    
+
     scrollbar-width: thin;
     scrollbar-color: #dee2e6 transparent;
 }
@@ -69,9 +70,11 @@
 .season-row-scroll::-webkit-scrollbar {
     height: 8px;
 }
+
 .season-row-scroll::-webkit-scrollbar-track {
     background: transparent;
 }
+
 .season-row-scroll::-webkit-scrollbar-thumb {
     background-color: #dee2e6;
     border-radius: 4px;
@@ -80,9 +83,10 @@
 /* SLOT IN ALBUM */
 .album-slot {
     /* Fixed width to prevent shrinking */
-    min-width: 200px; 
+    min-width: 200px;
     max-width: 200px;
-    flex: 0 0 auto; /* Prevent shrinking */
+    flex: 0 0 auto;
+    /* Prevent shrinking */
 }
 
 /* EMPTY SLOT - Styling */
@@ -90,7 +94,8 @@
     border: 2px dashed #e9ecef;
     border-radius: 12px;
     height: 100%;
-    min-height: 280px; /* Match height to KitCard */
+    min-height: 280px;
+    /* Match height to KitCard */
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -141,25 +146,73 @@
 
 /* Add missing card button */
 .add-missing-card {
-  width: 100%;
-  height: 100%;
+    width: 100%;
+    height: 100%;
 
-  border: 3px dashed #ced4da;
-  border-radius: 16px;
+    border: 3px dashed #ced4da;
+    border-radius: 16px;
 
-  display: flex;
-  align-items: center;
-  justify-content: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 
-  text-decoration: none;
-  color: #6c757d;
-  font-weight: 500;
+    text-decoration: none;
+    color: #6c757d;
+    font-weight: 500;
 
-  transition: all 0.15s ease;
+    transition: all 0.15s ease;
 }
 
 .add-missing-card:hover {
-  border-color: #6e65f0;
-  background: rgba(110, 101, 240, 0.04);
-  color: #6e65f0;
+    border-color: #6e65f0;
+    background: rgba(110, 101, 240, 0.04);
+    color: #6e65f0;
+}
+
+/* Breadcrumb link */
+.breadcrumb-link {
+    position: relative;
+    cursor: pointer;
+    font-weight: 500;
+    color: #0d6efd;
+}
+
+.breadcrumb-link::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: -2px;
+    width: 100%;
+    height: 2px;
+    background-color: currentColor;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.2s ease;
+}
+
+.breadcrumb-link:hover::after {
+    transform: scaleX(1);
+}
+
+.breadcrumb-active {
+    font-weight: 600;
+    color: #212529;
+}
+
+.breadcrumb-item+.breadcrumb-item::before {
+    content: "›";
+    color: #adb5bd;
+    font-weight: 600;
+}
+
+.breadcrumb-link:hover {
+    color: #0b5ed7;
+}
+
+.breadcrumb-link {
+    transition: color 0.15s ease;
+}
+
+.breadcrumb span {
+    letter-spacing: 0.2px;
 }
