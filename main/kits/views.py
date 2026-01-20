@@ -4,8 +4,10 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.exceptions import ValidationError
-
 from rest_framework.pagination import PageNumberPagination
+
+from rest_framework.throttling import ScopedRateThrottle
+from .throttles import KitCreationThrottle
 
 from django.shortcuts import get_object_or_404
 from django.db.models import Sum, Count
@@ -32,6 +34,8 @@ class StandardResultsSetPagination(PageNumberPagination):
 class MyCollectionAPI(generics.ListCreateAPIView):
     serializer_class = UserKitSerializer
     permission_classes = [IsAuthenticated] # Only for logged in users
+
+    throttle_classes = [KitCreationThrottle] # Custom throttle for kit creation based on user plan - Pro 50 create/day, Free 5 create/day
 
     def get_queryset(self):
         # Return only kits of the logged-in user
@@ -126,11 +130,14 @@ class KitOptionsView(APIView):
 class TeamSearchAPI(generics.ListAPIView):
     serializer_class = TeamSerializer
 
+    throttle_classes = [ScopedRateThrottle] # General throttling based on settings.py
+    throttle_scope = 'team_search'
+
     def get_queryset(self):
         # Get search query from URL parameters e.g., /api/teams/search/?q=Bar
         query = self.request.query_params.get('q', '')
 
-        if len(query) < 2:
+        if len(query) < 3:
             return Team.objects.none()  # Return empty queryset for short queries
 
         return Team.objects.filter(
@@ -168,7 +175,7 @@ class UserSearchAPI(generics.ListAPIView):
 
     def get_queryset(self):
         query = self.request.query_params.get('q', '')
-        if len(query) < 2:
+        if len(query) < 3:
             return User.objects.none() # Don't search for very short queries
 
         return User.objects.filter(

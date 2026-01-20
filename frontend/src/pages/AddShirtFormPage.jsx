@@ -174,8 +174,8 @@ const AddShirtFormPage = () => {
             return;
         }
 
-        // if team name is less than 2 characters, do not fetch
-        if (teamName.length < 2) {
+        // if team name is less than 3 characters, do not fetch
+        if (teamName.length < 3) {
             setSuggestions([]);
             return;
         }

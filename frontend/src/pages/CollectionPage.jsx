@@ -11,7 +11,7 @@ const CollectionPage = () => {
 
     useEffect(() => {
         // if (!searchQuery) return;
-        if (!searchQuery.trim()) {
+        if (!searchQuery.trim() || searchQuery.trim().length < 3) {
             setUsers([]);
             setLoading(false);
             return;
@@ -74,7 +74,7 @@ const CollectionPage = () => {
                 ))}
 
                 {/* No results message */}
-                {!loading && users.length === 0 && searchQuery.trim() !== '' && !error && (
+                {!loading && users.length === 0 && searchQuery.trim() !== '' && searchQuery.trim().length >= 4 && !error && (
                     <div className="col-12 text-center text-muted py-5">
                         <h4>No users found matching "{searchQuery}" 🤷‍♂️</h4>
                     </div>

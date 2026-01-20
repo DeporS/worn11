@@ -196,7 +196,7 @@ const EditShirtFormPage = () => {
             isSelectionRef.current = false;
             return;
         }
-        if (teamName.length < 2) {
+        if (teamName.length < 3) {
             setSuggestions([]);
             return;
         }

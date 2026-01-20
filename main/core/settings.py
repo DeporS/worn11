@@ -66,7 +66,16 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticatedOrReadOnly',
-    ]
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '100/day',
+        'user': '1000/day',
+
+        'kits-create': '5/day',
+        'kits-create-pro': '50/day',
+
+        'team_search': '60/min',
+    }   
 }
 
 # JWT configuration
