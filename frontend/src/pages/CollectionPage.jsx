@@ -9,6 +9,8 @@ const CollectionPage = () => {
     const [error, setError] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
 
+    const isFirstLoad = loading && users.length === 0 && !error;
+
     useEffect(() => {
         // if (!searchQuery) return;
         if (!searchQuery.trim() || searchQuery.trim().length < 3) {
@@ -19,7 +21,7 @@ const CollectionPage = () => {
 
         // Delay so we don't spam the API with requests on every keystroke
         const delayDebounceFn = setTimeout(() => {
-            
+
             setLoading(true);
             setError(null);
 
@@ -46,31 +48,50 @@ const CollectionPage = () => {
             <header className="mb-5 text-center">
                 <h1 className="display-5 fw-bold">Find Collectors 🔍</h1>
                 <p className="text-muted">Start typing to find users</p>
-                
+
                 <div className="mt-4 mx-auto" style={{ maxWidth: '600px' }}>
                     {/* We only pass value and onChange */}
-                    <SearchBar 
-                        value={searchQuery} 
-                        onChange={setSearchQuery} 
+                    <SearchBar
+                        value={searchQuery}
+                        onChange={setSearchQuery}
                     />
+
+                    {/* {loading && users.length > 0 && (
+                        <div className="text-muted small mt-2">
+                            <span className="spinner-border spinner-border-sm me-2"></span>
+                            Updating results...
+                        </div>
+                    )} */}
                 </div>
             </header>
 
             {/* Loading (Spinner) */}
-            {loading && (
+            {/* {loading && (
                 <div className="text-center py-5">
                     <div className="spinner-border text-primary"></div>
                 </div>
-            )}
-            
+            )} */}
+
             {error && <div className="alert alert-danger text-center">{error}</div>}
 
-            {/* List Section */}
-            <div className="row g-4">
-                {users.map(user => (
-                <div key={user.id} className="col-12 col-sm-6 col-md-4 col-lg-3">
-                    <UserCard user={user} />
+            {isFirstLoad && (
+                <div className="text-center py-5">
+                    <div className="spinner-border text-primary" style={{ width: '3rem', height: '3rem' }}></div>
                 </div>
+            )}
+
+            {/* List Section */}
+            <div
+                className="row g-4"
+                style={{
+                    opacity: loading && users.length > 0 ? 0.5 : 1,
+                    transition: 'opacity 0.2s ease-in-out'
+                }}
+            >
+                {users.map(user => (
+                    <div key={user.id} className="col-12 col-sm-6 col-md-4 col-lg-3">
+                        <UserCard user={user} />
+                    </div>
                 ))}
 
                 {/* No results message */}
