@@ -20,7 +20,7 @@ const ProfilePage = ({ user }) => {
 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    
+
     useEffect(() => {
         if (!profileUsername) return;
 
@@ -31,16 +31,16 @@ const ProfilePage = ({ user }) => {
             getUserCollection(profileUsername),
             getUserStats(profileUsername)
         ])
-        .then(([kitsData, statsData]) => {
-            setMyKits(kitsData);
-            setStats(statsData);
-            setProfileData(statsData);
-        })
-        .catch(err => {
-            console.error("Failed to load profile", err);
-            setError("User not found or error loading data.");
-        })
-        .finally(() => setLoading(false));
+            .then(([kitsData, statsData]) => {
+                setMyKits(kitsData);
+                setStats(statsData);
+                setProfileData(statsData);
+            })
+            .catch(err => {
+                console.error("Failed to load profile", err);
+                setError("User not found or error loading data.");
+            })
+            .finally(() => setLoading(false));
 
     }, [profileUsername, user?.username]);
 
@@ -71,7 +71,7 @@ const ProfilePage = ({ user }) => {
                                     </Link>
                                 )}
                             </div>
-                            
+
                             {isOwner && profileData?.email && (
                                 <p className="text-muted mb-0">{profileData.email}</p>
                             )}
@@ -82,7 +82,7 @@ const ProfilePage = ({ user }) => {
                         <span className="small text-muted d-block">Kits in collection</span>
 
                         <h4 className="text-success fw-bold mb-0 mt-2">
-                            ${stats.total_value.toLocaleString()} 
+                            ${stats.total_value.toLocaleString()}
                         </h4>
                         <span className="small text-muted">Total Value</span>
                     </div>
@@ -113,14 +113,14 @@ const ProfilePage = ({ user }) => {
                 <div className="row g-4">
                     {myKits.map(item => (
                         <div key={item.id} className="col-12 col-sm-12 col-md-12 col-lg-6 col-xl-6 col-xxl-4 col-xxl-4">
-                            <KitCard 
-                                item={item} 
-                                onDeleteSuccess={handleDeleteSuccess} 
+                            <KitCard
+                                item={item}
+                                onDeleteSuccess={handleDeleteSuccess}
                                 user={user}
                             />
                         </div>
                     ))}
-                    
+
                     {myKits.length === 0 && (
                         <div className="text-center text-muted py-5 w-100">
                             <p>{isOwner ? "You don't" : "This user doesn't"} have any kits yet.</p>
@@ -128,7 +128,7 @@ const ProfilePage = ({ user }) => {
                     )}
                 </div>
             )}
-            
+
         </div>
     );
 };

@@ -244,3 +244,14 @@ class TopKitsByTeamAPI(generics.ListAPIView):
             .prefetch_related('images', 'likes')\
             .annotate(likes_count=Count('likes', distinct=True))\
             .order_by('-likes_count', '-added_at')
+
+# Endpoint: Check username availability
+class CheckUsernameAPI(APIView):
+    def get(self, request):
+        username = request.query_params.get('q', '').strip()
+        if not username:
+            return Response({"available": False, "error": "Empty username"})
+        
+        # Check if username exists excluding the current user
+        exists = User.objects.filter(username__iexact=username).exclude(id=request.user.id).exists()
+        return Response({"available": not exists})

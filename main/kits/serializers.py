@@ -187,10 +187,29 @@ class UserKitSerializer(serializers.ModelSerializer):
 
 # Profile Serializer
 class ProfileSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source='user.username', required=False)
+
     class Meta:
         model = Profile
-        fields = ['avatar', 'bio', 'is_pro', 'is_moderator']
+        fields = ['avatar', 'bio', 'is_pro', 'is_moderator', 'username']
         read_only_fields = ['is_pro', 'is_moderator']
+
+    def update(self, instance, validated_data):
+        # Extract user data if present
+        user_data = validated_data.pop('user', {})
+        new_username = user_data.get('username')
+
+        # Update username if provided
+        if new_username and new_username != instance.user.username:
+            # check if available excluding current user
+            if User.objects.filter(username__iexact=new_username).exclude(id=instance.user.id).exists():
+                raise serializers.ValidationError({"username": "This username is already taken."})
+            
+            instance.user.username = new_username
+            instance.user.save()
+
+        # Update other profile fields
+        return super().update(instance, validated_data)
 
 # User serializer
 class UserSerializer(serializers.ModelSerializer):
