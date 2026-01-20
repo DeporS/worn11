@@ -19,13 +19,13 @@ const SeasonRow = ({ season, organizedKits, showEmpty, selectedTeamName, user })
     const [isExpanded, setIsExpanded] = useState(false);
 
     // Default items per row
-    const [itemsPerRow, setItemsPerRow] = useState(5); 
+    const [itemsPerRow, setItemsPerRow] = useState(5);
 
     // Responsiveness
     useEffect(() => {
         const handleResize = () => {
             const width = window.innerWidth;
-            
+
             if (width < 576) {
                 setItemsPerRow(2); // Mobile
             } else if (width < 768) {
@@ -54,7 +54,7 @@ const SeasonRow = ({ season, organizedKits, showEmpty, selectedTeamName, user })
 
     // Slice the array depending on the screen size
     const visibleTypes = isExpanded ? SHIRT_TYPES : SHIRT_TYPES.slice(0, itemsPerRow);
-    
+
     // Show the button only if there are more types than fit in one row
     const hasMore = SHIRT_TYPES.length > itemsPerRow;
 
@@ -78,10 +78,10 @@ const SeasonRow = ({ season, organizedKits, showEmpty, selectedTeamName, user })
 
                     return (
                         <div key={`${season}-${typeObj.value}`} className="col d-flex justify-content-center">
-                            <div 
-                                key={`${season}-${typeObj.value}`} 
+                            <div
+                                key={`${season}-${typeObj.value}`}
                                 className="d-flex flex-column h-100 w-100"
-                                style={{ minHeight: '240px'}}
+                                style={{ minHeight: '240px' }}
                             >
                                 <div className="text-center mb-2">
                                     <span className={`badge rounded-pill ${bestKit ? 'bg-primary' : 'bg-light text-muted border'}`}>
@@ -100,8 +100,8 @@ const SeasonRow = ({ season, organizedKits, showEmpty, selectedTeamName, user })
                                             className="add-missing-card"
                                             title={`Add ${season} ${typeObj.label}`}
                                             state={{ prefill: { season, type: typeObj.value, team: selectedTeamName } }}
-                                            style= {{ minHeight: '100%' }}
-                                            >
+                                            style={{ minHeight: '100%' }}
+                                        >
                                             <span className="add-missing-text">
                                                 + Add missing kit
                                             </span>
@@ -115,9 +115,9 @@ const SeasonRow = ({ season, organizedKits, showEmpty, selectedTeamName, user })
             </div>
 
             {/* Show More / Less */}
-            {hasMore && (
+            {hasMore && showEmpty && (
                 <div className="text-center mt-3">
-                    <button 
+                    <button
                         onClick={() => setIsExpanded(!isExpanded)}
                         className="btn btn-sm btn-outline-secondary rounded-pill px-4"
                     >
