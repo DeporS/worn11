@@ -3,6 +3,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.exceptions import ValidationError
 
 from rest_framework.pagination import PageNumberPagination
 
@@ -35,6 +36,44 @@ class MyCollectionAPI(generics.ListCreateAPIView):
     def get_queryset(self):
         # Return only kits of the logged-in user
         return UserKit.objects.filter(user=self.request.user).select_related('kit', 'kit__team').order_by('-added_at')
+    
+    # Override to check pro limits and file uploads safety
+    def create(self, request, *args, **kwargs):
+
+        images = request.FILES.getlist('images')
+
+        user = request.user
+        is_pro = False
+        if hasattr(user, 'profile'):
+            is_pro = user.profile.is_pro
+        
+        limit = 20 if is_pro else 5
+
+        # Business logic bypass check
+        if len(images) > limit:
+            raise ValidationError({
+                "images": [f"Upload limit exceeded. You are allowed {limit} photos. You sent {len(images)}."]
+            })
+        
+        # Malicious file upload check
+        allowed_types = ['image/jpeg', 'image/png', 'image/webp', 'image/heic']
+
+        for img in images:
+
+            # Check content type
+            if img.content_type not in allowed_types:
+                raise ValidationError({
+                    "images": [f"Unsupported file type: {img.content_type}. Allowed types are: JPEG, PNG, WEBP, HEIC."]
+                })
+            
+            # Check file size (max 10MB)
+            if img.size > 10 * 1024 * 1024:
+                raise ValidationError({
+                    "images": [f"File too large: {img.name}. Maximum allowed size is 10MB."]
+                })
+            
+        return super().create(request, *args, **kwargs)
+
 
     def perform_create(self, serializer):
         # Automatically assign the logged-in user on save
