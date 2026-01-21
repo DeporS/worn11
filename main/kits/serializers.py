@@ -191,22 +191,41 @@ class ProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Profile
-        fields = ['avatar', 'bio', 'is_pro', 'is_moderator', 'username']
-        read_only_fields = ['is_pro', 'is_moderator']
+        fields = ['avatar', 'bio', 'is_pro', 'is_moderator', 'username', 'has_changed_username']
+        read_only_fields = ['is_pro', 'is_moderator', 'has_changed_username']
 
     def update(self, instance, validated_data):
         # Extract user data if present
-        user_data = validated_data.pop('user', {})
-        new_username = user_data.get('username')
+        new_username = None
+        if 'user' in validated_data and 'username' in validated_data['user']:
+            new_username = validated_data['user']['username']
+        elif 'username' in self.initial_data:
+            new_username = self.initial_data['username']
 
         # Update username if provided
         if new_username and new_username != instance.user.username:
+
+            # Check if user has changed username before
+            if instance.has_changed_username:
+                raise serializers.ValidationError({
+                    "username": "You can only change your username once."
+                })
+
             # check if available excluding current user
             if User.objects.filter(username__iexact=new_username).exclude(id=instance.user.id).exists():
                 raise serializers.ValidationError({"username": "This username is already taken."})
             
+            # update username
             instance.user.username = new_username
             instance.user.save()
+
+            # set flag to prevent future changes
+            instance.has_changed_username = True
+            instance.save()
+
+        # Prevent changing the user field
+        if 'user' in validated_data:
+            validated_data.pop('user')
 
         # Update other profile fields
         return super().update(instance, validated_data)

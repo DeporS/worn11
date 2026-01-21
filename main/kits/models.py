@@ -68,6 +68,12 @@ TECHNOLOGIE_MULTIPLIERS = {
     'MATCH_WORN': Decimal('5.0'),
 }
 
+CURRENCY_CHOICES = [
+    ('USD', 'US Dollar (USD)'),
+    ('EUR', 'Euro (EUR)'),
+    ('GBP', 'British Pound (GBP)'),
+]
+
 # User profile
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
@@ -78,6 +84,24 @@ class Profile(models.Model):
 
     avatar = models.ImageField(upload_to='profile_avatars/', null=True, blank=True)
     bio = models.TextField(max_length=1000, blank=True)
+    has_changed_username = models.BooleanField(default=False)
+    name = models.CharField(max_length=150, blank=True)
+    surname = models.CharField(max_length=150, blank=True)
+
+    instagram_link = models.URLField(max_length=2048, null=True, blank=True)
+    twitter_link = models.URLField(max_length=2048, null=True, blank=True)
+    youTube_link = models.URLField(max_length=2048, null=True, blank=True)
+    email_public = models.BooleanField(default=False)
+    tiktok_link = models.URLField(max_length=2048, null=True, blank=True)
+
+    country = models.ForeignKey('Country', on_delete=models.SET_NULL, null=True, blank=True, related_name='users')
+
+    favorite_team = models.ForeignKey('Team', on_delete=models.SET_NULL, null=True, blank=True, related_name='fans')
+
+    preferred_size = models.CharField(max_length=10, choices=SIZE_CHOICES, null=True, blank=True)
+    currency = models.CharField(max_length=3, choices=CURRENCY_CHOICES, default='USD')
+
+    on_vacation = models.BooleanField(default=False)
 
     def __str__(self):
         return f"{self.user.username} Profile"

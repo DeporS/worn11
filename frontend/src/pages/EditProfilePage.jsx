@@ -20,6 +20,8 @@ const EditProfilePage = ({ user, setUser }) => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
+    const isUsernameLocked = user?.profile?.has_changed_username;
+
     // Load existing profile data on mount
     useEffect(() => {
         if (user?.profile) {
@@ -186,7 +188,14 @@ const EditProfilePage = ({ user, setUser }) => {
 
                                 {/* USERNAME SECTION */}
                                 <div className="mb-3">
-                                    <label className="form-label fw-bold">Username</label>
+                                    <label className="form-label fw-bold">
+                                        Username
+                                        {isUsernameLocked && (
+                                            <span className="badge bg-secondary ms-2" style={{ fontSize: '0.7rem' }}>
+                                                Change limit reached
+                                            </span>
+                                        )}
+                                    </label>
                                     <div className="input-group has-validation">
                                         <span className="input-group-text bg-light text-muted">@</span>
                                         <input
@@ -197,14 +206,8 @@ const EditProfilePage = ({ user, setUser }) => {
                                             onChange={(e) => setUsername(e.target.value)}
                                             required
                                             minLength={3}
+                                            disabled={isUsernameLocked}
                                         />
-
-                                        {/* Spinner inside input */}
-                                        {/* {checkingUsername && (
-                                            <span className="input-group-text bg-white border-start-0">
-                                                <div className="spinner-border spinner-border-sm text-secondary" role="status"></div>
-                                            </span>
-                                        )} */}
 
                                         {/* Validation Message */}
                                         <div className="invalid-feedback">
@@ -214,8 +217,11 @@ const EditProfilePage = ({ user, setUser }) => {
                                             Username available!
                                         </div>
                                     </div>
-                                    <div className="form-text text-muted small">
-                                        Changing username will change your profile link.
+                                    <div className="form-text text-danger small">
+                                        {isUsernameLocked
+                                            ? "You have already changed your username once. It cannot be changed again."
+                                            : "Warning: You can only change your username ONCE."
+                                        }
                                     </div>
                                 </div>
 
