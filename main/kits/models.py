@@ -77,31 +77,42 @@ CURRENCY_CHOICES = [
 # User profile
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+
+    # Status fields
     is_pro = models.BooleanField(default=False)  # Pro users have extra features
     is_moderator = models.BooleanField(default=False)  # Moderators can help manage content
+    has_changed_username = models.BooleanField(default=False)
+    on_vacation = models.BooleanField(default=False)
 
     # pro_expiration_date = models.DateTimeField(null=True, blank=True)
 
+    # Personal info
     avatar = models.ImageField(upload_to='profile_avatars/', null=True, blank=True)
     bio = models.TextField(max_length=1000, blank=True)
-    has_changed_username = models.BooleanField(default=False)
     name = models.CharField(max_length=150, blank=True)
     surname = models.CharField(max_length=150, blank=True)
 
-    instagram_link = models.URLField(max_length=2048, null=True, blank=True)
-    twitter_link = models.URLField(max_length=2048, null=True, blank=True)
-    youTube_link = models.URLField(max_length=2048, null=True, blank=True)
-    email_public = models.BooleanField(default=False)
-    tiktok_link = models.URLField(max_length=2048, null=True, blank=True)
-
+    # Preferences and location
     country = models.ForeignKey('Country', on_delete=models.SET_NULL, null=True, blank=True, related_name='users')
-
     favorite_team = models.ForeignKey('Team', on_delete=models.SET_NULL, null=True, blank=True, related_name='fans')
-
     preferred_size = models.CharField(max_length=10, choices=SIZE_CHOICES, null=True, blank=True)
     currency = models.CharField(max_length=3, choices=CURRENCY_CHOICES, default='USD')
 
-    on_vacation = models.BooleanField(default=False)
+    # Contact 
+    contact_email = models.EmailField(max_length=254, blank=True, null=True)
+
+    # Social links
+    facebook_link = models.URLField(max_length=2048, null=True, blank=True)
+    instagram_link = models.URLField(max_length=2048, null=True, blank=True)
+    twitter_link = models.URLField(max_length=2048, null=True, blank=True)
+    youTube_link = models.URLField(max_length=2048, null=True, blank=True)
+    tiktok_link = models.URLField(max_length=2048, null=True, blank=True)
+    
+    # Marketplaces
+    vinted_link = models.URLField(max_length=2048, null=True, blank=True)
+    ebay_link = models.URLField(max_length=2048, null=True, blank=True)
+    depop_link = models.URLField(max_length=2048, null=True, blank=True)
+    website_link = models.URLField(max_length=2048, null=True, blank=True)
 
     def __str__(self):
         return f"{self.user.username} Profile"

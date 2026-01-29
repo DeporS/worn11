@@ -10,6 +10,20 @@ class TeamSerializer(serializers.ModelSerializer):
         model = Team
         fields = ['id', 'name', 'logo', 'league']
 
+# Country Serializer
+class CountrySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Country
+        fields = ['id', 'name', 'flag']
+
+# League Serializer
+class LeagueSerializer(serializers.ModelSerializer):
+    country = CountrySerializer(read_only=True)
+
+    class Meta:
+        model = League
+        fields = ['id', 'name', 'hex_color', 'country', 'logo']
+
 # Kit Serializer
 class KitSerializer(serializers.ModelSerializer):
     team = TeamSerializer(read_only=True)
@@ -189,9 +203,49 @@ class UserKitSerializer(serializers.ModelSerializer):
 class ProfileSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username', required=False)
 
+    country_info = CountrySerializer(source='country', read_only=True)
+    favorite_team_info = TeamSerializer(source='favorite_team', read_only=True)
+
     class Meta:
         model = Profile
-        fields = ['avatar', 'bio', 'is_pro', 'is_moderator', 'username', 'has_changed_username']
+        fields = [
+            # User & System
+            'username', 
+            'is_pro', 
+            'is_moderator', 
+            'has_changed_username',
+            'on_vacation', 
+            
+            # Personal Info
+            'avatar', 
+            'bio', 
+            'name', 
+            'surname',
+            
+            # Preferences
+            'country',            # country id eg. 34 (for saving)
+            'favorite_team',      # team id eg. 12 (for saving)
+            'country_info',       # full country data (for reading)
+            'favorite_team_info', # full team data (for reading)
+            'preferred_size', 
+            'currency',
+            
+            # Contact
+            'contact_email',
+
+            # Socials
+            'facebook_link',
+            'instagram_link', 
+            'twitter_link', 
+            'youTube_link', 
+            'tiktok_link',
+            
+            # Marketplaces
+            'vinted_link', 
+            'ebay_link', 
+            'depop_link', 
+            'website_link'
+        ]
         read_only_fields = ['is_pro', 'is_moderator', 'has_changed_username']
 
     def update(self, instance, validated_data):
@@ -265,27 +319,58 @@ class UserSearchSerializer(serializers.ModelSerializer):
 
 # User Stats Profile Serializer
 class UserStatsProfileSerializer(serializers.ModelSerializer):
-    avatar = serializers.ImageField(source='profile.avatar', read_only=True)
-    bio = serializers.CharField(source='profile.bio', read_only=True)
     date_joined = serializers.DateTimeField(read_only=True)
-    
     total_kits = serializers.IntegerField(read_only=True)
     total_value = serializers.IntegerField(read_only=True)
 
+    # --- Profile Basic Info ---
+    avatar = serializers.ImageField(source='profile.avatar', read_only=True)
+    bio = serializers.CharField(source='profile.bio', read_only=True)
+    name = serializers.CharField(source='profile.name', read_only=True)
+    surname = serializers.CharField(source='profile.surname', read_only=True)
+
+    # --- Status ---
+    is_pro = serializers.BooleanField(source='profile.is_pro', read_only=True)
+    is_moderator = serializers.BooleanField(source='profile.is_moderator', read_only=True)
+    on_vacation = serializers.BooleanField(source='profile.on_vacation', read_only=True)
+
+    # --- Preferences (Full Objects for display) ---
+    country_info = CountrySerializer(source='profile.country', read_only=True)
+    favorite_team_info = TeamSerializer(source='profile.favorite_team', read_only=True)
+
+    # --- Contact ---
+    contact_email = serializers.EmailField(source='profile.contact_email', read_only=True)
+    website_link = serializers.URLField(source='profile.website_link', read_only=True)
+
+    # --- Social Media ---
+    facebook_link = serializers.URLField(source='profile.facebook_link', read_only=True)
+    instagram_link = serializers.URLField(source='profile.instagram_link', read_only=True)
+    twitter_link = serializers.URLField(source='profile.twitter_link', read_only=True)
+    youTube_link = serializers.URLField(source='profile.youTube_link', read_only=True)
+    tiktok_link = serializers.URLField(source='profile.tiktok_link', read_only=True)
+    
+    # --- Marketplaces ---
+    vinted_link = serializers.URLField(source='profile.vinted_link', read_only=True)
+    ebay_link = serializers.URLField(source='profile.ebay_link', read_only=True)
+    depop_link = serializers.URLField(source='profile.depop_link', read_only=True)
+
     class Meta:
         model = User
-        fields = ['username', 'email', 'date_joined', 'avatar', 'bio', 'total_kits', 'total_value']
+        fields = [
+            'username', 'email', 'date_joined', 
+            'total_kits', 'total_value',
+            
+            # Profile Fields
+            'avatar', 'bio', 'name', 'surname',
+            'is_pro', 'is_moderator', 'on_vacation',
+            
+            # Details
+            'country_info',
+            'favorite_team_info',
+            
+            # Links
+            'contact_email', 'website_link',
+            'facebook_link', 'instagram_link', 'twitter_link', 'youTube_link', 'tiktok_link',
+            'vinted_link', 'ebay_link', 'depop_link'
+        ]
 
-# Country Serializer
-class CountrySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Country
-        fields = ['id', 'name', 'flag']
-
-# League Serializer
-class LeagueSerializer(serializers.ModelSerializer):
-    country = CountrySerializer(read_only=True)
-
-    class Meta:
-        model = League
-        fields = ['id', 'name', 'hex_color', 'country', 'logo']
