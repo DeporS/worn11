@@ -337,6 +337,7 @@ class UserStatsProfileSerializer(serializers.ModelSerializer):
     # --- Preferences (Full Objects for display) ---
     country_info = CountrySerializer(source='profile.country', read_only=True)
     favorite_team_info = TeamSerializer(source='profile.favorite_team', read_only=True)
+    preferred_size = serializers.CharField(source='profile.preferred_size', read_only=True)
 
     # --- Contact ---
     contact_email = serializers.EmailField(source='profile.contact_email', read_only=True)
@@ -367,6 +368,7 @@ class UserStatsProfileSerializer(serializers.ModelSerializer):
             # Details
             'country_info',
             'favorite_team_info',
+            'preferred_size',
             
             # Links
             'contact_email', 'website_link',

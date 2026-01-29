@@ -26,7 +26,6 @@ const EditProfilePage = ({ user, setUser }) => {
 
 	// Validation states
 	const [usernameAvailable, setUsernameAvailable] = useState(true);
-	const [checkingUsername, setCheckingUsername] = useState(false);
 	const [usernameError, setUsernameError] = useState(null);
 
 	const [loading, setLoading] = useState(false);
