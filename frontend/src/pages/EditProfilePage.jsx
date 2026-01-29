@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { updateUserProfile } from "../services/api";
 import api from "../services/api";
 
+import SocialInput from "../components/profile/SocialInput";
+
 const EditProfilePage = ({ user, setUser }) => {
 	const navigate = useNavigate();
 
@@ -175,32 +177,6 @@ const EditProfilePage = ({ user, setUser }) => {
 	};
 
 	if (!user) return <div className="text-center mt-5">Loading...</div>;
-
-	const SocialInput = ({
-		label,
-		iconClass,
-		value,
-		setValue,
-		placeholder,
-	}) => (
-		<div className="mb-3">
-			<label className="form-label small fw-bold text-muted">
-				{label}
-			</label>
-			<div className="input-group">
-				<span className="input-group-text bg-light border-end-0">
-					<i className={`bi ${iconClass}`}></i>
-				</span>
-				<input
-					type="url"
-					className="form-control border-start-0"
-					placeholder={placeholder}
-					value={value}
-					onChange={(e) => setValue(e.target.value)}
-				/>
-			</div>
-		</div>
-	);
 
 	return (
 		<div className="container py-5">

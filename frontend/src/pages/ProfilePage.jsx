@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { getUserCollection, getUserStats } from "../services/api";
 import { Link, useParams } from "react-router-dom";
-import KitCard from "../components/KitCard";
+import KitCard from "../components/profile/KitCard";
+import SocialLink from "../components/profile/SocialLink";
+import MarketBadge from "../components/profile/MarketBadge";
 import UserAvatar from "../components/UserAvatar";
 
 import "../styles/profile.css";
@@ -56,49 +58,6 @@ const ProfilePage = ({ user }) => {
 	const handleDeleteSuccess = (deletedKitId) => {
 		setMyKits((prev) => prev.filter((item) => item.id !== deletedKitId));
 		getUserStats(profileUsername).then(setStats);
-	};
-
-	// Pomocniczy komponent do ikonek social media
-	const SocialLink = ({ url, icon, color, title }) => {
-		if (!url) return null;
-		return (
-			<a
-				href={url}
-				target="_blank"
-				rel="noopener noreferrer"
-				className="text-decoration-none me-3"
-				style={{
-					fontSize: "1.5rem",
-					color: color || "#333",
-					transition: "transform 0.2s",
-				}}
-				onMouseOver={(e) =>
-					(e.currentTarget.style.transform = "scale(1.2)")
-				}
-				onMouseOut={(e) =>
-					(e.currentTarget.style.transform = "scale(1)")
-				}
-				title={title}
-			>
-				<i className={`bi ${icon}`}></i>
-			</a>
-		);
-	};
-
-	// Pomocniczy komponent do Marketplace (Vinted, eBay) - wyglądają jak przyciski
-	const MarketBadge = ({ url, icon, label, colorClass }) => {
-		if (!url) return null;
-		return (
-			<a
-				href={url}
-				target="_blank"
-				rel="noopener noreferrer"
-				className={`btn btn-sm ${colorClass} me-2 mb-2 d-inline-flex align-items-center gap-1`}
-				style={{ borderRadius: "20px", padding: "5px 15px" }}
-			>
-				<i className={`bi ${icon}`}></i> {label}
-			</a>
-		);
 	};
 
 	return (
