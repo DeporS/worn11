@@ -8,6 +8,9 @@ import UserAvatar from "../components/UserAvatar";
 
 import "../styles/profile.css";
 
+import EyeCloseIcon from "../assets/icons/eye-close.svg?react";
+import EyeOpenIcon from "../assets/icons/eye-open.svg?react";
+
 const ProfilePage = ({ user }) => {
 	const { username } = useParams(); // Get username from URL params
 	const profileUsername = username || user?.username;
@@ -21,6 +24,8 @@ const ProfilePage = ({ user }) => {
 
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState(null);
+
+	const [hover, setHover] = useState(false);
 
 	useEffect(() => {
 		if (!profileUsername) return;
@@ -174,34 +179,67 @@ const ProfilePage = ({ user }) => {
 							</div>
 						)}
 
-						{/* MARKETPLACES (Vinted, eBay, Depop) */}
-						{(profileData?.vinted_link ||
-							profileData?.ebay_link ||
-							profileData?.depop_link) && (
+						{/* CONTACT INFO (Email + Website) */}
+						{(profileData?.contact_email ||
+							profileData?.website_link) && (
 							<div className="mb-4">
 								<h6 className="fw-bold text-uppercase small text-muted mb-2">
-									My Shops
+									Contact
 								</h6>
-								<div className="d-flex flex-wrap">
-									<MarketBadge
-										url={profileData.vinted_link}
-										icon="bi-tag-fill"
-										label="Vinted"
-										colorClass="btn-info text-white"
-									/>
-									<MarketBadge
-										url={profileData.depop_link}
-										icon="bi-bag-fill"
-										label="Depop"
-										colorClass="btn-danger"
-									/>
-									<MarketBadge
-										url={profileData.ebay_link}
-										icon="bi-shop"
-										label="eBay"
-										colorClass="btn-outline-dark"
-									/>
-								</div>
+
+								{profileData.website_link && (
+									<div className="mb-2">
+										<i className="bi bi-globe me-2"></i>
+										<a
+											href={profileData.website_link}
+											target="_blank"
+											rel="noopener noreferrer"
+											className="text-decoration-none fw-bold"
+										>
+											{profileData.website_link}
+										</a>
+									</div>
+								)}
+
+								{profileData.contact_email && (
+									<div className="d-flex align-items-center gap-2">
+										<i className="bi bi-envelope"></i>
+
+										{showEmail ? (
+											<span className="fw-bold text-muted">
+												{profileData.contact_email}
+											</span>
+										) : (
+											<span
+												className="email-hidden"
+												onMouseEnter={() =>
+													setHover(true)
+												}
+												onMouseLeave={() =>
+													setHover(false)
+												}
+											>
+												<span className="text-muted">
+													Email hidden
+												</span>
+
+												<span
+													className="ms-2 eye-clickable"
+													onClick={() =>
+														setShowEmail(true)
+													}
+													title="Show Email"
+												>
+													{hover ? (
+														<EyeOpenIcon className="eye-icon" />
+													) : (
+														<EyeCloseIcon className="eye-icon" />
+													)}
+												</span>
+											</span>
+										)}
+									</div>
+								)}
 							</div>
 						)}
 					</div>
@@ -252,51 +290,34 @@ const ProfilePage = ({ user }) => {
 							</div>
 						)}
 
-						{/* CONTACT INFO (Email + Website) */}
-						{(profileData?.contact_email ||
-							profileData?.website_link) && (
-							<div className="p-3 bg-light rounded small">
+						{/* MARKETPLACES (Vinted, eBay, Depop) */}
+						{(profileData?.vinted_link ||
+							profileData?.ebay_link ||
+							profileData?.depop_link) && (
+							<div className="mb-4">
 								<h6 className="fw-bold text-uppercase small text-muted mb-2">
-									Contact
+									My Shops
 								</h6>
-
-								{profileData.website_link && (
-									<div className="mb-2">
-										<i className="bi bi-globe me-2"></i>
-										<a
-											href={profileData.website_link}
-											target="_blank"
-											rel="noopener noreferrer"
-											className="text-decoration-none fw-bold"
-										>
-											Visit Website
-										</a>
-									</div>
-								)}
-
-								{profileData.contact_email && (
-									<div>
-										<i className="bi bi-envelope me-2"></i>
-										{showEmail ? (
-											<a
-												href={`mailto:${profileData.contact_email}`}
-												className="fw-bold text-dark"
-											>
-												{profileData.contact_email}
-											</a>
-										) : (
-											<span
-												className="text-primary text-decoration-underline"
-												style={{ cursor: "pointer" }}
-												onClick={() =>
-													setShowEmail(true)
-												}
-											>
-												Show Email Address
-											</span>
-										)}
-									</div>
-								)}
+								<div className="d-flex flex-wrap">
+									<MarketBadge
+										url={profileData.vinted_link}
+										icon="bi-tag-fill"
+										label="Vinted"
+										colorClass="btn-info text-white"
+									/>
+									<MarketBadge
+										url={profileData.depop_link}
+										icon="bi-bag-fill"
+										label="Depop"
+										colorClass="btn-danger"
+									/>
+									<MarketBadge
+										url={profileData.ebay_link}
+										icon="bi-shop"
+										label="eBay"
+										colorClass="btn-outline-dark"
+									/>
+								</div>
 							</div>
 						)}
 					</div>
