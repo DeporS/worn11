@@ -75,8 +75,11 @@ const ProfilePage = ({ user }) => {
 					<div className="d-flex align-items-center gap-4">
 						{/* Profile avatar */}
 						<UserAvatar user={profileData} size={80} />
-						<div>
-							<div className="d-flex align-items-center gap-1 mb-1">
+						<div
+							className="d-flex flex-column justify-content-center"
+							style={{ minHeight: "80px" }}
+						>
+							<div className="d-flex align-items-center gap-1">
 								{/* Username and edit button */}
 								<h2 className="fw-bold mb-0">
 									{profileUsername}
@@ -141,7 +144,7 @@ const ProfilePage = ({ user }) => {
 								{isOwner && (
 									<Link
 										to="/profile/edit"
-										className="btn edit-button"
+										className="edit-button"
 										title="Edit Profile"
 									>
 										✏️
