@@ -439,3 +439,20 @@
 	width: 36px;
 	height: 36px;
 }
+
+/* Expand */
+.details-wrapper {
+	max-height: 0;
+	opacity: 0;
+	overflow: hidden;
+
+	transition:
+		max-height 1s ease-in-out,
+		opacity 0.8s ease-in-out;
+}
+
+/* state: expanded */
+.details-wrapper.open {
+	max-height: 2000px;
+	opacity: 1;
+}
