@@ -76,33 +76,67 @@ const ProfilePage = ({ user }) => {
 						{/* Profile avatar */}
 						<UserAvatar user={profileData} size={80} />
 						<div>
-							<div className="d-flex align-items-center gap-1">
+							<div className="d-flex align-items-center gap-1 mb-1">
+								{/* Username and edit button */}
+								<h2 className="fw-bold mb-0">
+									{profileUsername}
+								</h2>
+
+								{/* Country */}
+								{profileData?.country_info && (
+									<div
+										className="d-flex align-items-center gap-1 ms-1"
+										title={profileData.country_info.name}
+									>
+										<img
+											className="rounded"
+											src={profileData.country_info.flag}
+											alt="flag"
+											style={{
+												height: "32px",
+											}}
+										/>
+									</div>
+								)}
+
 								{/* Badges for Pro/Mod */}
 								{profileData?.is_moderator && (
 									<span
-										className="justify-content-center align-items-center d-flex"
+										className="justify-content-center align-items-center d-flex ms-1"
 										title="Moderator"
 									>
-										<ShieldIcon className="shield-icon me-1" />
+										<ShieldIcon className="shield-icon" />
 									</span>
 								)}
 
 								{profileData?.is_pro && (
 									<a
-										className="justify-content-center align-items-center d-flex"
+										className="justify-content-center align-items-center d-flex ms-1"
 										title="Pro Member"
 										href="/get-pro"
 										target="_blank"
 										rel="noopener noreferrer"
 									>
-										<DiamondIcon className="diamond-icon me-1" />
+										<DiamondIcon className="diamond-icon" />
 									</a>
 								)}
 
-								{/* Username and edit button */}
-								<h2 className="fw-bold mb-0">
-									{profileUsername}
-								</h2>
+								{/* Favorite Team */}
+								{/* {profileData?.favorite_team_info && (
+									<div
+										className="d-flex align-items-center gap-1 ms-2"
+										title={`${profileData.favorite_team_info.name} Fan`}
+									>
+										<img
+											src={
+												profileData.favorite_team_info
+													.logo
+											}
+											alt="logo"
+											style={{ height: "32px" }}
+										/>
+									</div>
+								)} */}
 
 								{isOwner && (
 									<Link
@@ -115,55 +149,20 @@ const ProfilePage = ({ user }) => {
 								)}
 							</div>
 
-							{/* Name & Surname */}
-							{(profileData?.name || profileData?.surname) && (
-								<p className="text-muted mb-0 small">
-									{profileData.name} {profileData.surname}
-								</p>
-							)}
-
-							{/* Location & Team & Size */}
-							<div className="d-flex align-items-center gap-3 mt-2 small text-secondary">
-								{profileData?.country_info && (
-									<div
-										className="d-flex align-items-center gap-1"
-										title="Country"
-									>
-										<img
-											src={profileData.country_info.flag}
-											alt="flag"
-											style={{
-												height: "20px",
-												width: "20px",
-											}}
-										/>
-										{profileData.country_info.name}
-									</div>
-								)}
-
-								{profileData?.favorite_team_info && (
-									<div
-										className="d-flex align-items-center gap-1"
-										title="Favorite Team"
-									>
-										<img
-											src={
-												profileData.favorite_team_info
-													.logo
-											}
-											alt="logo"
-											style={{ width: "20px" }}
-										/>
-										{profileData.favorite_team_info.name}
-									</div>
-								)}
-
-								{profileData?.preferred_size && (
-									<span className="badge bg-light text-dark border">
-										Size: {profileData.preferred_size}
-									</span>
+							<div className="d-flex align-items-center gap-1">
+								{/* Name & Surname */}
+								{(profileData?.name ||
+									profileData?.surname) && (
+									<>
+										<p className="text-muted mb-0 small">
+											{profileData.name}{" "}
+											{profileData.surname}
+										</p>
+									</>
 								)}
 							</div>
+
+							<div className="d-flex align-items-center gap-3 mt-2 small text-secondary"></div>
 						</div>
 					</div>
 					<div className="text-end">
