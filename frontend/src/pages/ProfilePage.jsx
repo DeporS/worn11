@@ -12,6 +12,8 @@ import EyeCloseIcon from "../assets/icons/eye-close.svg?react";
 import EyeOpenIcon from "../assets/icons/eye-open.svg?react";
 import DiamondIcon from "../assets/icons/diamond-blue.svg?react";
 import ShieldIcon from "../assets/icons/shield-2.svg?react";
+import ShirtIcon from "../assets/icons/shirt.svg?react";
+import MoneyBagIcon from "../assets/icons/money-bag.svg?react";
 
 const ProfilePage = ({ user }) => {
 	const { username } = useParams(); // Get username from URL params
@@ -169,17 +171,35 @@ const ProfilePage = ({ user }) => {
 						</div>
 					</div>
 					<div className="text-end">
-						<h3 className="text-primary fw-bold mb-0">
-							{stats.total_kits}
-						</h3>
-						<span className="small text-muted d-block">
-							Kits in collection
-						</span>
+						{/* Row 1*/}
+						<div className="d-flex justify-content-end gap-4">
+							<div className="text-center">
+								<div className="d-flex justify-content-center align-items-center gap-2">
+									<ShirtIcon className="shirt-icon" />
+									<h3 className="text-primary fw-bold mb-0">
+										{stats.total_kits}
+									</h3>
+								</div>
+								<span className="small text-muted d-block">
+									Kits in collection
+								</span>
+							</div>
 
-						<h4 className="text-success fw-bold mb-0 mt-2">
-							${stats.total_value.toLocaleString()}
-						</h4>
-						<span className="small text-muted">Total Value</span>
+							<div className="text-center">
+								<div className="d-flex justify-content-center align-items-center gap-2">
+									<MoneyBagIcon className="money-bag-icon" />
+									<h4 className="text-success fw-bold mb-0">
+										${stats.total_value.toLocaleString()}
+									</h4>
+								</div>
+								<span className="small text-muted d-block">
+									Total Value
+								</span>
+							</div>
+						</div>
+
+						{/* Row 2 */}
+						<div className="mt-2"></div>
 					</div>
 				</div>
 				<hr className="my-4 text-muted opacity-25" />
