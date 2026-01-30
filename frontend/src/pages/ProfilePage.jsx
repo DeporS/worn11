@@ -10,6 +10,8 @@ import "../styles/profile.css";
 
 import EyeCloseIcon from "../assets/icons/eye-close.svg?react";
 import EyeOpenIcon from "../assets/icons/eye-open.svg?react";
+import DiamondIcon from "../assets/icons/diamond-blue.svg?react";
+import ShieldIcon from "../assets/icons/shield-2.svg?react";
 
 const ProfilePage = ({ user }) => {
 	const { username } = useParams(); // Get username from URL params
@@ -75,10 +77,33 @@ const ProfilePage = ({ user }) => {
 						<UserAvatar user={profileData} size={80} />
 						<div>
 							<div className="d-flex align-items-center gap-1">
+								{/* Badges for Pro/Mod */}
+								{profileData?.is_moderator && (
+									<span
+										className="justify-content-center align-items-center d-flex"
+										title="Moderator"
+									>
+										<ShieldIcon className="shield-icon me-1" />
+									</span>
+								)}
+
+								{profileData?.is_pro && (
+									<a
+										className="justify-content-center align-items-center d-flex"
+										title="Pro Member"
+										href="/get-pro"
+										target="_blank"
+										rel="noopener noreferrer"
+									>
+										<DiamondIcon className="diamond-icon me-1" />
+									</a>
+								)}
+
 								{/* Username and edit button */}
 								<h2 className="fw-bold mb-0">
 									{profileUsername}
 								</h2>
+
 								{isOwner && (
 									<Link
 										to="/profile/edit"
@@ -87,17 +112,6 @@ const ProfilePage = ({ user }) => {
 									>
 										✏️
 									</Link>
-								)}
-								{/* Badges for Pro/Mod */}
-								{profileData?.is_pro && (
-									<span className="badge bg-warning text-dark">
-										PRO
-									</span>
-								)}
-								{profileData?.is_moderator && (
-									<span className="badge bg-info text-white">
-										MOD
-									</span>
 								)}
 							</div>
 
@@ -108,9 +122,9 @@ const ProfilePage = ({ user }) => {
 								</p>
 							)}
 
-							{/* Location & Team & Size EDITTTTTTTTTTTTTTTTTTT */}
+							{/* Location & Team & Size */}
 							<div className="d-flex align-items-center gap-3 mt-2 small text-secondary">
-								{profileData?.country_info ? (
+								{profileData?.country_info && (
 									<div
 										className="d-flex align-items-center gap-1"
 										title="Country"
@@ -118,22 +132,29 @@ const ProfilePage = ({ user }) => {
 										<img
 											src={profileData.country_info.flag}
 											alt="flag"
-											style={{ width: "20px" }}
+											style={{
+												height: "20px",
+												width: "20px",
+											}}
 										/>
 										{profileData.country_info.name}
 									</div>
-								) : profileData?.country ? (
-									<span>
-										🌍 Country: {profileData.country}
-									</span>
-								) : null}
+								)}
 
 								{profileData?.favorite_team_info && (
 									<div
 										className="d-flex align-items-center gap-1"
 										title="Favorite Team"
 									>
-										⚽ {profileData.favorite_team_info.name}
+										<img
+											src={
+												profileData.favorite_team_info
+													.logo
+											}
+											alt="logo"
+											style={{ width: "20px" }}
+										/>
+										{profileData.favorite_team_info.name}
 									</div>
 								)}
 
@@ -335,7 +356,7 @@ const ProfilePage = ({ user }) => {
 										className="fw-bold text-uppercase small text-muted mb-3"
 										style={{ letterSpacing: "0.5px" }}
 									>
-										Follow me
+										Find me
 									</h6>
 									<div className="d-flex gap-3 flex-wrap">
 										<SocialLink
