@@ -1,16 +1,25 @@
-import React from "react";
+import React, { useState } from "react";
 
-const MarketBadge = ({ url, icon, label, colorClass }) => {
+const MarketBadge = ({ url, icon, label, hoverColor }) => {
+	const [isHovered, setIsHovered] = useState(false);
+
 	if (!url) return null;
+
 	return (
 		<a
 			href={url}
 			target="_blank"
 			rel="noopener noreferrer"
-			className={`btn btn-sm ${colorClass} me-2 mb-2 d-inline-flex align-items-center gap-1`}
-			style={{ borderRadius: "20px", padding: "5px 15px" }}
+			className="market-badge me-2 mb-2"
+			style={{
+				color: isHovered ? hoverColor : "#555555",
+				borderColor: isHovered ? hoverColor : "#e0e0e0",
+			}}
+			onMouseEnter={() => setIsHovered(true)}
+			onMouseLeave={() => setIsHovered(false)}
 		>
-			<i className={`bi ${icon}`}></i> {label}
+			<i className={`bi ${icon}`} style={{ fontSize: "1rem" }}></i>
+			<span>{label}</span>
 		</a>
 	);
 };

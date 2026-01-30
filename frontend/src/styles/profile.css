@@ -330,7 +330,6 @@
 .email-hidden {
 	display: inline-flex;
 	align-items: center;
-	font-weight: 500;
 }
 
 .email-hidden:hover .eye-icon {
@@ -355,4 +354,62 @@
 	color: #000000;
 	width: 24px;
 	height: 24px;
+}
+
+/* website link */
+.breadcrumb-link {
+	position: relative;
+	display: inline-block;
+	cursor: pointer;
+	font-weight: 400 !important;
+
+	text-decoration: none !important;
+
+	transition:
+		color 0.25s ease,
+		transform 0.25s ease;
+}
+
+.breadcrumb-link::after {
+	content: "";
+	position: absolute;
+	left: 0;
+	bottom: -2px;
+	width: 100%;
+	height: 2px;
+	background-color: currentColor;
+
+	transform: scaleX(0);
+	transform-origin: left;
+	transition: transform 0.25s ease;
+}
+
+.breadcrumb-link:hover::after,
+.breadcrumb-link:focus-visible::after {
+	transform: scaleX(1);
+}
+
+/* MARKET BADGE */
+.market-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 16px;
+	border-radius: 50px; /* Pill shape */
+
+	background-color: #ffffff;
+	border: 1px solid #e0e0e0;
+	color: #555555;
+
+	font-size: 0.85rem;
+	font-weight: 500;
+	text-decoration: none;
+	transition: all 0.2s ease-in-out;
+}
+
+.market-badge:hover {
+	border-color: currentColor;
+	background-color: #fafafa;
+	transform: translateY(-1px);
+	box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
 }

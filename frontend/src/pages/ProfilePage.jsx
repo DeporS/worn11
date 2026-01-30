@@ -161,165 +161,217 @@ const ProfilePage = ({ user }) => {
 				</div>
 				<hr className="my-4 text-muted opacity-25" />
 
-				{/* Middle Row: Bio & Socials & Contact */}
-				<div className="row">
-					<div className="col-lg-7">
-						{/* BIO */}
-						{profileData?.bio && (
-							<div className="mb-4">
-								<h6 className="fw-bold text-uppercase small text-muted">
-									About
-								</h6>
+				{/* --- MIDDLE SECTION: 2 Rows Layout --- */}
+				<div className="d-flex flex-column gap-5">
+					{" "}
+					{/* --- ROW 1: Bio (Left) and Contact (Right) --- */}
+					<div className="row gx-5">
+						{/* LEFT: BIO */}
+						<div className="col-lg-7">
+							<h6
+								className="fw-bold text-uppercase small text-muted mb-3"
+								style={{ letterSpacing: "0.5px" }}
+							>
+								About
+							</h6>
+							{profileData?.bio ? (
 								<p
-									className="text-secondary"
+									className="text-secondary lh-lg mb-0"
 									style={{ whiteSpace: "pre-line" }}
 								>
 									{profileData.bio}
 								</p>
-							</div>
-						)}
+							) : (
+								<p className="text-muted fst-italic small">
+									No bio provided.
+								</p>
+							)}
+						</div>
 
-						{/* CONTACT INFO (Email + Website) */}
-						{(profileData?.contact_email ||
-							profileData?.website_link) && (
-							<div className="mb-4">
-								<h6 className="fw-bold text-uppercase small text-muted mb-2">
-									Contact
-								</h6>
-
-								{profileData.website_link && (
-									<div className="mb-2">
-										<i className="bi bi-globe me-2"></i>
-										<a
-											href={profileData.website_link}
-											target="_blank"
-											rel="noopener noreferrer"
-											className="text-decoration-none fw-bold"
-										>
-											{profileData.website_link}
-										</a>
-									</div>
-								)}
-
-								{profileData.contact_email && (
-									<div className="d-flex align-items-center gap-2">
-										<i className="bi bi-envelope"></i>
-
-										{showEmail ? (
-											<span className="fw-bold text-muted">
-												{profileData.contact_email}
-											</span>
-										) : (
-											<span
-												className="email-hidden"
-												onMouseEnter={() =>
-													setHover(true)
-												}
-												onMouseLeave={() =>
-													setHover(false)
-												}
-											>
-												<span className="text-muted">
-													Email hidden
-												</span>
-
-												<span
-													className="ms-2 eye-clickable"
-													onClick={() =>
-														setShowEmail(true)
-													}
-													title="Show Email"
+						{/* RIGHT: CONTACT */}
+						<div className="col-lg-5 mt-4 mt-lg-0">
+							{" "}
+							{profileData?.contact_email ||
+							profileData?.website_link ? (
+								<>
+									<h6
+										className="fw-bold text-uppercase small text-muted mb-3"
+										style={{ letterSpacing: "0.5px" }}
+									>
+										Contact
+									</h6>
+									<div className="d-flex flex-column gap-3">
+										{profileData.website_link && (
+											<div className="d-flex align-items-center gap-2">
+												<div
+													className="bg-light rounded-circle d-flex align-items-center justify-content-center"
+													style={{
+														width: "32px",
+														height: "32px",
+													}}
 												>
-													{hover ? (
-														<EyeOpenIcon className="eye-icon" />
-													) : (
-														<EyeCloseIcon className="eye-icon" />
+													<i className="bi bi-globe text-muted"></i>
+												</div>
+												<a
+													href={
+														profileData.website_link
+													}
+													target="_blank"
+													rel="noopener noreferrer"
+													className="breadcrumb-link text-muted"
+													title="Website"
+												>
+													{profileData.website_link.replace(
+														/^https?:\/\//,
+														"",
 													)}
-												</span>
-											</span>
+												</a>
+											</div>
+										)}
+
+										{profileData.contact_email && (
+											<div className="d-flex align-items-center gap-2">
+												<div
+													className="bg-light rounded-circle d-flex align-items-center justify-content-center"
+													style={{
+														width: "32px",
+														height: "32px",
+													}}
+												>
+													<i className="bi bi-envelope text-muted"></i>
+												</div>
+												{showEmail ? (
+													<span className="text-muted">
+														{
+															profileData.contact_email
+														}
+													</span>
+												) : (
+													<span
+														className="email-hidden d-flex align-items-center cursor-pointer"
+														onMouseEnter={() =>
+															setHover(true)
+														}
+														onMouseLeave={() =>
+															setHover(false)
+														}
+													>
+														<span className="text-muted">
+															Email hidden
+														</span>
+
+														<span
+															className="ms-2 eye-clickable"
+															onClick={() =>
+																setShowEmail(
+																	true,
+																)
+															}
+															title="Show Email"
+														>
+															{hover ? (
+																<EyeOpenIcon className="eye-icon" />
+															) : (
+																<EyeCloseIcon className="eye-icon" />
+															)}
+														</span>
+													</span>
+												)}
+											</div>
 										)}
 									</div>
-								)}
-							</div>
-						)}
+								</>
+							) : (
+								<div className="d-none d-lg-block"></div>
+							)}
+						</div>
 					</div>
+					<div className="row gx-5">
+						{/* LEFT SHOPS */}
+						<div className="col-lg-7">
+							{(profileData?.vinted_link ||
+								profileData?.ebay_link ||
+								profileData?.depop_link) && (
+								<>
+									<h6
+										className="fw-bold text-uppercase small text-muted mb-3"
+										style={{ letterSpacing: "0.5px" }}
+									>
+										My Shops
+									</h6>
+									<div className="d-flex flex-wrap">
+										<MarketBadge
+											url={profileData.vinted_link}
+											icon="bi-tag-fill"
+											label="Vinted"
+											hoverColor="#09B1BA"
+										/>
+										<MarketBadge
+											url={profileData.depop_link}
+											icon="bi-bag-fill"
+											label="Depop"
+											hoverColor="#FF0000"
+										/>
+										<MarketBadge
+											url={profileData.ebay_link}
+											icon="bi-shop"
+											label="eBay"
+											hoverColor="#0064D2"
+										/>
+									</div>
+								</>
+							)}
+						</div>
 
-					<div className="col-lg-5">
-						{/* SOCIAL MEDIA */}
-						{(profileData?.instagram_link ||
-							profileData?.twitter_link ||
-							profileData?.youTube_link ||
-							profileData?.tiktok_link ||
-							profileData?.facebook_link) && (
-							<div className="mb-4">
-								<h6 className="fw-bold text-uppercase small text-muted mb-2">
-									Follow me
-								</h6>
-								<div className="d-flex align-items-center">
-									<SocialLink
-										url={profileData.instagram_link}
-										icon="bi-instagram"
-										color="#E1306C"
-										title="Instagram"
-									/>
-									<SocialLink
-										url={profileData.twitter_link}
-										icon="bi-twitter-x"
-										color="#000"
-										title="X / Twitter"
-									/>
-									<SocialLink
-										url={profileData.tiktok_link}
-										icon="bi-tiktok"
-										color="#000"
-										title="TikTok"
-									/>
-									<SocialLink
-										url={profileData.youTube_link}
-										icon="bi-youtube"
-										color="#FF0000"
-										title="YouTube"
-									/>
-									<SocialLink
-										url={profileData.facebook_link}
-										icon="bi-facebook"
-										color="#1877F2"
-										title="Facebook"
-									/>
-								</div>
-							</div>
-						)}
-
-						{/* MARKETPLACES (Vinted, eBay, Depop) */}
-						{(profileData?.vinted_link ||
-							profileData?.ebay_link ||
-							profileData?.depop_link) && (
-							<div className="mb-4">
-								<h6 className="fw-bold text-uppercase small text-muted mb-2">
-									My Shops
-								</h6>
-								<div className="d-flex flex-wrap">
-									<MarketBadge
-										url={profileData.vinted_link}
-										icon="bi-tag-fill"
-										label="Vinted"
-										colorClass="btn-info text-white"
-									/>
-									<MarketBadge
-										url={profileData.depop_link}
-										icon="bi-bag-fill"
-										label="Depop"
-										colorClass="btn-danger"
-									/>
-									<MarketBadge
-										url={profileData.ebay_link}
-										icon="bi-shop"
-										label="eBay"
-										colorClass="btn-outline-dark"
-									/>
-								</div>
-							</div>
-						)}
+						{/* RIGHT: SOCIALS */}
+						<div className="col-lg-5 mt-4 mt-lg-0">
+							{(profileData?.instagram_link ||
+								profileData?.twitter_link ||
+								profileData?.tiktok_link ||
+								profileData?.youTube_link ||
+								profileData?.facebook_link) && (
+								<>
+									<h6
+										className="fw-bold text-uppercase small text-muted mb-3"
+										style={{ letterSpacing: "0.5px" }}
+									>
+										Follow me
+									</h6>
+									<div className="d-flex gap-3 flex-wrap">
+										<SocialLink
+											url={profileData.instagram_link}
+											icon="bi-instagram"
+											color="#E1306C"
+											title="Instagram"
+										/>
+										<SocialLink
+											url={profileData.twitter_link}
+											icon="bi-twitter-x"
+											color="#000"
+											title="X"
+										/>
+										<SocialLink
+											url={profileData.tiktok_link}
+											icon="bi-tiktok"
+											color="#000"
+											title="TikTok"
+										/>
+										<SocialLink
+											url={profileData.youTube_link}
+											icon="bi-youtube"
+											color="#FF0000"
+											title="YouTube"
+										/>
+										<SocialLink
+											url={profileData.facebook_link}
+											icon="bi-facebook"
+											color="#1877F2"
+											title="Facebook"
+										/>
+									</div>
+								</>
+							)}
+						</div>
 					</div>
 				</div>
 			</div>
