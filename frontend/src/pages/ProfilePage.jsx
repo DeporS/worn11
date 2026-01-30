@@ -173,23 +173,31 @@ const ProfilePage = ({ user }) => {
 					<div className="text-end">
 						{/* Row 1*/}
 						<div className="d-flex justify-content-end gap-4">
-							<div className="text-center">
+							<div
+								className="text-center"
+								title="Kits in collection"
+							>
 								<div className="d-flex justify-content-center align-items-center gap-2">
 									<ShirtIcon className="shirt-icon" />
-									<h3 className="text-primary fw-bold mb-0">
+									<h4 className="text-primary fw-bold mb-0">
 										{stats.total_kits}
-									</h3>
+									</h4>
 								</div>
 								<span className="small text-muted d-block">
 									Kits in collection
 								</span>
 							</div>
 
-							<div className="text-center">
+							<div className="text-center" title="Total Value">
 								<div className="d-flex justify-content-center align-items-center gap-2">
 									<MoneyBagIcon className="money-bag-icon" />
 									<h4 className="text-success fw-bold mb-0">
-										${stats.total_value.toLocaleString()}
+										$
+										{Number(
+											stats.total_value,
+										).toLocaleString(undefined, {
+											maximumFractionDigits: 0,
+										})}
 									</h4>
 								</div>
 								<span className="small text-muted d-block">

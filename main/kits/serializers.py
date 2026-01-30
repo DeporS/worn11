@@ -321,7 +321,7 @@ class UserSearchSerializer(serializers.ModelSerializer):
 class UserStatsProfileSerializer(serializers.ModelSerializer):
     date_joined = serializers.DateTimeField(read_only=True)
     total_kits = serializers.IntegerField(read_only=True)
-    total_value = serializers.IntegerField(read_only=True)
+    total_value = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
 
     # --- Profile Basic Info ---
     avatar = serializers.ImageField(source='profile.avatar', read_only=True)
