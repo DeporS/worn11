@@ -139,26 +139,32 @@ const ProfilePage = ({ user }) => {
 							</div>
 
 							<div className="d-flex align-items-center gap-1">
-								{/* Country */}
-								{profileData?.country_info && (
-									<div
-										className="d-flex align-items-center gap-1 ms-1"
-										title={profileData.country_info.name}
-									>
-										<img
-											className="rounded"
-											src={profileData.country_info.flag}
-											alt="flag"
-											style={{
-												height: "16px",
-											}}
-										/>
-									</div>
-								)}
 								{/* Name & Surname */}
 								{(profileData?.name ||
 									profileData?.surname) && (
 									<>
+										{/* Country */}
+										{profileData?.country_info && (
+											<div
+												className="d-flex align-items-center gap-1 ms-1"
+												title={
+													profileData.country_info
+														.name
+												}
+											>
+												<img
+													className="rounded"
+													src={
+														profileData.country_info
+															.flag
+													}
+													alt="flag"
+													style={{
+														height: "16px",
+													}}
+												/>
+											</div>
+										)}
 										<p className="text-muted mb-0 small">
 											{profileData.name}{" "}
 											{profileData.surname}
