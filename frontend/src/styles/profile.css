@@ -456,3 +456,18 @@
 	max-height: 2000px;
 	opacity: 1;
 }
+
+/* For mobile */
+@media (min-width: 992px) {
+	.details-wrapper {
+		max-height: none !important;
+		opacity: 1 !important;
+		overflow: visible !important;
+	}
+
+	.details-wrapper .fade-in-animation {
+		animation: none !important;
+		transform: none !important;
+		opacity: 1 !important;
+	}
+}

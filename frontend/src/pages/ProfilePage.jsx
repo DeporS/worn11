@@ -25,7 +25,7 @@ const ProfilePage = ({ user }) => {
 	const [profileData, setProfileData] = useState(null);
 
 	const [showEmail, setShowEmail] = useState(false); // For toggling email visibility
-	const [isExpanded, setIsExpanded] = useState(false); // For bio expansion
+	const [isExpanded, setIsExpanded] = useState(true); // For bio expansion
 
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState(null);
@@ -74,7 +74,7 @@ const ProfilePage = ({ user }) => {
 		<div className="container py-5 px-3 px-md-1">
 			{/* Profile headline */}
 			<div className="container bg-white p-4 rounded shadow-sm mb-5">
-				<div className="d-flex justify-content-between align-items-center">
+				<div className="d-flex flex-column flex-lg-row justify-content-between align-items-center gap-4">
 					<div className="d-flex align-items-center gap-4">
 						{/* Profile avatar */}
 						<UserAvatar user={profileData} size={80} />
@@ -460,7 +460,7 @@ const ProfilePage = ({ user }) => {
 				</div>
 
 				{/* Expanding button */}
-				<div className="d-flex justify-content-center mt-3">
+				<div className="d-flex justify-content-center mt-3 d-lg-none">
 					<button
 						className="btn btn-sm btn-light border rounded-pill px-4 py-1 text-muted d-flex align-items-center gap-2 shadow-sm"
 						onClick={() => setIsExpanded(!isExpanded)}
@@ -469,12 +469,12 @@ const ProfilePage = ({ user }) => {
 						{isExpanded ? (
 							<>
 								<span>Show Less</span>
-								<i className="bi bi-chevron-up"></i>{" "}
+								<i className="bi bi-chevron-up"></i>
 							</>
 						) : (
 							<>
 								<span>Show Details</span>
-								<i className="bi bi-chevron-down"></i>{" "}
+								<i className="bi bi-chevron-down"></i>
 							</>
 						)}
 					</button>
