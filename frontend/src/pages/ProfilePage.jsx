@@ -459,8 +459,8 @@ const ProfilePage = ({ user }) => {
 					</div>
 				</div>
 
-				{/* Expanding button */}
-				<div className="d-flex justify-content-center mt-3 d-lg-none">
+				{/* Expanding button  - Turned off right now*/}
+				<div className="d-flex justify-content-center mt-3 d-none">
 					<button
 						className="btn btn-sm btn-light border rounded-pill px-4 py-1 text-muted d-flex align-items-center gap-2 shadow-sm"
 						onClick={() => setIsExpanded(!isExpanded)}
