@@ -86,14 +86,14 @@ const NavBar = ({ user, onLoginSuccess, onLogout }) => {
 						<hr className="d-lg-none text-muted w-100 my-3" />
 						<li className="nav-item">
 							<NavLink
-								to="/history"
+								to="/groups"
 								className={({ isActive }) =>
 									`nav-link px-3 fw-bold text-nowrap ${isActive ? "text-primary" : "text-dark"}`
 								}
 								onClick={closeMenu}
 								style={{ fontSize: "1.1rem" }}
 							>
-								Kit Museum
+								Groups
 							</NavLink>
 						</li>
 						{/* More links here */}
