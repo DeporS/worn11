@@ -71,3 +71,12 @@
 	top: 10px;
 	transform: rotate(-135deg);
 }
+
+.logout-button {
+	transition: color 0.3s ease-in-out;
+}
+
+.logout-button:hover {
+	color: #c91f1f;
+	transform: scale(1.05);
+}

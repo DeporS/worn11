@@ -146,7 +146,7 @@ const NavBar = ({ user, onLoginSuccess, onLogout }) => {
 										{/* Mobile */}
 										<i className="bi bi-box-arrow-right fs-1 d-lg-none"></i>
 										{/* Desktop */}
-										<i className="bi bi-box-arrow-right fs-3 d-none d-lg-inline"></i>
+										<i className="bi bi-box-arrow-right fs-3 d-none d-lg-inline logout-button"></i>
 									</button>
 								</div>
 							</>
