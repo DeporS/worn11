@@ -323,6 +323,11 @@ class UserStatsProfileSerializer(serializers.ModelSerializer):
     total_kits = serializers.IntegerField(read_only=True)
     total_value = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
 
+    # --- Social ---
+    followers_count = serializers.IntegerField(read_only=True, default=0)
+    following_count = serializers.IntegerField(read_only=True, default=0)
+    is_followed_by_me = serializers.BooleanField(read_only=True, default=False)
+
     # --- Profile Basic Info ---
     avatar = serializers.ImageField(source='profile.avatar', read_only=True)
     bio = serializers.CharField(source='profile.bio', read_only=True)
@@ -360,6 +365,9 @@ class UserStatsProfileSerializer(serializers.ModelSerializer):
         fields = [
             'username', 'email', 'date_joined', 
             'total_kits', 'total_value',
+
+            # Social
+            'followers_count', 'following_count', 'is_followed_by_me',
             
             # Profile Fields
             'avatar', 'bio', 'name', 'surname',

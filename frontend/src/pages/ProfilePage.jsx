@@ -1,5 +1,9 @@
 import { useState, useEffect } from "react";
-import { getUserCollection, getUserStats } from "../services/api";
+import {
+	getUserCollection,
+	getUserStats,
+	toggleFollowUser,
+} from "../services/api";
 import { Link, useParams } from "react-router-dom";
 import KitCard from "../components/profile/KitCard";
 import SocialLink from "../components/profile/SocialLink";
@@ -14,6 +18,8 @@ import DiamondIcon from "../assets/icons/diamond-blue.svg?react";
 import ShieldIcon from "../assets/icons/shield-2.svg?react";
 import ShirtIcon from "../assets/icons/shirt.svg?react";
 import MoneyBagIcon from "../assets/icons/money-bag.svg?react";
+import FollowersIcon from "../assets/icons/followers.svg?react";
+import FollowingIcon from "../assets/icons/following.svg?react";
 
 const ProfilePage = ({ user }) => {
 	const { username } = useParams(); // Get username from URL params
@@ -32,6 +38,12 @@ const ProfilePage = ({ user }) => {
 
 	const [hover, setHover] = useState(false);
 
+	// Following states
+	const [isFollowing, setIsFollowing] = useState(false);
+	const [followersCount, setFollowersCount] = useState(0);
+	const [followingCount, setFollowingCount] = useState(0);
+	const [followLoading, setFollowLoading] = useState(false);
+
 	useEffect(() => {
 		if (!profileUsername) return;
 
@@ -46,6 +58,11 @@ const ProfilePage = ({ user }) => {
 				setMyKits(kitsData);
 				setStats(statsData);
 				setProfileData(statsData);
+
+				// Set following states
+				setIsFollowing(statsData.is_followed_by_me);
+				setFollowersCount(statsData.followers_count || 0);
+				setFollowingCount(statsData.following_count || 0);
 			})
 			.catch((err) => {
 				console.error("Failed to load profile", err);
@@ -68,6 +85,36 @@ const ProfilePage = ({ user }) => {
 	const handleDeleteSuccess = (deletedKitId) => {
 		setMyKits((prev) => prev.filter((item) => item.id !== deletedKitId));
 		getUserStats(profileUsername).then(setStats);
+	};
+
+	const handleFollowToggle = async () => {
+		if (!user) {
+			alert("You need to be logged in!");
+			return;
+		}
+
+		// Prevent multiple clicks while loading
+		if (followLoading) return;
+		setFollowLoading(true);
+
+		// Optimistic UI Update (change UI before server response for better UX)
+		const previousIsFollowing = isFollowing;
+		const previousFollowersCount = followersCount;
+		setIsFollowing(!isFollowing);
+		setFollowersCount((prev) => (isFollowing ? prev - 1 : prev + 1));
+
+		try {
+			const data = await toggleFollowUser(profileUsername);
+			// Server response will confirm the new state, but we already updated the UI optimistically
+			setIsFollowing(data.is_following);
+		} catch (err) {
+			console.error("Error while following", err);
+			// Rollback, if the server returns an error
+			setIsFollowing(previousIsFollowing);
+			setFollowersCount(previousFollowersCount);
+		} finally {
+			setFollowLoading(false);
+		}
 	};
 
 	return (
@@ -127,7 +174,8 @@ const ProfilePage = ({ user }) => {
 									</div>
 								)} */}
 
-								{isOwner && (
+								{/* Edit Button OR Follow Button */}
+								{isOwner ? (
 									<Link
 										to="/profile/edit"
 										className="edit-button"
@@ -135,6 +183,28 @@ const ProfilePage = ({ user }) => {
 									>
 										✏️
 									</Link>
+								) : (
+									<button
+										onClick={handleFollowToggle}
+										disabled={followLoading}
+										className={`btn btn-sm rounded-pill ms-2 px-3 fw-bold ${
+											isFollowing
+												? "btn-outline-secondary" // Style for "Unfollow"
+												: "btn-primary" // Style for "Follow"
+										}`}
+									>
+										{isFollowing ? (
+											<>
+												<i className="bi bi-person-dash-fill me-1"></i>{" "}
+												Unfollow
+											</>
+										) : (
+											<>
+												<i className="bi bi-person-plus-fill me-1"></i>{" "}
+												Follow
+											</>
+										)}
+									</button>
 								)}
 							</div>
 
@@ -179,6 +249,32 @@ const ProfilePage = ({ user }) => {
 					<div className="text-end">
 						{/* Row 1*/}
 						<div className="d-flex justify-content-end gap-4">
+							{/* Followers */}
+							<div className="text-center" title="Followers">
+								<div className="d-flex justify-content-center align-items-center gap-2">
+									<FollowersIcon className="followers-icon" />
+									<h4 className="text-dark fw-bold mb-0">
+										{followersCount}
+									</h4>
+								</div>
+								<span className="small text-muted d-block">
+									Followers
+								</span>
+							</div>
+
+							{/* Following */}
+							<div className="text-center" title="Following">
+								<div className="d-flex justify-content-center align-items-center gap-2">
+									<FollowingIcon className="following-icon" />
+									<h4 className="text-dark fw-bold mb-0">
+										{followingCount}
+									</h4>
+								</div>
+								<span className="small text-muted d-block">
+									Following
+								</span>
+							</div>
+							{/* Kits */}
 							<div
 								className="text-center"
 								title="Kits in collection"
@@ -193,7 +289,7 @@ const ProfilePage = ({ user }) => {
 									Kits in collection
 								</span>
 							</div>
-
+							{/* Total Value */}
 							<div className="text-center" title="Total Value">
 								<div className="d-flex justify-content-center align-items-center gap-2">
 									<MoneyBagIcon className="money-bag-icon" />

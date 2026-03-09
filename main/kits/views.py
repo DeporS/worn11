@@ -13,7 +13,7 @@ from django.shortcuts import get_object_or_404
 from django.db.models import Sum, Count
 from django.contrib.auth.models import User
 
-from .models import League, UserKit, Kit, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country
+from .models import League, UserKit, Kit, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country, Follow
 from .serializers import LeagueSerializer, UserKitSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer, CountrySerializer
 
 # Current user
@@ -163,6 +163,18 @@ class UserCollectionStatsAPI(APIView):
         user.total_value = stats['total_value'] or 0
         user.total_kits = stats['total_kits'] or 0
 
+        # Calculate followers and following counts
+        user.followers_count = user.followers.count()
+        user.following_count = user.following.count()
+
+        # Check if the logged-in user is following this user (if authenticated)
+        user.is_followed_by_me = False
+        if request.user.is_authenticated:
+            user.is_followed_by_me = Follow.objects.filter(
+                follower=request.user, 
+                following=user
+            ).exists()
+
         # Pass the user to the new serializer
         serializer = UserStatsProfileSerializer(user, context={'request': request})
 
@@ -265,3 +277,31 @@ class CountryListView(generics.ListAPIView):
     permission_classes = [permissions.AllowAny] 
     
     pagination_class = None
+
+# Endpoint: Toggle follow/unfollow another user
+class ToggleFollowView(APIView):
+    # Only authenticated users can follow/unfollow
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, username):
+        # Find the user to follow or return 404 if not found
+        user_to_follow = get_object_or_404(User, username=username)
+
+        # Prevent users from following themselves
+        if request.user == user_to_follow:
+            return Response({"error": "You cannot follow yourself."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check if the follow relationship already exists
+        follow_instance = Follow.objects.filter(
+            follower=request.user, 
+            following=user_to_follow
+        ).first()
+
+        if follow_instance:
+            # If it exists -> Delete it (Unfollow)
+            follow_instance.delete()
+            return Response({"is_following": False}, status=status.HTTP_200_OK)
+        else:
+            # If it doesn't exist -> Create it (Follow)
+            Follow.objects.create(follower=request.user, following=user_to_follow)
+            return Response({"is_following": True}, status=status.HTTP_201_CREATED)

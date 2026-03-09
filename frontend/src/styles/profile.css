@@ -440,6 +440,18 @@
 	height: 36px;
 }
 
+/* Followers icon */
+.followers-icon {
+	width: 36px;
+	height: 36px;
+}
+
+/* Following icon */
+.following-icon {
+	width: 36px;
+	height: 36px;
+}
+
 /* Expand */
 .details-wrapper {
 	max-height: 0;

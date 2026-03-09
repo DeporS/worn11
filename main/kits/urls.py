@@ -18,6 +18,7 @@ from .views import (
     TopKitsByTeamAPI,
     CheckUsernameAPI,
     CountryListView,
+    ToggleFollowView,
 )
 from .views_auth import GoogleLogin
 
@@ -40,6 +41,7 @@ urlpatterns = [
     path('kits/team/<int:team_id>/best/', TopKitsByTeamAPI.as_view(), name='top-kits-by-team'),
     path('auth/check-username/', CheckUsernameAPI.as_view(), name='check-username'),
     path('countries/', CountryListView.as_view(), name='country-list'),
+    path('users/<str:username>/follow/', ToggleFollowView.as_view(), name='toggle-follow'),
 ]
 
 if settings.DEBUG:
