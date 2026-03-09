@@ -17,6 +17,7 @@ from .views import (
     TeamsByLeagueAPI,
     TopKitsByTeamAPI,
     CheckUsernameAPI,
+    CountryListView,
 )
 from .views_auth import GoogleLogin
 
@@ -38,6 +39,7 @@ urlpatterns = [
     path('teams/league/<int:league_id>/', TeamsByLeagueAPI.as_view(), name='teams-by-league'),
     path('kits/team/<int:team_id>/best/', TopKitsByTeamAPI.as_view(), name='top-kits-by-team'),
     path('auth/check-username/', CheckUsernameAPI.as_view(), name='check-username'),
+    path('countries/', CountryListView.as_view(), name='country-list'),
 ]
 
 if settings.DEBUG:

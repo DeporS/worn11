@@ -23,6 +23,15 @@ const EditProfilePage = ({ user, setUser }) => {
 	const [ebayLink, setEbayLink] = useState(null);
 	const [depopLink, setDepopLink] = useState(null);
 	const [websiteLink, setWebsiteLink] = useState(null);
+	const [name, setName] = useState("");
+	const [surname, setSurname] = useState("");
+
+	// Country selection states
+	const [countriesList, setCountriesList] = useState([]); // Countries fetched from backend
+	const [filteredCountries, setFilteredCountries] = useState([]); // List after filtering by search
+	const [countrySearch, setCountrySearch] = useState(""); // Users input for searching countries
+	const [selectedCountry, setSelectedCountry] = useState(null); // Currently selected country
+	const [showCountryDropdown, setShowCountryDropdown] = useState(false); // Whether to show the dropdown list
 
 	// Validation states
 	const [usernameAvailable, setUsernameAvailable] = useState(true);
@@ -32,6 +41,15 @@ const EditProfilePage = ({ user, setUser }) => {
 	const [error, setError] = useState(null);
 
 	const isUsernameLocked = user?.profile?.has_changed_username;
+
+	// Fetch countries on mount
+	useEffect(() => {
+		api.get("/countries/")
+			.then((res) => {
+				setCountriesList(res.data);
+			})
+			.catch((err) => console.error("Failed to load countries", err));
+	}, []);
 
 	// Load existing profile data on mount
 	useEffect(() => {
@@ -55,6 +73,14 @@ const EditProfilePage = ({ user, setUser }) => {
 			setEbayLink(user.profile.ebay_link || "");
 			setDepopLink(user.profile.depop_link || "");
 			setWebsiteLink(user.profile.website_link || "");
+			setName(user.profile.name || "");
+			setSurname(user.profile.surname || "");
+
+			// Set country on mount if exists
+			if (user.profile.country_info) {
+				setSelectedCountry(user.profile.country_info);
+				setCountrySearch(user.profile.country_info.name);
+			}
 		}
 	}, [user]);
 
@@ -117,6 +143,34 @@ const EditProfilePage = ({ user, setUser }) => {
 		}
 	};
 
+	// Filter countries as user types and handle selection
+	const handleCountrySearch = (e) => {
+		const value = e.target.value;
+		setCountrySearch(value);
+		setShowCountryDropdown(true); // Open dropdown when user types
+
+		// If the typed text doesn't match the selected country, it means the user wants to change it
+		if (selectedCountry && value !== selectedCountry.name) {
+			setSelectedCountry(null);
+		}
+
+		if (value) {
+			const filtered = countriesList.filter((c) =>
+				c.name.toLowerCase().includes(value.toLowerCase()),
+			);
+			setFilteredCountries(filtered);
+		} else {
+			setFilteredCountries(countriesList);
+		}
+	};
+
+	// When user selects a country from the list
+	const handleSelectCountry = (country) => {
+		setSelectedCountry(country);
+		setCountrySearch(country.name); // Insert the selected country's name into the input
+		setShowCountryDropdown(false); // Close the list
+	};
+
 	// Submit the form
 	const handleSubmit = async (e) => {
 		e.preventDefault();
@@ -143,6 +197,15 @@ const EditProfilePage = ({ user, setUser }) => {
 		formData.append("ebay_link", ebayLink || "");
 		formData.append("depop_link", depopLink || "");
 		formData.append("website_link", websiteLink || "");
+		formData.append("name", name || "");
+		formData.append("surname", surname || "");
+
+		// Append country ID if selected, otherwise send empty to clear it
+		if (selectedCountry) {
+			formData.append("country", selectedCountry.id);
+		} else {
+			formData.append("country", ""); // Send empty string if cleared
+		}
 
 		// We send the file only if the user selected a new one
 		if (avatarFile) {
@@ -283,6 +346,151 @@ const EditProfilePage = ({ user, setUser }) => {
 											? "You have already changed your username once. It cannot be changed again."
 											: "Warning: You can only change your username ONCE."}
 									</div>
+								</div>
+
+								{/* NAME & SURNAME SECTION */}
+								<div className="row mb-3">
+									<div className="col-6">
+										<label className="form-label fw-bold">
+											Name
+										</label>
+										<div className="input-group">
+											<span className="input-group-text bg-light border-end-0">
+												<i className="bi bi-person-badge"></i>
+											</span>
+											<input
+												type="text"
+												className="form-control border-start-0"
+												placeholder="Name"
+												value={name}
+												onChange={(e) =>
+													setName(e.target.value)
+												}
+											/>
+										</div>
+									</div>
+									<div className="col-6">
+										<label className="form-label fw-bold">
+											Surname
+										</label>
+										<div className="input-group">
+											<span className="input-group-text bg-light border-end-0">
+												<i className="bi bi-person-vcard"></i>
+											</span>
+											<input
+												type="text"
+												className="form-control border-start-0"
+												placeholder="Surname"
+												value={surname}
+												onChange={(e) =>
+													setSurname(e.target.value)
+												}
+											/>
+										</div>
+									</div>
+								</div>
+
+								{/* COUNTRY SECTION (AUTOCOMPLETE) */}
+								<div className="mb-3 position-relative">
+									<label className="form-label fw-bold">
+										Country
+									</label>
+									<div className="input-group">
+										{/* Display flag in input if country is selected */}
+										{selectedCountry?.flag ? (
+											<span className="input-group-text bg-white border-end-0 pe-1">
+												<img
+													src={selectedCountry.flag}
+													alt="flag"
+													style={{
+														height: "16px",
+														borderRadius: "2px",
+													}}
+												/>
+											</span>
+										) : (
+											<span className="input-group-text bg-white border-end-0 pe-1">
+												<i className="bi bi-geo-alt text-muted"></i>
+											</span>
+										)}
+
+										<input
+											type="text"
+											className="form-control border-start-0 ps-2"
+											placeholder="Start typing your country..."
+											value={countrySearch}
+											onChange={handleCountrySearch}
+											// Show list on input click:
+											onFocus={() => {
+												setShowCountryDropdown(true);
+												setFilteredCountries(
+													countrySearch
+														? countriesList.filter(
+																(c) =>
+																	c.name
+																		.toLowerCase()
+																		.includes(
+																			countrySearch.toLowerCase(),
+																		),
+															)
+														: countriesList,
+												);
+											}}
+											// Hide list on input blur (timeout to allow click on list item first)
+											onBlur={() =>
+												setTimeout(
+													() =>
+														setShowCountryDropdown(
+															false,
+														),
+													200,
+												)
+											}
+										/>
+									</div>
+
+									{/* Country dropdown */}
+									{showCountryDropdown &&
+										filteredCountries.length > 0 && (
+											<ul
+												className="dropdown-menu show w-100 position-absolute shadow-sm"
+												style={{
+													top: "100%",
+													left: 0,
+													zIndex: 1050,
+													maxHeight: "250px",
+													overflowY: "auto",
+													marginTop: "2px",
+												}}
+											>
+												{filteredCountries.map((c) => (
+													<li key={c.id}>
+														<button
+															type="button"
+															className="dropdown-item d-flex align-items-center gap-2 py-2"
+															onClick={() =>
+																handleSelectCountry(
+																	c,
+																)
+															}
+														>
+															{c.flag && (
+																<img
+																	src={c.flag}
+																	alt="flag"
+																	style={{
+																		height: "16px",
+																		borderRadius:
+																			"2px",
+																	}}
+																/>
+															)}
+															{c.name}
+														</button>
+													</li>
+												))}
+											</ul>
+										)}
 								</div>
 
 								{/* BIO SECTION */}

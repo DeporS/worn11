@@ -13,8 +13,8 @@ from django.shortcuts import get_object_or_404
 from django.db.models import Sum, Count
 from django.contrib.auth.models import User
 
-from .models import League, UserKit, Kit, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile
-from .serializers import LeagueSerializer, UserKitSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer
+from .models import League, UserKit, Kit, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country
+from .serializers import LeagueSerializer, UserKitSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer, CountrySerializer
 
 # Current user
 class CurrentUserAPI(generics.RetrieveAPIView):
@@ -255,3 +255,13 @@ class CheckUsernameAPI(APIView):
         # Check if username exists excluding the current user
         exists = User.objects.filter(username__iexact=username).exclude(id=request.user.id).exists()
         return Response({"available": not exists})
+
+# Endpoint: List of countries
+class CountryListView(generics.ListAPIView):
+    queryset = Country.objects.all().order_by('name')
+    serializer_class = CountrySerializer
+    
+    # Allow everyone to access this endpoint
+    permission_classes = [permissions.AllowAny] 
+    
+    pagination_class = None
