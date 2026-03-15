@@ -34,6 +34,8 @@ const EditShirtFormPage = () => {
 	const [playerNumber, setPlayerNumber] = useState("");
 	const [offerLink, setOfferLink] = useState("");
 
+	const [inCollection, setInCollection] = useState(true);
+
 	// Error states
 	const [teamError, setTeamError] = useState(null);
 	const [seasonError, setSeasonError] = useState(null);
@@ -112,6 +114,7 @@ const EditShirtFormPage = () => {
 				setPlayerName(data.player_name || "");
 				setPlayerNumber(data.player_number || "");
 				setOfferLink(data.offer_link || "");
+				setInCollection(data.in_the_collection);
 
 				if (data.images && Array.isArray(data.images)) {
 					const mappedImages = data.images.map((img) => ({
@@ -328,6 +331,7 @@ const EditShirtFormPage = () => {
 		formData.append("player_name", playerName);
 		formData.append("player_number", playerNumber);
 		formData.append("offer_link", offerLink);
+		formData.append("in_the_collection", inCollection);
 
 		// --- COMPLEX IMAGE HANDLING FOR EDIT ---
 		const fullOrder = [];
@@ -607,6 +611,53 @@ const EditShirtFormPage = () => {
 													{typeError}
 												</div>
 											)}
+										</div>
+									</div>
+									<div className="col-12 mt-3">
+										<div className="h-100 d-flex flex-column p-3 rounded bg-white border">
+											<div className="form-check form-switch d-flex align-items-center gap-2 m-0">
+												<input
+													className="form-check-input my-0"
+													type="checkbox"
+													role="switch"
+													id="inCollectionCheck"
+													style={{
+														cursor: "pointer",
+														width: "3em",
+														height: "1.5em",
+													}}
+													checked={inCollection}
+													onChange={(e) =>
+														setInCollection(
+															e.target.checked,
+														)
+													}
+												/>
+												<label
+													className="form-check-label small fw-bold cursor-pointer"
+													htmlFor="inCollectionCheck"
+												>
+													{inCollection ? (
+														<span className="text-primary">
+															IN MY COLLECTION
+														</span>
+													) : (
+														<span className="text-muted">
+															NO LONGER OWNED
+														</span>
+													)}
+												</label>
+											</div>
+
+											{/* Tekst wyjaśniający, żeby było jasne co to robi */}
+											<span
+												className="text-muted mt-2"
+												style={{ fontSize: "0.75rem" }}
+											>
+												{inCollection
+													? "This kit counts towards your total collection value and kits count."
+													: "This kit remains in your history, but is excluded from your collection stats."}
+											</span>
 										</div>
 									</div>
 								</div>

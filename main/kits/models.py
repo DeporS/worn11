@@ -211,6 +211,9 @@ class UserKit(models.Model):
     for_sale = models.BooleanField(default=False)
     offer_link = models.URLField(max_length=2048, null=True, blank=True)
 
+    # If false, it means the user had it but sold or traded it away
+    in_the_collection = models.BooleanField(default=True)  
+
     # How many users like this kit
     likes = models.ManyToManyField(User, related_name='liked_kits', blank=True)
 

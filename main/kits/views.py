@@ -154,7 +154,10 @@ class UserCollectionStatsAPI(APIView):
         user = get_object_or_404(User, username=username)
 
         # Calculate stats
-        stats = UserKit.objects.filter(user=user).aggregate(
+        stats = UserKit.objects.filter(
+            user=user,
+            in_the_collection=True
+        ).aggregate(
             total_value=Sum('final_value'), # Sum the value of all kits
             total_kits=Count('id')          # Count the number of kits
         )
