@@ -182,7 +182,9 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 	return (
 		<>
 			<div className="card h-100 shadow-sm border-0 kit-card-relative">
-				{item.for_sale && <div className="ribbon">For Sale</div>}
+				{item.for_sale && item.in_the_collection && (
+					<div className="ribbon">For Sale</div>
+				)}
 
 				{/* Gallery of photos */}
 				{/* <div
