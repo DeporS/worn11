@@ -291,7 +291,10 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 							</h5>
 						</div>
 						<span className="badge-outline" title="Estimated Value">
-							${item.final_value}
+							{item.in_the_collection
+								? `$${item.final_value}`
+								: "SOLD"}
+							{/* ${item.final_value} */}
 						</span>
 					</div>
 
