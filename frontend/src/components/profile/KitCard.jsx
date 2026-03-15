@@ -217,55 +217,12 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 					<div className="ribbon">For Sale</div>
 				)}
 
-				{/* Gallery of photos */}
-				{/* <div
-                    ref={galleryRef}
-                    className="p-2 d-flex custom-scrollbar"
-                    style={{
-                        gap: '2px',
-                        scrollSnapType: 'x mandatory',
-                        scrollPaddingLeft: '8px',
-                        maxWidth: '100%',
-                        scrollBehavior: 'smooth',
-                        overflowX: 'scroll',
-                    }}
-                >
-                    {item.images.length > 0 ? (
-                        item.images.map((photo, index) => (
-                            <img
-                                key={photo.id}
-                                src={photo.image}
-                                alt="Kit"
-                                className="rounded gallery-img"
-                                onClick={() => setSelectedImageIndex(index)}
-                                style={{
-                                    width: 'calc(25% - 2px)',
-                                    minWidth: 'calc(25% - 2px)',
-                                    maxWidth: 'calc(25% - 2px)',
-                                    aspectRatio: '3 / 4',
-                                    objectFit: 'cover',
-                                    scrollSnapAlign: 'start',
-                                }}
-                            />
-                        ))
-                    ) : (
-                        <div className="bg-light d-flex align-items-center justify-content-center rounded"
-                            style={{
-                                width: 'calc(25% - 2px)',
-                                minWidth: 'calc(25% - 2px)',
-                                maxWidth: 'calc(25% - 2px)',
-                                aspectRatio: '3 / 4',
-                                objectFit: 'cover',
-                                scrollSnapAlign: 'start'
-                            }}
-                        >
-                            <small className="text-muted">No photo</small>
-                        </div>
-                    )}
-                </div> */}
-				{/* Main photo */}
+				{/* ========================================== */}
+				{/* PC VERSION - Click to view more images */}
+				{/* VISIBLE ON LARGE SCREENS (md and above) */}
+				{/* ========================================== */}
 				<div
-					className="p-2"
+					className="p-2 d-none d-md-block"
 					style={{ cursor: "pointer" }}
 					onClick={() => {
 						if (item.images.length > 0) setSelectedImageIndex(0);
@@ -284,7 +241,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 									display: "block",
 								}}
 							/>
-							{/* Badge showing number of photos if more than 1 */}
+							{/* Stary badge z samą liczbą */}
 							{item.images.length > 1 && (
 								<div
 									className="position-absolute bottom-0 end-0 m-2 badge bg-dark bg-opacity-75"
@@ -299,6 +256,65 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 						<div
 							className="bg-light d-flex align-items-center justify-content-center rounded text-muted"
 							style={{ width: "100%", aspectRatio: "3 / 4" }}
+						>
+							<small>No photo</small>
+						</div>
+					)}
+				</div>
+
+				{/* ========================================== */}
+				{/* MOBILE VERSION - swipe through images */}
+				{/* Visible only on small screens (below md) */}
+				{/* ========================================== */}
+				<div
+					className="p-2 d-flex d-md-none kit-swipe-gallery"
+					style={{
+						overflowX: "auto",
+						scrollSnapType: "x mandatory",
+						WebkitOverflowScrolling: "touch",
+					}}
+				>
+					{item.images.length > 0 ? (
+						item.images.map((img, index) => (
+							<div
+								key={img.id}
+								className="position-relative"
+								style={{
+									flex: "0 0 100%",
+									scrollSnapAlign: "center",
+								}}
+							>
+								<img
+									src={img.image}
+									alt={`Kit ${index + 1}`}
+									className="rounded"
+									style={{
+										width: "100%",
+										aspectRatio: "3 / 4",
+										objectFit: "cover",
+										display: "block",
+									}}
+								/>
+								{/* Nowy badge z numerem aktualnego zdjęcia */}
+								{item.images.length > 1 && (
+									<div
+										className="position-absolute bottom-0 end-0 m-2 badge bg-dark bg-opacity-75"
+										style={{ fontSize: "0.7rem" }}
+									>
+										<i className="bi bi-images me-1"></i>
+										{index + 1} / {item.images.length}
+									</div>
+								)}
+							</div>
+						))
+					) : (
+						<div
+							className="bg-light d-flex align-items-center justify-content-center rounded text-muted"
+							style={{
+								width: "100%",
+								aspectRatio: "3 / 4",
+								flex: "0 0 100%",
+							}}
 						>
 							<small>No photo</small>
 						</div>

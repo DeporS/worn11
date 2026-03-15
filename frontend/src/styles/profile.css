@@ -483,3 +483,12 @@
 		opacity: 1 !important;
 	}
 }
+
+/* Swipe gallery */
+.kit-swipe-gallery::-webkit-scrollbar {
+	display: none;
+}
+.kit-swipe-gallery {
+	-ms-overflow-style: none; /* IE and Edge */
+	scrollbar-width: none; /* Firefox */
+}
