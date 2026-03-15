@@ -290,11 +290,17 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 								{item.kit.team.name}
 							</h5>
 						</div>
-						<span className="badge-outline" title="Estimated Value">
+						<span
+							className={`badge-outline ${!item.in_the_collection ? "text-muted border-secondary" : ""}`}
+							title={
+								item.in_the_collection
+									? "Estimated Value"
+									: "No longer in collection"
+							}
+						>
 							{item.in_the_collection
-								? `$${item.final_value}`
+								? `$${Number(item.final_value).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
 								: "SOLD"}
-							{/* ${item.final_value} */}
 						</span>
 					</div>
 
