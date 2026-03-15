@@ -11,6 +11,7 @@ import KitCard from "../components/profile/KitCard";
 import SocialLink from "../components/profile/SocialLink";
 import MarketBadge from "../components/profile/MarketBadge";
 import UserAvatar from "../components/UserAvatar";
+import UserListModal from "../components/profile/UserListModal";
 
 import "../styles/profile.css";
 
@@ -77,19 +78,6 @@ const ProfilePage = ({ user }) => {
 			})
 			.finally(() => setLoading(false));
 	}, [profileUsername, user?.username]);
-
-	useEffect(() => {
-		if (modalType) {
-			document.body.style.overflow = "hidden";
-		} else {
-			document.body.style.overflow = "unset";
-		}
-
-		// Cleanup: reset overflow when component unmounts or modalType changes
-		return () => {
-			document.body.style.overflow = "unset";
-		};
-	}, [modalType]);
 
 	if (!profileUsername)
 		return <div className="text-center mt-5">Please log in.</div>;
@@ -692,103 +680,13 @@ const ProfilePage = ({ user }) => {
 			)}
 
 			{/* Followers/Following Modal */}
-			{modalType && (
-				<div
-					className="d-flex justify-content-center align-items-center"
-					style={{
-						position: "fixed",
-						top: 0,
-						left: 0,
-						width: "100%",
-						height: "100%",
-						backgroundColor: "rgba(0,0,0,0.8)",
-						zIndex: 1050,
-					}}
-					onClick={closeFollowModal}
-				>
-					<div
-						className="card shadow"
-						style={{
-							width: "90%",
-							maxWidth: "400px",
-							maxHeight: "70vh",
-							overflow: "hidden",
-						}}
-						onClick={(e) => e.stopPropagation()} // click inside modal shouldn't close it
-					>
-						<div className="card-header bg-white d-flex justify-content-between align-items-center border-bottom-0 pt-3 pb-2">
-							<h5 className="fw-bold mb-0 text-capitalize">
-								{modalType}
-							</h5>
-							<button
-								className="btn-close"
-								onClick={closeFollowModal}
-							></button>
-						</div>
-
-						<div className="card-body overflow-auto p-0">
-							{modalLoading ? (
-								<div className="text-center p-4">
-									<div className="spinner-border spinner-border-sm text-primary"></div>
-								</div>
-							) : modalUsers.length === 0 ? (
-								<div className="text-center p-4 text-muted">
-									No {modalType} yet.
-								</div>
-							) : (
-								<ul className="list-group list-group-flush">
-									{modalUsers.map((u) => (
-										<Link
-											key={u.id}
-											to={`/profile/${u.username}`}
-											className="list-group-item list-group-item-action d-flex align-items-center gap-3 p-3 border-0 border-bottom"
-											onClick={closeFollowModal} // close modal when navigating to profile
-										>
-											{/* Avatar */}
-											{u.avatar ? (
-												<img
-													src={u.avatar}
-													alt="avatar"
-													className="rounded-circle"
-													style={{
-														width: "40px",
-														height: "40px",
-														objectFit: "cover",
-													}}
-												/>
-											) : (
-												<div
-													className="bg-primary text-white rounded-circle d-flex justify-content-center align-items-center"
-													style={{
-														width: "40px",
-														height: "40px",
-													}}
-												>
-													{u.username
-														.charAt(0)
-														.toUpperCase()}
-												</div>
-											)}
-
-											<div>
-												<h6 className="mb-0 fw-bold text-dark">
-													{u.username}
-												</h6>
-												<small className="text-muted">
-													{u.followers_count}{" "}
-													{u.followers_count === 1
-														? "follower"
-														: "followers"}
-												</small>
-											</div>
-										</Link>
-									))}
-								</ul>
-							)}
-						</div>
-					</div>
-				</div>
-			)}
+			<UserListModal
+				isOpen={modalType !== null}
+				onClose={closeFollowModal}
+				title={modalType || ""}
+				users={modalUsers}
+				loading={modalLoading}
+			/>
 		</div>
 	);
 };

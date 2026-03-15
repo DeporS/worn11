@@ -1,8 +1,14 @@
 import React from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { deleteKitFromCollection, toggleLike } from "../../services/api";
+import {
+	deleteKitFromCollection,
+	toggleLike,
+	getKitLikers,
+} from "../../services/api";
 import { useState, useEffect, useRef } from "react";
 import Swal from "sweetalert2";
+
+import UserListModal from "./UserListModal";
 
 import "../../styles/profile.css";
 
@@ -21,6 +27,31 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 	});
 	const [likesCount, setLikesCount] = useState(item.likes_count || 0);
 	const [likeLoading, setLikeLoading] = useState(false);
+
+	// Modal states for likers list
+	const [modalType, setModalType] = useState(null); // 'likers' or null
+	const [modalUsers, setModalUsers] = useState([]); // Users list for modal
+	const [modalLoading, setModalLoading] = useState(false);
+
+	// Function to open likers modal and load data
+	const openLikersModal = async () => {
+		setModalType("likers");
+		setModalLoading(true);
+		setModalUsers([]); // Clear previous data
+
+		try {
+			const data = await getKitLikers(item.id);
+			setModalUsers(data);
+		} catch (err) {
+			console.error("Failed to load list", err);
+		} finally {
+			setModalLoading(false);
+		}
+	};
+
+	const closeLikersModal = () => {
+		setModalType(null);
+	};
 
 	const handleLike = async (e) => {
 		e.stopPropagation();
@@ -491,9 +522,29 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 							</button>
 							<span className="small text-muted">
 								{/* If likesCount is NaN or null, show 0 */}
-								{Number.isNaN(likesCount) || likesCount === null
-									? 0
-									: likesCount}
+								<span
+									className="small text-muted cursor-pointer"
+									title="See who liked this"
+									onClick={(e) => {
+										e.stopPropagation();
+										openLikersModal();
+									}}
+									style={{
+										cursor: "pointer",
+										transition: "opacity 0.2s",
+									}}
+									onMouseEnter={(e) =>
+										(e.currentTarget.style.opacity = "0.7")
+									}
+									onMouseLeave={(e) =>
+										(e.currentTarget.style.opacity = "1")
+									}
+								>
+									{Number.isNaN(likesCount) ||
+									likesCount === null
+										? 0
+										: likesCount}
+								</span>
 							</span>
 						</div>
 
@@ -575,6 +626,14 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 						)}
 				</div>
 			)}
+			{/* Likers Modal */}
+			<UserListModal
+				isOpen={modalType !== null}
+				onClose={closeLikersModal}
+				title={"Liked this kit"}
+				users={modalUsers}
+				loading={modalLoading}
+			/>
 		</>
 	);
 };

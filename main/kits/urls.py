@@ -22,6 +22,7 @@ from .views import (
     ToggleFollowView,
     FollowersListAPI,
     FollowingListAPI,
+    KitLikersListAPI,
 )
 from .views_auth import GoogleLogin
 
@@ -48,6 +49,7 @@ urlpatterns = [
     path('kits/team/<int:team_id>/variants/', KitVariantsAPI.as_view(), name='kit-variants'),
     path('users/<str:username>/followers/', FollowersListAPI.as_view(), name='user-followers'),
     path('users/<str:username>/following/', FollowingListAPI.as_view(), name='user-following'),
+    path('kits/<int:kit_id>/likers/', KitLikersListAPI.as_view(), name='kit-likers'),
 ]
 
 if settings.DEBUG:

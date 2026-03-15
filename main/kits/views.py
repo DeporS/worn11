@@ -366,3 +366,22 @@ class FollowingListAPI(generics.ListAPIView):
         return User.objects.filter(id__in=following_ids).annotate(
             followers_count=Count('followers', distinct=True)
         ).order_by('-followers_count')
+
+# Endpoint: List of users that liked a specific kit
+class KitLikersListAPI(generics.ListAPIView):
+    serializer_class = UserSearchSerializer
+    permission_classes = [permissions.AllowAny]
+
+    def get_queryset(self):
+        kit_id = self.kwargs['kit_id']
+        
+        # Get IDs of users who liked this kit
+        liker_ids = UserKit.objects.filter(id=kit_id).values_list('likes__id', flat=True)
+        
+        # Return the list of those users, annotating with their kit count
+        return User.objects.filter(id__in=liker_ids).annotate(
+            followers_count=Count('followers', distinct=True)
+        ).order_by('-followers_count')
+        
+        
+        

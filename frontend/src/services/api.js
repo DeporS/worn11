@@ -122,4 +122,10 @@ export const getFollowingList = async (username) => {
 	return response.data.results || response.data;
 };
 
+// Get likers of a kit
+export const getKitLikers = async (kitId) => {
+	const response = await api.get(`/kits/${kitId}/likers/`);
+	return response.data.results || response.data;
+};
+
 export default api;
