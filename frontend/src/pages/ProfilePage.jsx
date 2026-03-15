@@ -775,10 +775,10 @@ const ProfilePage = ({ user }) => {
 													{u.username}
 												</h6>
 												<small className="text-muted">
-													{u.kits_count}{" "}
-													{u.kits_count === 1
-														? "kit"
-														: "kits"}
+													{u.followers_count}{" "}
+													{u.followers_count === 1
+														? "follower"
+														: "followers"}
 												</small>
 											</div>
 										</Link>

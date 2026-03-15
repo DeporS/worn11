@@ -346,7 +346,9 @@ class FollowersListAPI(generics.ListAPIView):
         follower_ids = Follow.objects.filter(following=user).values_list('follower_id', flat=True)
         
         # Return the list of those users, annotating with their kit count
-        return User.objects.filter(id__in=follower_ids).annotate(kits_count=Count('collection'))
+        return User.objects.filter(id__in=follower_ids).annotate(
+            followers_count=Count('followers', distinct=True)
+        ).order_by('-followers_count')
 
 # Endpoint: List of users that a user is following
 class FollowingListAPI(generics.ListAPIView):
@@ -361,4 +363,6 @@ class FollowingListAPI(generics.ListAPIView):
         following_ids = Follow.objects.filter(follower=user).values_list('following_id', flat=True)
         
         # Return the list of those users
-        return User.objects.filter(id__in=following_ids).annotate(kits_count=Count('collection'))
+        return User.objects.filter(id__in=following_ids).annotate(
+            followers_count=Count('followers', distinct=True)
+        ).order_by('-followers_count')

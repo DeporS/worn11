@@ -311,11 +311,12 @@ class CustomUserDetailsSerializer(UserDetailsSerializer):
 # User Search Serializer with kits count
 class UserSearchSerializer(serializers.ModelSerializer):
     kits_count = serializers.IntegerField(read_only=True)
+    followers_count = serializers.IntegerField(read_only=True, default=0)
     avatar = serializers.ImageField(source='profile.avatar', read_only=True)
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'kits_count', 'avatar']
+        fields = ['id', 'username', 'kits_count', 'avatar', 'followers_count']
 
 # User Stats Profile Serializer
 class UserStatsProfileSerializer(serializers.ModelSerializer):
