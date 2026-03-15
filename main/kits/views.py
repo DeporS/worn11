@@ -332,3 +332,33 @@ class KitVariantsAPI(generics.ListAPIView):
             .prefetch_related('images', 'likes')\
             .annotate(likes_count=Count('likes', distinct=True))\
             .order_by('-likes_count', '-added_at')
+
+# Endpoint: List of followers for a user
+class FollowersListAPI(generics.ListAPIView):
+    serializer_class = UserSearchSerializer
+    permission_classes = [permissions.AllowAny]
+
+    def get_queryset(self):
+        # Find the user whose followers we want to list, or return 404 if not found
+        user = get_object_or_404(User, username=self.kwargs['username'])
+        
+        # Get IDs of users who are following this user
+        follower_ids = Follow.objects.filter(following=user).values_list('follower_id', flat=True)
+        
+        # Return the list of those users, annotating with their kit count
+        return User.objects.filter(id__in=follower_ids).annotate(kits_count=Count('collection'))
+
+# Endpoint: List of users that a user is following
+class FollowingListAPI(generics.ListAPIView):
+    serializer_class = UserSearchSerializer
+    permission_classes = [permissions.AllowAny]
+
+    def get_queryset(self):
+        # Find the user whose followings we want to list, or return 404 if not found
+        user = get_object_or_404(User, username=self.kwargs['username'])
+        
+        # Get IDs of users that this user is following
+        following_ids = Follow.objects.filter(follower=user).values_list('following_id', flat=True)
+        
+        # Return the list of those users
+        return User.objects.filter(id__in=following_ids).annotate(kits_count=Count('collection'))

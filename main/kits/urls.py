@@ -20,6 +20,8 @@ from .views import (
     CheckUsernameAPI,
     CountryListView,
     ToggleFollowView,
+    FollowersListAPI,
+    FollowingListAPI,
 )
 from .views_auth import GoogleLogin
 
@@ -44,6 +46,8 @@ urlpatterns = [
     path('countries/', CountryListView.as_view(), name='country-list'),
     path('users/<str:username>/follow/', ToggleFollowView.as_view(), name='toggle-follow'),
     path('kits/team/<int:team_id>/variants/', KitVariantsAPI.as_view(), name='kit-variants'),
+    path('users/<str:username>/followers/', FollowersListAPI.as_view(), name='user-followers'),
+    path('users/<str:username>/following/', FollowingListAPI.as_view(), name='user-following'),
 ]
 
 if settings.DEBUG:

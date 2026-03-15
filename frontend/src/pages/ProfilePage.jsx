@@ -3,6 +3,8 @@ import {
 	getUserCollection,
 	getUserStats,
 	toggleFollowUser,
+	getFollowersList,
+	getFollowingList,
 } from "../services/api";
 import { Link, useParams } from "react-router-dom";
 import KitCard from "../components/profile/KitCard";
@@ -43,6 +45,11 @@ const ProfilePage = ({ user }) => {
 	const [followersCount, setFollowersCount] = useState(0);
 	const [followingCount, setFollowingCount] = useState(0);
 	const [followLoading, setFollowLoading] = useState(false);
+
+	// Modal states for followers/following lists
+	const [modalType, setModalType] = useState(null); // 'followers' or 'following' or null
+	const [modalUsers, setModalUsers] = useState([]); // Users list for modal
+	const [modalLoading, setModalLoading] = useState(false);
 
 	useEffect(() => {
 		if (!profileUsername) return;
@@ -115,6 +122,31 @@ const ProfilePage = ({ user }) => {
 		} finally {
 			setFollowLoading(false);
 		}
+	};
+
+	// Function to open followers/following modal and load data
+	const openFollowModal = async (type) => {
+		setModalType(type);
+		setModalLoading(true);
+		setModalUsers([]); // Clear previous data
+
+		try {
+			if (type === "followers") {
+				const data = await getFollowersList(profileUsername);
+				setModalUsers(data);
+			} else if (type === "following") {
+				const data = await getFollowingList(profileUsername);
+				setModalUsers(data);
+			}
+		} catch (err) {
+			console.error("Failed to load list", err);
+		} finally {
+			setModalLoading(false);
+		}
+	};
+
+	const closeFollowModal = () => {
+		setModalType(null);
 	};
 
 	return (
@@ -250,7 +282,21 @@ const ProfilePage = ({ user }) => {
 						{/* Row 1*/}
 						<div className="d-flex justify-content-end gap-4">
 							{/* Followers */}
-							<div className="text-center" title="Followers">
+							<div
+								className="text-center cursor-pointer"
+								title="See Followers"
+								onClick={() => openFollowModal("followers")}
+								style={{
+									cursor: "pointer",
+									transition: "opacity 0.2s",
+								}}
+								onMouseEnter={(e) =>
+									(e.currentTarget.style.opacity = "0.7")
+								}
+								onMouseLeave={(e) =>
+									(e.currentTarget.style.opacity = "1")
+								}
+							>
 								<div className="d-flex justify-content-center align-items-center gap-2">
 									<FollowersIcon className="followers-icon" />
 									<h4 className="text-dark fw-bold mb-0">
@@ -263,7 +309,21 @@ const ProfilePage = ({ user }) => {
 							</div>
 
 							{/* Following */}
-							<div className="text-center" title="Following">
+							<div
+								className="text-center cursor-pointer"
+								title="See Following"
+								onClick={() => openFollowModal("following")}
+								style={{
+									cursor: "pointer",
+									transition: "opacity 0.2s",
+								}}
+								onMouseEnter={(e) =>
+									(e.currentTarget.style.opacity = "0.7")
+								}
+								onMouseLeave={(e) =>
+									(e.currentTarget.style.opacity = "1")
+								}
+							>
 								<div className="d-flex justify-content-center align-items-center gap-2">
 									<FollowingIcon className="following-icon" />
 									<h4 className="text-dark fw-bold mb-0">
@@ -274,6 +334,7 @@ const ProfilePage = ({ user }) => {
 									Following
 								</span>
 							</div>
+
 							{/* Kits */}
 							<div
 								className="text-center"
@@ -614,6 +675,105 @@ const ProfilePage = ({ user }) => {
 							</p>
 						</div>
 					)}
+				</div>
+			)}
+
+			{/* Followers/Following Modal */}
+			{modalType && (
+				<div
+					className="d-flex justify-content-center align-items-center"
+					style={{
+						position: "fixed",
+						top: 0,
+						left: 0,
+						width: "100%",
+						height: "100%",
+						backgroundColor: "rgba(0,0,0,0.8)",
+						zIndex: 1050,
+					}}
+					onClick={closeFollowModal}
+				>
+					<div
+						className="card shadow"
+						style={{
+							width: "90%",
+							maxWidth: "400px",
+							maxHeight: "70vh",
+							overflow: "hidden",
+						}}
+						onClick={(e) => e.stopPropagation()} // click inside modal shouldn't close it
+					>
+						<div className="card-header bg-white d-flex justify-content-between align-items-center border-bottom-0 pt-3 pb-2">
+							<h5 className="fw-bold mb-0 text-capitalize">
+								{modalType}
+							</h5>
+							<button
+								className="btn-close"
+								onClick={closeFollowModal}
+							></button>
+						</div>
+
+						<div className="card-body overflow-auto p-0">
+							{modalLoading ? (
+								<div className="text-center p-4">
+									<div className="spinner-border spinner-border-sm text-primary"></div>
+								</div>
+							) : modalUsers.length === 0 ? (
+								<div className="text-center p-4 text-muted">
+									No {modalType} yet.
+								</div>
+							) : (
+								<ul className="list-group list-group-flush">
+									{modalUsers.map((u) => (
+										<Link
+											key={u.id}
+											to={`/profile/${u.username}`}
+											className="list-group-item list-group-item-action d-flex align-items-center gap-3 p-3 border-0 border-bottom"
+											onClick={closeFollowModal} // close modal when navigating to profile
+										>
+											{/* Avatar */}
+											{u.avatar ? (
+												<img
+													src={u.avatar}
+													alt="avatar"
+													className="rounded-circle"
+													style={{
+														width: "40px",
+														height: "40px",
+														objectFit: "cover",
+													}}
+												/>
+											) : (
+												<div
+													className="bg-primary text-white rounded-circle d-flex justify-content-center align-items-center"
+													style={{
+														width: "40px",
+														height: "40px",
+													}}
+												>
+													{u.username
+														.charAt(0)
+														.toUpperCase()}
+												</div>
+											)}
+
+											<div>
+												<h6 className="mb-0 fw-bold text-dark">
+													{u.username}
+												</h6>
+												<small className="text-muted">
+													{u.kits_count}{" "}
+													{u.kits_count === 1
+														? "kit"
+														: "kits"}
+												</small>
+											</div>
+										</Link>
+									))}
+								</ul>
+							)}
+						</div>
+					</div>
 				</div>
 			)}
 		</div>

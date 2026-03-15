@@ -110,4 +110,16 @@ export const getKitVariants = async (teamId, season, type) => {
 	return response.data;
 };
 
+// Get followers list for a user
+export const getFollowersList = async (username) => {
+	const response = await api.get(`/users/${username}/followers/`);
+	return response.data.results || response.data;
+};
+
+// Get following list for a user
+export const getFollowingList = async (username) => {
+	const response = await api.get(`/users/${username}/following/`);
+	return response.data.results || response.data;
+};
+
 export default api;
