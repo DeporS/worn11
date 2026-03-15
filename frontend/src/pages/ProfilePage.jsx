@@ -78,6 +78,19 @@ const ProfilePage = ({ user }) => {
 			.finally(() => setLoading(false));
 	}, [profileUsername, user?.username]);
 
+	useEffect(() => {
+		if (modalType) {
+			document.body.style.overflow = "hidden";
+		} else {
+			document.body.style.overflow = "unset";
+		}
+
+		// Cleanup: reset overflow when component unmounts or modalType changes
+		return () => {
+			document.body.style.overflow = "unset";
+		};
+	}, [modalType]);
+
 	if (!profileUsername)
 		return <div className="text-center mt-5">Please log in.</div>;
 	if (loading)
