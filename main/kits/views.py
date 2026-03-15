@@ -305,3 +305,27 @@ class ToggleFollowView(APIView):
             # If it doesn't exist -> Create it (Follow)
             Follow.objects.create(follower=request.user, following=user_to_follow)
             return Response({"is_following": True}, status=status.HTTP_201_CREATED)
+
+# Endpoint: List of kit variants for a specific team with optional filters (season, type)
+class KitVariantsAPI(generics.ListAPIView):
+    serializer_class = UserKitSerializer
+    permission_classes = [permissions.AllowAny]
+    pagination_class = StandardResultsSetPagination # paginate results
+
+    def get_queryset(self):
+        team_id = self.kwargs['team_id']
+        season = self.request.query_params.get('season')
+        kit_type = self.request.query_params.get('type')
+
+        queryset = UserKit.objects.filter(kit__team_id=team_id)
+
+        if season:
+            queryset = queryset.filter(kit__season=season)
+        if kit_type:
+            queryset = queryset.filter(kit__kit_type=kit_type)
+
+        return queryset\
+            .select_related('kit', 'kit__team', 'user')\
+            .prefetch_related('images', 'likes')\
+            .annotate(likes_count=Count('likes', distinct=True))\
+            .order_by('-likes_count', '-added_at')

@@ -102,4 +102,12 @@ export const toggleLike = async (id) => {
 	}
 };
 
+// Get kit variants for a team and season
+export const getKitVariants = async (teamId, season, type) => {
+	const response = await api.get(
+		`/kits/team/${teamId}/variants/?season=${encodeURIComponent(season)}&type=${encodeURIComponent(type)}`,
+	);
+	return response.data;
+};
+
 export default api;

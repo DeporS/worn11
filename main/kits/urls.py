@@ -2,6 +2,7 @@ from django.urls import path
 from django.conf import settings
 from django.conf.urls.static import static
 from .views import (
+    KitVariantsAPI,
     MyCollectionAPI, 
     MyCollectionDetailAPI,
     UserCollectionAPI, 
@@ -42,6 +43,7 @@ urlpatterns = [
     path('auth/check-username/', CheckUsernameAPI.as_view(), name='check-username'),
     path('countries/', CountryListView.as_view(), name='country-list'),
     path('users/<str:username>/follow/', ToggleFollowView.as_view(), name='toggle-follow'),
+    path('kits/team/<int:team_id>/variants/', KitVariantsAPI.as_view(), name='kit-variants'),
 ]
 
 if settings.DEBUG:

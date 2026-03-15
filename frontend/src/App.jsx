@@ -12,6 +12,7 @@ import EditShirtFormPage from "./pages/EditShirtFormPage";
 import EditProfilePage from "./pages/EditProfilePage";
 import HistoryPage from "./pages/HistoryPage";
 import GroupsPage from "./pages/GroupsPage";
+import KitVariantsPage from "./pages/KitVariantsPage";
 import NavBar from "./components/NavBar";
 import api from "./services/api";
 
@@ -125,6 +126,12 @@ function App() {
 					<Route
 						path="/groups"
 						element={<GroupsPage user={user} />}
+					/>
+
+					{/* Kit Variants Page */}
+					<Route
+						path="/history/team/:teamId/variants"
+						element={<KitVariantsPage user={user} />}
 					/>
 				</Routes>
 			</div>
