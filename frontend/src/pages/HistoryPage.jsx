@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigationType } from "react-router-dom";
 import api from "../services/api";
 
 // Importy nowych komponentów
@@ -10,6 +11,7 @@ import KitsGrid from "../components/history/KitsGrid";
 import "../styles/history.css";
 
 const HistoryPage = ({ user }) => {
+	const navType = useNavigationType();
 	const [loading, setLoading] = useState(false);
 
 	// --- DATA ---
@@ -19,16 +21,22 @@ const HistoryPage = ({ user }) => {
 
 	// --- STATE WITH SESSION STORAGE ---
 	const [step, setStep] = useState(() => {
+		if (navType !== "POP") return 1; // Default to step 1 on normal navigation, but restore on back/forward
+
 		const saved = sessionStorage.getItem("history_step");
 		return saved ? parseInt(saved) : 1;
 	});
 
 	const [selectedLeague, setSelectedLeague] = useState(() => {
+		if (navType !== "POP") return null;
+
 		const saved = sessionStorage.getItem("history_league");
 		return saved ? JSON.parse(saved) : null;
 	});
 
 	const [selectedTeam, setSelectedTeam] = useState(() => {
+		if (navType !== "POP") return null;
+
 		const saved = sessionStorage.getItem("history_team");
 		return saved ? JSON.parse(saved) : null;
 	});
