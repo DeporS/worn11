@@ -208,7 +208,7 @@
 	font-size: 3rem;
 	padding: 10px 20px;
 	cursor: pointer;
-	z-index: 10000;
+	z-index: 2;
 	transition:
 		background 0.3s,
 		transform 0.2s;
@@ -226,6 +226,14 @@
 
 .nav-next {
 	right: 20px;
+}
+
+.report-kit-backdrop {
+	z-index: 2000;
+}
+
+.report-kit-dialog {
+	z-index: 2001;
 }
 
 .unified-kit-modal {

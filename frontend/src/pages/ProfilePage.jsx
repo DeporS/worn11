@@ -5,8 +5,10 @@ import {
 	toggleFollowUser,
 	getFollowersList,
 	getFollowingList,
+	startConversation,
 } from "../services/api";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import Swal from "sweetalert2";
 import KitCard from "../components/profile/KitCard";
 import SocialLink from "../components/profile/SocialLink";
 import MarketBadge from "../components/profile/MarketBadge";
@@ -26,6 +28,7 @@ import FollowingIcon from "../assets/icons/following.svg?react";
 
 const ProfilePage = ({ user }) => {
 	const { username } = useParams(); // Get username from URL params
+	const navigate = useNavigate();
 	const profileUsername = username || user?.username;
 	const isOwner = user?.username === profileUsername; // Check if viewing own profile
 
@@ -150,6 +153,33 @@ const ProfilePage = ({ user }) => {
 		setModalType(null);
 	};
 
+	const handleMessageClick = async () => {
+		if (!user) {
+			Swal.fire({
+				title: "You need to log in!",
+				text: "Only logged-in users can send messages.",
+				icon: "info",
+				confirmButtonColor: "#3085d6",
+				confirmButtonText: "Ok",
+			});
+			return;
+		}
+
+		try {
+			const conversation = await startConversation({
+				username: profileUsername,
+			});
+			navigate(`/messages/${conversation.id}`);
+		} catch (error) {
+			console.error("Failed to start conversation", error);
+			const message =
+				error?.response?.data?.non_field_errors?.[0] ||
+				error?.response?.data?.username?.[0] ||
+				"Could not start a conversation.";
+			Swal.fire("Error", message, "error");
+		}
+	};
+
 	return (
 		<div className="container py-5 px-3 px-md-1">
 			{/* Profile headline */}
@@ -217,27 +247,37 @@ const ProfilePage = ({ user }) => {
 										✏️
 									</Link>
 								) : (
-									<button
-										onClick={handleFollowToggle}
-										disabled={followLoading}
-										className={`btn btn-sm rounded-pill ms-2 px-3 fw-bold ${
-											isFollowing
-												? "btn-outline-secondary" // Style for "Unfollow"
-												: "btn-primary" // Style for "Follow"
-										}`}
-									>
-										{isFollowing ? (
-											<>
-												<i className="bi bi-person-dash-fill me-1"></i>{" "}
-												Unfollow
-											</>
-										) : (
-											<>
-												<i className="bi bi-person-plus-fill me-1"></i>{" "}
-												Follow
-											</>
-										)}
-									</button>
+									<div className="d-flex align-items-center gap-2 ms-2">
+										<button
+											onClick={handleFollowToggle}
+											disabled={followLoading}
+											className={`btn btn-sm rounded-pill px-3 fw-bold ${
+												isFollowing
+													? "btn-outline-secondary"
+													: "btn-primary"
+											}`}
+										>
+											{isFollowing ? (
+												<>
+													<i className="bi bi-person-dash-fill me-1"></i>{" "}
+													Unfollow
+												</>
+											) : (
+												<>
+													<i className="bi bi-person-plus-fill me-1"></i>{" "}
+													Follow
+												</>
+											)}
+										</button>
+										<button
+											type="button"
+											onClick={handleMessageClick}
+											className="btn btn-sm btn-outline-dark rounded-pill px-3 fw-semibold"
+										>
+											<i className="bi bi-chat-dots me-1"></i>
+											Message
+										</button>
+									</div>
 								)}
 							</div>
 

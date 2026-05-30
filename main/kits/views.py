@@ -10,11 +10,12 @@ from rest_framework.throttling import ScopedRateThrottle
 from .throttles import KitCreationThrottle
 
 from django.shortcuts import get_object_or_404
-from django.db.models import Sum, Count, Exists, OuterRef, Value, BooleanField, Prefetch
+from django.db.models import Sum, Count, Exists, OuterRef, Value, BooleanField, Prefetch, Q, Subquery
 from django.contrib.auth.models import User
+from django.utils import timezone
 
-from .models import League, UserKit, Kit, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country, Follow, KitComment, KitCommentLike
-from .serializers import LeagueSerializer, UserKitSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer, CountrySerializer, KitCommentSerializer, KitCommentWriteSerializer
+from .models import League, UserKit, Kit, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country, Follow, KitComment, KitCommentLike, KitReport, Conversation, Message
+from .serializers import LeagueSerializer, UserKitSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer, CountrySerializer, KitCommentSerializer, KitCommentWriteSerializer, KitReportSerializer, ConversationListSerializer, ConversationDetailSerializer, ConversationStartSerializer, MessageSerializer, MessageWriteSerializer
 
 
 def get_comment_like_annotation(user):
@@ -43,6 +44,31 @@ def get_top_level_comments_queryset(user):
 
     return get_comment_base_queryset(user).filter(parent__isnull=True).prefetch_related(
         Prefetch('replies', queryset=replies_queryset, to_attr='prefetched_replies')
+    )
+
+
+def get_user_conversations_queryset(user):
+    latest_message_queryset = Message.objects.filter(
+        conversation_id=OuterRef('pk')
+    ).order_by('-created_at')
+    unread_messages_queryset = Message.objects.filter(
+        conversation_id=OuterRef('pk'),
+        read_at__isnull=True,
+    ).exclude(
+        sender=user,
+    )
+
+    return Conversation.objects.filter(
+        Q(participant_one=user) | Q(participant_two=user)
+    ).select_related(
+        'participant_one',
+        'participant_one__profile',
+        'participant_two',
+        'participant_two__profile',
+    ).annotate(
+        last_message_preview=Subquery(latest_message_queryset.values('body')[:1]),
+        last_message_created_at=Subquery(latest_message_queryset.values('created_at')[:1]),
+        unread_count=Count('messages', filter=Q(messages__read_at__isnull=True) & ~Q(messages__sender=user), distinct=True),
     )
 
 # Current user
@@ -143,6 +169,18 @@ class UserCollectionAPI(generics.ListAPIView):
             .annotate(likes_count=Count('likes', distinct=True), comments_count=Count('comments', distinct=True))\
             .order_by('-added_at')
 
+
+# Endpoint: Public detail for a specific user kit
+class PublicUserKitDetailAPI(generics.RetrieveAPIView):
+    serializer_class = UserKitSerializer
+    permission_classes = [permissions.AllowAny]
+    lookup_url_kwarg = 'userkit_id'
+
+    def get_queryset(self):
+        return UserKit.objects.select_related('kit', 'kit__team', 'user')\
+            .prefetch_related('images', 'likes')\
+            .annotate(likes_count=Count('likes', distinct=True), comments_count=Count('comments', distinct=True))
+
 # Endpoint: Catalog of all available kits (e.g., for selection when adding)
 class KitCatalogAPI(generics.ListAPIView):
     queryset = Kit.objects.all()
@@ -230,6 +268,89 @@ class UserSearchAPI(generics.ListAPIView):
         ).annotate(
             kits_count=Count('collection') # Count kits for each user
         ).order_by('-kits_count')[:10] # Limit to top 10 results
+
+
+class ConversationListAPI(generics.ListAPIView):
+    serializer_class = ConversationListSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return get_user_conversations_queryset(self.request.user)
+
+
+class StartConversationAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = ConversationStartSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+
+        recipient = serializer.validated_data['recipient']
+        conversation = Conversation.get_or_create_between(request.user, recipient)
+        response_serializer = ConversationDetailSerializer(conversation, context={'request': request})
+        return Response(response_serializer.data, status=status.HTTP_200_OK)
+
+
+class ConversationDetailAPI(generics.RetrieveAPIView):
+    serializer_class = ConversationDetailSerializer
+    permission_classes = [IsAuthenticated]
+    lookup_url_kwarg = 'conversation_id'
+
+    def get_queryset(self):
+        return get_user_conversations_queryset(self.request.user)
+
+
+class ConversationMessagesAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def _get_user_conversation(self, request, conversation_id):
+        queryset = Conversation.objects.select_related(
+            'participant_one',
+            'participant_one__profile',
+            'participant_two',
+            'participant_two__profile',
+        ).filter(
+            Q(participant_one=request.user) | Q(participant_two=request.user)
+        )
+        return get_object_or_404(queryset, pk=conversation_id)
+
+    def get(self, request, conversation_id):
+        conversation = self._get_user_conversation(request, conversation_id)
+        conversation.messages.filter(
+            read_at__isnull=True
+        ).exclude(
+            sender=request.user
+        ).update(
+            read_at=timezone.now()
+        )
+        messages = conversation.messages.select_related('sender').order_by('created_at')
+        serializer = MessageSerializer(messages, many=True, context={'request': request})
+        return Response(serializer.data)
+
+    def post(self, request, conversation_id):
+        conversation = self._get_user_conversation(request, conversation_id)
+        serializer = MessageWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        message = serializer.save(conversation=conversation, sender=request.user)
+        response_serializer = MessageSerializer(message, context={'request': request})
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+
+class UnreadMessagesCountAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        unread_count = Message.objects.filter(
+            read_at__isnull=True,
+        ).exclude(
+            sender=request.user,
+        ).filter(
+            Q(conversation__participant_one=request.user) |
+            Q(conversation__participant_two=request.user)
+        ).count()
+
+        return Response({'unread_count': unread_count})
 
 # Endpoint: Update user profile
 class UpdateProfileView(generics.RetrieveUpdateAPIView):
@@ -352,6 +473,28 @@ class DeleteCommentAPI(APIView):
 
         comment.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ReportKitAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, userkit_id):
+        kit = get_object_or_404(UserKit, pk=userkit_id)
+
+        if KitReport.objects.filter(kit=kit, reporter=request.user).exists():
+            return Response(
+                {'detail': 'You have already reported this kit.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = KitReportSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(kit=kit, reporter=request.user)
+
+        return Response(
+            {'message': 'Report submitted successfully.'},
+            status=status.HTTP_201_CREATED,
+        )
 
 # Endpoint: List of leagues
 class LeagueListAPI(generics.ListAPIView):

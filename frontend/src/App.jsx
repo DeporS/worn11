@@ -13,14 +13,17 @@ import EditProfilePage from "./pages/EditProfilePage";
 import HistoryPage from "./pages/HistoryPage";
 import GroupsPage from "./pages/GroupsPage";
 import KitVariantsPage from "./pages/KitVariantsPage";
+import KitDetailPage from "./pages/KitDetailPage";
+import MessagesPage from "./pages/MessagesPage";
 import NavBar from "./components/NavBar";
-import api from "./services/api";
+import api, { getUnreadMessagesCount } from "./services/api";
 
 import ScrollToTop from "./components/utils/ScrollTop";
 import "./index.css";
 
 function App() {
 	const [user, setUser] = useState(null); // User state
+	const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
 
 	const fetchUserData = async () => {
 		try {
@@ -39,6 +42,20 @@ function App() {
 		}
 	}, []);
 
+	useEffect(() => {
+		if (!user) {
+			setUnreadMessagesCount(0);
+			return;
+		}
+
+		refreshUnreadMessagesCount();
+
+		const intervalId = window.setInterval(() => {
+			refreshUnreadMessagesCount();
+		}, 30000);
+
+		return () => window.clearInterval(intervalId);
+	}, [user]);
 	const handleLoginSuccess = () => {
 		fetchUserData();
 	};
@@ -47,6 +64,22 @@ function App() {
 		localStorage.removeItem("access_token");
 		localStorage.removeItem("refresh_token");
 		setUser(null);
+		setUnreadMessagesCount(0);
+	};
+
+	const refreshUnreadMessagesCount = async () => {
+		const token = localStorage.getItem("access_token");
+		if (!token) {
+			setUnreadMessagesCount(0);
+			return;
+		}
+
+		try {
+			const data = await getUnreadMessagesCount();
+			setUnreadMessagesCount(data.unread_count || 0);
+		} catch (error) {
+			console.error("Failed to load unread messages count:", error);
+		}
 	};
 
 	return (
@@ -58,6 +91,7 @@ function App() {
 						onLoginSuccess={handleLoginSuccess}
 						onLogout={handleLogout}
 						refreshUser={fetchUserData}
+						unreadMessagesCount={unreadMessagesCount}
 					/>
 				</div>
 
@@ -83,6 +117,36 @@ function App() {
 					<Route
 						path="/profile/:username"
 						element={<ProfilePage user={user} />}
+					/>
+					<Route
+						path="/profile/:username/kits/:kitId"
+						element={<KitDetailPage user={user} />}
+					/>
+					<Route
+						path="/messages"
+						element={
+							user ? (
+								<MessagesPage
+									user={user}
+									refreshUnreadMessagesCount={refreshUnreadMessagesCount}
+								/>
+							) : (
+								<Navigate to="/" />
+							)
+						}
+					/>
+					<Route
+						path="/messages/:conversationId"
+						element={
+							user ? (
+								<MessagesPage
+									user={user}
+									refreshUnreadMessagesCount={refreshUnreadMessagesCount}
+								/>
+							) : (
+								<Navigate to="/" />
+							)
+						}
 					/>
 
 					{/* Edit Profile Page */}

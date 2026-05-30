@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import { toggleLike } from "../../services/api";
 import { useState } from "react";
 import Swal from "sweetalert2";
-import { formatLikedByText } from "../utils/likeText";
 import CommentsModal from "../comments/CommentsModal";
 
 import "../../styles/profile.css";
@@ -20,11 +19,6 @@ const KitCardHistory = ({ item, onDeleteSuccess, user }) => {
 	});
 	const [likesCount, setLikesCount] = useState(item.likes_count || 0);
 	const [likeLoading, setLikeLoading] = useState(false);
-	const commentsCount = item.comments_count ?? 0;
-	const likedByText = formatLikedByText({
-		count: likesCount,
-		isLiked,
-	});
 
 	const openViewer = (initialImageIndex = 0) => {
 		setViewerState({
@@ -190,19 +184,8 @@ const KitCardHistory = ({ item, onDeleteSuccess, user }) => {
 									<i className="bi bi-heart text-muted fs-5"></i> // Empty heart
 								)}
 							</button>
-							<span className="small text-muted">{likedByText}</span>
+							<span className="small text-muted">{likesCount}</span>
 							</div>
-							<button
-								type="button"
-								className="p-0 bg-transparent border-0 small text-muted text-start mt-1"
-								onClick={(e) => {
-									e.stopPropagation();
-									openViewer(0);
-								}}
-							>
-								<i className="bi bi-chat me-1" aria-hidden="true"></i>
-								Comments ({commentsCount})
-							</button>
 						</div>
 
 						<div className="d-flex align-items-center">

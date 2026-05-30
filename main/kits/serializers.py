@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Country, League, Team, Kit, UserKit, UserKitImage, User, Profile, KitComment
+from .models import Country, League, Team, Kit, UserKit, UserKitImage, User, Profile, KitComment, KitReport, Conversation, Message
 from django.contrib.auth.models import User
 from dj_rest_auth.serializers import UserDetailsSerializer
 import json
@@ -84,6 +84,144 @@ class KitCommentWriteSerializer(serializers.ModelSerializer):
         if not cleaned:
             raise serializers.ValidationError('Comment cannot be empty.')
         return cleaned
+
+
+class KitReportSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = KitReport
+        fields = ['reason', 'description']
+
+    def validate_description(self, value):
+        return (value or '').strip()
+
+    def validate(self, attrs):
+        reason = attrs.get('reason')
+        description = (attrs.get('description') or '').strip()
+
+        if reason == 'other' and not description:
+            raise serializers.ValidationError({
+                'description': 'Description is required when selecting Other.'
+            })
+
+        attrs['description'] = description
+        return attrs
+
+
+class ConversationUserSerializer(serializers.ModelSerializer):
+    avatar = serializers.ImageField(source='profile.avatar', read_only=True)
+
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'avatar']
+
+
+class ConversationStartSerializer(serializers.Serializer):
+    username = serializers.CharField(required=False)
+    kit_id = serializers.IntegerField(required=False)
+
+    def validate(self, attrs):
+        username = attrs.get('username')
+        kit_id = attrs.get('kit_id')
+        request = self.context['request']
+        has_username = username is not None
+        has_kit_id = kit_id is not None
+
+        if has_username == has_kit_id:
+            raise serializers.ValidationError('Provide either username or kit_id.')
+
+        if username:
+            cleaned_username = username.strip()
+            if not cleaned_username:
+                raise serializers.ValidationError({'username': 'Username is required.'})
+
+            recipient = User.objects.filter(username__iexact=cleaned_username).first()
+            if recipient is None:
+                raise serializers.ValidationError({'username': 'User not found.'})
+        else:
+            try:
+                user_kit = UserKit.objects.select_related('user').get(pk=kit_id)
+            except UserKit.DoesNotExist as exc:
+                raise serializers.ValidationError({'kit_id': 'Kit not found.'}) from exc
+            recipient = user_kit.user
+
+        if recipient == request.user:
+            raise serializers.ValidationError('You cannot start a conversation with yourself.')
+
+        attrs['recipient'] = recipient
+        return attrs
+
+
+class MessageWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Message
+        fields = ['body']
+
+    def validate_body(self, value):
+        cleaned = (value or '').strip()
+        if not cleaned:
+            raise serializers.ValidationError('Message cannot be empty.')
+        return cleaned
+
+
+class ConversationDetailSerializer(serializers.ModelSerializer):
+    other_user = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Conversation
+        fields = ['id', 'other_user', 'created_at', 'updated_at']
+
+    def get_other_user(self, obj):
+        request = self.context.get('request')
+        other_user = obj.get_other_participant(request.user) if request else None
+        return ConversationUserSerializer(other_user, context=self.context).data if other_user else None
+
+
+class ConversationListSerializer(serializers.ModelSerializer):
+    other_user = serializers.SerializerMethodField()
+    last_message_preview = serializers.SerializerMethodField()
+    last_message_created_at = serializers.DateTimeField(read_only=True)
+    unread_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Conversation
+        fields = ['id', 'other_user', 'last_message_preview', 'last_message_created_at', 'updated_at', 'unread_count']
+
+    def get_other_user(self, obj):
+        request = self.context.get('request')
+        other_user = obj.get_other_participant(request.user) if request else None
+        return ConversationUserSerializer(other_user, context=self.context).data if other_user else None
+
+    def get_last_message_preview(self, obj):
+        return getattr(obj, 'last_message_preview', '') or ''
+
+    def get_unread_count(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return 0
+
+        unread_queryset = getattr(obj, 'unread_messages', None)
+        if unread_queryset is not None:
+            return len(unread_queryset)
+
+        return obj.messages.filter(
+            read_at__isnull=True
+        ).exclude(
+            sender=request.user
+        ).count()
+
+
+class MessageSerializer(serializers.ModelSerializer):
+    sender_id = serializers.IntegerField(source='sender.id', read_only=True)
+    sender_username = serializers.CharField(source='sender.username', read_only=True)
+    is_mine = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Message
+        fields = ['id', 'sender_id', 'sender_username', 'body', 'created_at', 'is_mine']
+
+    def get_is_mine(self, obj):
+        request = self.context.get('request')
+        return bool(request and request.user.is_authenticated and obj.sender_id == request.user.id)
 
 # Team Serializer
 class TeamSerializer(serializers.ModelSerializer):

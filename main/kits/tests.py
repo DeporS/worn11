@@ -1,11 +1,13 @@
 from decimal import Decimal
+from datetime import timedelta
 
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APIClient, APITestCase
 
-from .models import Kit, Team, UserKit, KitComment, AUTOMATED_VALUATION_UNAVAILABLE_MESSAGE
+from .models import Kit, Team, UserKit, UserKitImage, KitComment, KitReport, Conversation, Message, AUTOMATED_VALUATION_UNAVAILABLE_MESSAGE
 
 
 class UserKitPricingTests(APITestCase):
@@ -377,3 +379,525 @@ class KitCommentAPITests(APITestCase):
                 body="Invalid reply",
                 parent=foreign_parent,
             )
+
+
+class KitReportAPITests(APITestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(username="reporter", password="password123")
+        self.other_user = User.objects.create_user(username="another", password="password123")
+        self.team = Team.objects.create(name="Report FC", is_verified=True)
+        self.kit = Kit.objects.create(
+            team=self.team,
+            season="2024/2025",
+            kit_type="Home",
+            estimated_price=Decimal("55.00"),
+        )
+        self.user_kit = UserKit.objects.create(
+            user=self.other_user,
+            kit=self.kit,
+            shirt_technology="REPLICA",
+            condition="VERY_GOOD",
+            size="L",
+        )
+
+    def test_authenticated_user_can_report_kit(self):
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.post(
+            reverse("kit-report", args=[self.user_kit.id]),
+            {
+                "reason": "wrong_season",
+                "description": "Listed as 2008/2009 but looks like 2010/2011.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["message"], "Report submitted successfully.")
+        self.assertTrue(
+            KitReport.objects.filter(kit=self.user_kit, reporter=self.user, reason="wrong_season").exists()
+        )
+
+    def test_unauthenticated_user_cannot_report(self):
+        response = self.client.post(
+            reverse("kit-report", args=[self.user_kit.id]),
+            {"reason": "spam"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_duplicate_report_from_same_user_is_blocked(self):
+        KitReport.objects.create(
+            kit=self.user_kit,
+            reporter=self.user,
+            reason="wrong_team",
+        )
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.post(
+            reverse("kit-report", args=[self.user_kit.id]),
+            {"reason": "wrong_season"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["detail"], "You have already reported this kit.")
+
+    def test_different_users_can_report_same_kit(self):
+        KitReport.objects.create(
+            kit=self.user_kit,
+            reporter=self.user,
+            reason="wrong_team",
+        )
+        self.client.force_authenticate(user=self.other_user)
+
+        response = self.client.post(
+            reverse("kit-report", args=[self.user_kit.id]),
+            {"reason": "spam"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(KitReport.objects.filter(kit=self.user_kit).count(), 2)
+
+    def test_reason_is_required(self):
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.post(
+            reverse("kit-report", args=[self.user_kit.id]),
+            {"description": "Missing reason"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("reason", response.data)
+
+    def test_invalid_reason_is_rejected(self):
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.post(
+            reverse("kit-report", args=[self.user_kit.id]),
+            {"reason": "not_a_real_reason"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("reason", response.data)
+
+    def test_other_reason_requires_description(self):
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.post(
+            reverse("kit-report", args=[self.user_kit.id]),
+            {"reason": "other", "description": ""},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("description", response.data)
+
+    def test_other_reason_with_whitespace_only_description_is_rejected(self):
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.post(
+            reverse("kit-report", args=[self.user_kit.id]),
+            {"reason": "other", "description": "   "},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("description", response.data)
+
+    def test_valid_other_reason_with_description_succeeds(self):
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.post(
+            reverse("kit-report", args=[self.user_kit.id]),
+            {"reason": "other", "description": "  Something else is wrong here.  "},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        report = KitReport.objects.get(kit=self.user_kit, reporter=self.user)
+        self.assertEqual(report.description, "Something else is wrong here.")
+
+
+class PublicUserKitDetailAPITests(APITestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.owner = User.objects.create_user(username="detail-owner", password="password123")
+        self.liker = User.objects.create_user(username="detail-liker", password="password123")
+        self.team = Team.objects.create(name="Detail FC", is_verified=True)
+        self.kit = Kit.objects.create(
+            team=self.team,
+            season="2024/2025",
+            kit_type="Away",
+            estimated_price=Decimal("90.00"),
+        )
+        self.user_kit = UserKit.objects.create(
+            user=self.owner,
+            kit=self.kit,
+            shirt_technology="REPLICA",
+            condition="VERY_GOOD",
+            size="L",
+        )
+        UserKitImage.objects.create(user_kit=self.user_kit, image="user_kit_images/detail-1.jpg")
+        self.user_kit.likes.add(self.liker)
+        KitComment.objects.create(
+            kit=self.user_kit,
+            user=self.liker,
+            body="Great one",
+        )
+
+    def test_public_user_can_fetch_existing_kit_detail(self):
+        response = self.client.get(reverse("kit-detail", args=[self.user_kit.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["id"], self.user_kit.id)
+
+    def test_response_includes_images(self):
+        response = self.client.get(reverse("kit-detail", args=[self.user_kit.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["images"]), 1)
+
+    def test_response_includes_owner_username(self):
+        response = self.client.get(reverse("kit-detail", args=[self.user_kit.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["owner_username"], self.owner.username)
+
+    def test_response_includes_likes_count(self):
+        response = self.client.get(reverse("kit-detail", args=[self.user_kit.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["likes_count"], 1)
+
+    def test_response_includes_comments_count(self):
+        response = self.client.get(reverse("kit-detail", args=[self.user_kit.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["comments_count"], 1)
+
+    def test_nonexistent_kit_returns_404(self):
+        response = self.client.get(reverse("kit-detail", args=[999999]))
+
+        self.assertEqual(response.status_code, 404)
+
+
+class MessagingAPITests(APITestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(username="sender", password="password123")
+        self.other_user = User.objects.create_user(username="receiver", password="password123")
+        self.third_user = User.objects.create_user(username="outsider", password="password123")
+        self.team = Team.objects.create(name="Messaging FC", is_verified=True)
+        self.kit = Kit.objects.create(
+            team=self.team,
+            season="2024/2025",
+            kit_type="Home",
+            estimated_price=Decimal("65.00"),
+        )
+        self.user_kit = UserKit.objects.create(
+            user=self.other_user,
+            kit=self.kit,
+            shirt_technology="REPLICA",
+            condition="VERY_GOOD",
+            size="L",
+        )
+
+    def test_authenticated_user_can_start_conversation_with_another_user(self):
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.post(
+            reverse("conversation-start"),
+            {"username": self.other_user.username},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["other_user"]["username"], self.other_user.username)
+        self.assertTrue(
+            Conversation.objects.filter(
+                participant_one=self.user,
+                participant_two=self.other_user,
+            ).exists()
+            or Conversation.objects.filter(
+                participant_one=self.other_user,
+                participant_two=self.user,
+            ).exists()
+        )
+
+    def test_cannot_start_conversation_with_self(self):
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.post(
+            reverse("conversation-start"),
+            {"username": self.user.username},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("non_field_errors", response.data)
+
+    def test_starting_same_conversation_twice_returns_same_conversation(self):
+        self.client.force_authenticate(user=self.user)
+
+        first_response = self.client.post(
+            reverse("conversation-start"),
+            {"username": self.other_user.username},
+            format="json",
+        )
+        second_response = self.client.post(
+            reverse("conversation-start"),
+            {"username": self.other_user.username},
+            format="json",
+        )
+
+        self.assertEqual(first_response.status_code, 200)
+        self.assertEqual(second_response.status_code, 200)
+        self.assertEqual(first_response.data["id"], second_response.data["id"])
+        self.assertEqual(Conversation.objects.count(), 1)
+
+    def test_starting_conversation_by_kit_id_opens_conversation_with_kit_owner(self):
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.post(
+            reverse("conversation-start"),
+            {"kit_id": self.user_kit.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["other_user"]["username"], self.other_user.username)
+
+    def test_unauthenticated_user_cannot_access_conversations(self):
+        response = self.client.get(reverse("conversation-list"))
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_user_only_sees_their_own_conversations(self):
+        first_conversation = Conversation.get_or_create_between(self.user, self.other_user)
+        Conversation.get_or_create_between(self.other_user, self.third_user)
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.get(reverse("conversation-list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["id"], first_conversation.id)
+
+    def test_participant_can_list_messages(self):
+        conversation = Conversation.get_or_create_between(self.user, self.other_user)
+        Message.objects.create(
+            conversation=conversation,
+            sender=self.user,
+            body="Hello there",
+        )
+        self.client.force_authenticate(user=self.other_user)
+
+        response = self.client.get(reverse("conversation-messages", args=[conversation.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["body"], "Hello there")
+
+    def test_non_participant_cannot_list_messages(self):
+        conversation = Conversation.get_or_create_between(self.user, self.other_user)
+        Message.objects.create(
+            conversation=conversation,
+            sender=self.user,
+            body="Hello there",
+        )
+        self.client.force_authenticate(user=self.third_user)
+
+        response = self.client.get(reverse("conversation-messages", args=[conversation.id]))
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_participant_can_send_message(self):
+        conversation = Conversation.get_or_create_between(self.user, self.other_user)
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.post(
+            reverse("conversation-messages", args=[conversation.id]),
+            {"body": "Hi, is this kit still available?"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["body"], "Hi, is this kit still available?")
+        self.assertEqual(response.data["sender_username"], self.user.username)
+
+    def test_non_participant_cannot_send_message(self):
+        conversation = Conversation.get_or_create_between(self.user, self.other_user)
+        self.client.force_authenticate(user=self.third_user)
+
+        response = self.client.post(
+            reverse("conversation-messages", args=[conversation.id]),
+            {"body": "Intruding"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_empty_message_rejected(self):
+        conversation = Conversation.get_or_create_between(self.user, self.other_user)
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.post(
+            reverse("conversation-messages", args=[conversation.id]),
+            {"body": "   "},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("body", response.data)
+
+    def test_message_body_is_trimmed(self):
+        conversation = Conversation.get_or_create_between(self.user, self.other_user)
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.post(
+            reverse("conversation-messages", args=[conversation.id]),
+            {"body": "   Need more photos please   "},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["body"], "Need more photos please")
+
+    def test_conversation_updated_at_changes_when_message_is_sent(self):
+        conversation = Conversation.get_or_create_between(self.user, self.other_user)
+        old_timestamp = timezone.now() - timedelta(days=1)
+        Conversation.objects.filter(pk=conversation.pk).update(updated_at=old_timestamp)
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.post(
+            reverse("conversation-messages", args=[conversation.id]),
+            {"body": "Fresh update"},
+            format="json",
+        )
+
+        conversation.refresh_from_db()
+
+        self.assertEqual(response.status_code, 201)
+        self.assertGreater(conversation.updated_at, old_timestamp)
+
+    def test_unread_count_is_zero_when_no_messages(self):
+        Conversation.get_or_create_between(self.user, self.other_user)
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.get(reverse("conversation-unread-count"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["unread_count"], 0)
+
+    def test_incoming_unread_message_increments_count_for_recipient(self):
+        conversation = Conversation.get_or_create_between(self.user, self.other_user)
+        Message.objects.create(
+            conversation=conversation,
+            sender=self.other_user,
+            body="Unread for you",
+        )
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.get(reverse("conversation-unread-count"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["unread_count"], 1)
+
+    def test_own_sent_messages_do_not_count_as_unread(self):
+        conversation = Conversation.get_or_create_between(self.user, self.other_user)
+        Message.objects.create(
+            conversation=conversation,
+            sender=self.user,
+            body="My own message",
+        )
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.get(reverse("conversation-unread-count"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["unread_count"], 0)
+
+    def test_fetching_messages_marks_other_users_messages_as_read(self):
+        conversation = Conversation.get_or_create_between(self.user, self.other_user)
+        message = Message.objects.create(
+            conversation=conversation,
+            sender=self.other_user,
+            body="Please read this",
+        )
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.get(reverse("conversation-messages", args=[conversation.id]))
+        message.refresh_from_db()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNotNone(message.read_at)
+
+    def test_unread_count_returns_to_zero_after_opening_conversation(self):
+        conversation = Conversation.get_or_create_between(self.user, self.other_user)
+        Message.objects.create(
+            conversation=conversation,
+            sender=self.other_user,
+            body="Unread before open",
+        )
+        self.client.force_authenticate(user=self.user)
+
+        before_response = self.client.get(reverse("conversation-unread-count"))
+        self.client.get(reverse("conversation-messages", args=[conversation.id]))
+        after_response = self.client.get(reverse("conversation-unread-count"))
+
+        self.assertEqual(before_response.data["unread_count"], 1)
+        self.assertEqual(after_response.data["unread_count"], 0)
+
+    def test_conversation_list_includes_unread_count(self):
+        conversation = Conversation.get_or_create_between(self.user, self.other_user)
+        Message.objects.create(
+            conversation=conversation,
+            sender=self.other_user,
+            body="Unread list item",
+        )
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.get(reverse("conversation-list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data[0]["unread_count"], 1)
+
+    def test_own_messages_do_not_count_in_conversation_list_unread_count(self):
+        conversation = Conversation.get_or_create_between(self.user, self.other_user)
+        Message.objects.create(
+            conversation=conversation,
+            sender=self.user,
+            body="Own message",
+        )
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.get(reverse("conversation-list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data[0]["unread_count"], 0)
+
+    def test_non_participant_cannot_mark_or_read_other_conversation(self):
+        conversation = Conversation.get_or_create_between(self.user, self.other_user)
+        message = Message.objects.create(
+            conversation=conversation,
+            sender=self.user,
+            body="Private thread",
+        )
+        self.client.force_authenticate(user=self.third_user)
+
+        response = self.client.get(reverse("conversation-messages", args=[conversation.id]))
+        message.refresh_from_db()
+
+        self.assertEqual(response.status_code, 404)
+        self.assertIsNone(message.read_at)
+
+    def test_unauthenticated_user_cannot_access_unread_count(self):
+        response = self.client.get(reverse("conversation-unread-count"))
+
+        self.assertEqual(response.status_code, 401)

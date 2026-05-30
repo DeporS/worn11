@@ -9,6 +9,8 @@ import {
 	toggleCommentLike,
 } from "../../services/api";
 import CommentItem from "./CommentItem";
+import ReportKitModal from "../reports/ReportKitModal";
+import { copyKitShareUrl } from "../utils/kitShare";
 
 const countComments = (items) =>
 	items.reduce(
@@ -73,12 +75,14 @@ const CommentsModal = ({
 	const [submitting, setSubmitting] = useState(false);
 	const [replySubmitting, setReplySubmitting] = useState(false);
 	const [currentImageIndex, setCurrentImageIndex] = useState(0);
+	const [reportModalOpen, setReportModalOpen] = useState(false);
 
 	const totalComments = useMemo(() => countComments(comments), [comments]);
 	const images = item?.images || [];
 	const activeImage = images[currentImageIndex] || null;
 	const kitTitle = formatKitTitle(item);
 	const ownerLabel = formatOwnerLabel(item);
+	const offerUrl = getSafeUrl(item?.offer_link);
 
 	useEffect(() => {
 		if (!isOpen) return;
@@ -121,6 +125,7 @@ const CommentsModal = ({
 
 	useEffect(() => {
 		if (!isOpen) return;
+		if (reportModalOpen) return;
 
 		const handleKeyDown = (e) => {
 			if (e.key === "Escape") {
@@ -138,7 +143,7 @@ const CommentsModal = ({
 
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, [currentImageIndex, images.length, isOpen, onClose]);
+	}, [currentImageIndex, images.length, isOpen, onClose, reportModalOpen]);
 
 	if (!isOpen) return null;
 
@@ -296,7 +301,42 @@ const CommentsModal = ({
 							<h5 className="fw-bold mb-0 unified-kit-title">{kitTitle}</h5>
 							<small className="text-muted d-block">{ownerLabel}</small>
 						</div>
-						<button className="btn-close ms-md-auto" onClick={onClose}></button>
+						<div className="d-flex align-items-center gap-2 ms-md-auto flex-wrap justify-content-start justify-content-md-end">
+							{item?.for_sale && offerUrl && (
+								<a
+									href={offerUrl}
+									target="_blank"
+									rel="noopener noreferrer"
+									className="btn btn-link btn-sm p-0 text-decoration-none text-muted text-nowrap"
+								>
+									<i className="bi bi-box-arrow-up-right me-1" aria-hidden="true"></i>
+									View offer
+								</a>
+							)}
+							<button
+								type="button"
+								className="btn btn-link btn-sm p-0 text-decoration-none text-muted text-nowrap"
+								onClick={() => copyKitShareUrl(item)}
+							>
+								<i className="bi bi-link-45deg me-1" aria-hidden="true"></i>
+								Share
+							</button>
+							<button
+								type="button"
+								className="btn btn-link btn-sm p-0 text-decoration-none text-muted text-nowrap"
+								onClick={() => {
+									if (!currentUser) {
+										ensureAuthenticated();
+										return;
+									}
+									setReportModalOpen(true);
+								}}
+							>
+								<i className="bi bi-flag me-1" aria-hidden="true"></i>
+								Report kit
+							</button>
+							<button className="btn-close" onClick={onClose}></button>
+						</div>
 					</div>
 				</div>
 
@@ -306,7 +346,9 @@ const CommentsModal = ({
 							{activeImage ? (
 								<>
 									<div className="unified-kit-stage">
-										{images.length > 1 && currentImageIndex > 0 && (
+										{!reportModalOpen &&
+											images.length > 1 &&
+											currentImageIndex > 0 && (
 											<button
 												type="button"
 												className="lightbox-nav-btn nav-prev"
@@ -324,7 +366,8 @@ const CommentsModal = ({
 											/>
 										</div>
 
-										{images.length > 1 &&
+										{!reportModalOpen &&
+											images.length > 1 &&
 											currentImageIndex < images.length - 1 && (
 												<button
 													type="button"
@@ -439,6 +482,11 @@ const CommentsModal = ({
 					</div>
 				</div>
 			</div>
+			<ReportKitModal
+				isOpen={reportModalOpen}
+				onClose={() => setReportModalOpen(false)}
+				kitId={kitId}
+			/>
 		</div>
 	);
 };
@@ -465,6 +513,12 @@ function formatOwnerLabel(item) {
 	if (!owner) return "";
 
 	return `${owner}'s Kit`;
+}
+
+function getSafeUrl(url) {
+	if (!url) return "";
+
+	return /^(https?):\/\//i.test(url) ? url : "";
 }
 
 export default CommentsModal;

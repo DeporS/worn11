@@ -6,7 +6,7 @@ from django.db.models import Count
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.models import User
 
-from .models import Team, Kit, UserKit, UserKitImage, Profile, Country, League
+from .models import Team, Kit, UserKit, UserKitImage, Profile, Country, League, KitReport, Conversation, Message
 from .forms import MergeTeamForm
 
 class UserKitImageInline(admin.TabularInline):
@@ -127,9 +127,46 @@ class LeagueAdmin(admin.ModelAdmin):
     search_fields = ('name', 'country__name')
 
 
+class KitReportAdmin(admin.ModelAdmin):
+    list_display = ('kit', 'reporter', 'reason', 'status', 'created_at')
+    list_filter = ('reason', 'status', 'created_at')
+    search_fields = (
+        'reporter__username',
+        'kit__user__username',
+        'kit__kit__team__name',
+        'kit__kit__season',
+        'kit__kit__kit_type',
+        'description',
+    )
+
+
+class ConversationAdmin(admin.ModelAdmin):
+    list_display = ('participant_one', 'participant_two', 'updated_at', 'created_at')
+    list_filter = ('updated_at', 'created_at')
+    search_fields = ('participant_one__username', 'participant_two__username')
+
+
+class MessageAdmin(admin.ModelAdmin):
+    list_display = ('conversation', 'sender', 'body_preview', 'created_at', 'read_at')
+    list_filter = ('created_at', 'read_at')
+    search_fields = (
+        'sender__username',
+        'conversation__participant_one__username',
+        'conversation__participant_two__username',
+        'body',
+    )
+
+    @admin.display(description='Message')
+    def body_preview(self, obj):
+        return obj.body[:60]
+
+
 admin.site.register(Team, TeamAdmin)
 admin.site.register(Kit, KitAdmin)
 admin.site.register(UserKit, UserKitAdmin)
+admin.site.register(KitReport, KitReportAdmin)
+admin.site.register(Conversation, ConversationAdmin)
+admin.site.register(Message, MessageAdmin)
 admin.site.unregister(User)
 admin.site.register(User, CustomUserAdmin)
 admin.site.register(Country, CountryAdmin)

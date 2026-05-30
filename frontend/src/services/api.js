@@ -78,6 +78,38 @@ export const searchUsers = async (query) => {
 	return response.data;
 };
 
+export const getConversations = async () => {
+	const response = await api.get("/conversations/");
+	return response.data;
+};
+
+export const startConversation = async (payload) => {
+	const response = await api.post("/conversations/start/", payload);
+	return response.data;
+};
+
+export const getConversation = async (conversationId) => {
+	const response = await api.get(`/conversations/${conversationId}/`);
+	return response.data;
+};
+
+export const getConversationMessages = async (conversationId) => {
+	const response = await api.get(`/conversations/${conversationId}/messages/`);
+	return response.data;
+};
+
+export const getUnreadMessagesCount = async () => {
+	const response = await api.get("/conversations/unread-count/");
+	return response.data;
+};
+
+export const sendConversationMessage = async (conversationId, body) => {
+	const response = await api.post(`/conversations/${conversationId}/messages/`, {
+		body,
+	});
+	return response.data;
+};
+
 // Update user profile
 export const updateUserProfile = async (formData) => {
 	try {
@@ -128,6 +160,11 @@ export const getKitLikers = async (kitId) => {
 	return response.data.results || response.data;
 };
 
+export const getKitDetail = async (kitId) => {
+	const response = await api.get(`/kits/${kitId}/`);
+	return response.data;
+};
+
 export const getKitComments = async (kitId) => {
 	const response = await api.get(`/kits/${kitId}/comments/`);
 	return response.data;
@@ -150,6 +187,11 @@ export const toggleCommentLike = async (commentId) => {
 
 export const deleteComment = async (commentId) => {
 	const response = await api.delete(`/comments/${commentId}/`);
+	return response.data;
+};
+
+export const reportKit = async (kitId, payload) => {
+	const response = await api.post(`/kits/${kitId}/report/`, payload);
 	return response.data;
 };
 

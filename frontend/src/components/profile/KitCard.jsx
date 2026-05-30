@@ -4,6 +4,7 @@ import {
 	deleteKitFromCollection,
 	toggleLike,
 	getKitLikers,
+	startConversation,
 } from "../../services/api";
 import { useState } from "react";
 import Swal from "sweetalert2";
@@ -11,6 +12,7 @@ import Swal from "sweetalert2";
 import UserListModal from "./UserListModal";
 import { formatLikedByText } from "../utils/likeText";
 import CommentsModal from "../comments/CommentsModal";
+import { copyKitShareUrl } from "../utils/kitShare";
 
 import "../../styles/profile.css";
 
@@ -35,7 +37,6 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 	const [modalType, setModalType] = useState(null); // 'likers' or null
 	const [modalUsers, setModalUsers] = useState([]); // Users list for modal
 	const [modalLoading, setModalLoading] = useState(false);
-	const commentsCount = item.comments_count ?? 0;
 	const likedByText = formatLikedByText({
 		count: likesCount,
 		isLiked,
@@ -157,6 +158,38 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 
 	const handleEditClick = () => {
 		navigate(`/edit-kit/${item.id}`); // navigate to /edit-kit/15
+	};
+
+	const handleShareClick = async (e) => {
+		e.stopPropagation();
+		await copyKitShareUrl(item);
+	};
+
+	const handleContactOwnerClick = async (e) => {
+		e.stopPropagation();
+
+		if (!user) {
+			Swal.fire({
+				title: "You need to log in!",
+				text: "Only logged-in users can send messages.",
+				icon: "info",
+				confirmButtonColor: "#3085d6",
+				confirmButtonText: "Ok",
+			});
+			return;
+		}
+
+		try {
+			const conversation = await startConversation({ kit_id: item.id });
+			navigate(`/messages/${conversation.id}`);
+		} catch (error) {
+			console.error("Failed to start conversation", error);
+			const message =
+				error?.response?.data?.non_field_errors?.[0] ||
+				error?.response?.data?.kit_id?.[0] ||
+				"Could not start a conversation.";
+			Swal.fire("Error", message, "error");
+		}
 	};
 
 	// Helper function to sanitize link (Cybsersecurity)
@@ -395,15 +428,14 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 									<span className="arrow-icon">ツ</span>
 								</a>
 							) : (
-								<a
-									href={getSafeLink(item.externalUrl)}
-									target="_blank"
-									rel="noopener noreferrer"
+								<button
+									type="button"
 									className="minimal-offer-link"
+									onClick={handleContactOwnerClick}
 								>
 									<span>Contact Owner</span>
 									<span className="arrow-icon">✉︎</span>
-								</a>
+								</button>
 							)}
 
 							{/* View Offer Link */}
@@ -469,7 +501,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 							{/* Share Button */}
 							<button
 								className="btn btn-sm edit-button"
-								// onClick={handleShareClick}
+								onClick={handleShareClick}
 								title="Share"
 							>
 								🔗
@@ -516,21 +548,6 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 								{likedByText}
 							</button>
 							</div>
-							<button
-								type="button"
-								className="p-0 bg-transparent border-0 small text-muted text-start mt-1"
-								onClick={(e) => {
-									e.stopPropagation();
-									openViewer(0);
-								}}
-								style={{
-									cursor: "pointer",
-									lineHeight: 1.2,
-								}}
-							>
-								<i className="bi bi-chat me-1" aria-hidden="true"></i>
-								Comments ({commentsCount})
-							</button>
 						</div>
 
 						<div>

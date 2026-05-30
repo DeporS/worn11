@@ -4,6 +4,7 @@ from django.contrib.auth.models import User
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
+from django.utils import timezone
 
 SHIRT_TECHNOLOGIES = [
     ('PLAYER_ISSUE', 'Player Issue'),
@@ -72,6 +73,25 @@ CURRENCY_CHOICES = [
     ('USD', 'US Dollar (USD)'),
     ('EUR', 'Euro (EUR)'),
     ('GBP', 'British Pound (GBP)'),
+]
+
+KIT_REPORT_REASON_CHOICES = [
+    ('wrong_team', 'Wrong team'),
+    ('wrong_season', 'Wrong season'),
+    ('wrong_kit_type', 'Wrong kit type'),
+    ('wrong_details', 'Wrong details'),
+    ('fake_or_misleading', 'Fake or misleading'),
+    ('prohibited_content', 'Prohibited content'),
+    ('spam', 'Spam'),
+    ('harassment_or_abuse', 'Harassment or abuse'),
+    ('other', 'Other'),
+]
+
+KIT_REPORT_STATUS_CHOICES = [
+    ('pending', 'Pending'),
+    ('reviewed', 'Reviewed'),
+    ('dismissed', 'Dismissed'),
+    ('resolved', 'Resolved'),
 ]
 
 AUTOMATED_VALUATION_UNAVAILABLE_MESSAGE = (
@@ -322,6 +342,156 @@ class KitCommentLike(models.Model):
 
     def __str__(self):
         return f'{self.user.username} liked comment {self.comment_id}'
+
+
+class KitReport(models.Model):
+    kit = models.ForeignKey(UserKit, on_delete=models.CASCADE, related_name='reports')
+    reporter = models.ForeignKey(User, on_delete=models.CASCADE, related_name='kit_reports')
+    reason = models.CharField(max_length=50, choices=KIT_REPORT_REASON_CHOICES)
+    description = models.TextField(max_length=1000, blank=True)
+    status = models.CharField(max_length=20, choices=KIT_REPORT_STATUS_CHOICES, default='pending')
+    resolved_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='resolved_kit_reports',
+    )
+    resolution_note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(fields=['kit', 'reporter'], name='unique_kit_report_per_user')
+        ]
+
+    def clean(self):
+        self.description = (self.description or '').strip()
+        self.resolution_note = (self.resolution_note or '').strip()
+
+        if self.reason == 'other' and not self.description:
+            raise ValidationError({'description': 'Description is required when selecting Other.'})
+
+    def save(self, *args, **kwargs):
+        self.description = (self.description or '').strip()
+        self.resolution_note = (self.resolution_note or '').strip()
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'{self.reporter.username} reported kit {self.kit_id} ({self.reason})'
+
+
+class Conversation(models.Model):
+    participant_one = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='started_conversations',
+    )
+    participant_two = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='received_conversations',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at', '-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['participant_one', 'participant_two'],
+                name='unique_conversation_pair',
+            )
+        ]
+
+    @staticmethod
+    def normalize_participants(user_a, user_b):
+        if user_a.id <= user_b.id:
+            return user_a, user_b
+        return user_b, user_a
+
+    @classmethod
+    def get_or_create_between(cls, user_a, user_b):
+        first_user, second_user = cls.normalize_participants(user_a, user_b)
+        conversation, _ = cls.objects.get_or_create(
+            participant_one=first_user,
+            participant_two=second_user,
+        )
+        return conversation
+
+    def clean(self):
+        if self.participant_one_id and self.participant_two_id:
+            if self.participant_one_id == self.participant_two_id:
+                raise ValidationError("You cannot create a conversation with yourself.")
+
+            if self.participant_one_id > self.participant_two_id:
+                self.participant_one, self.participant_two = self.normalize_participants(
+                    self.participant_one,
+                    self.participant_two,
+                )
+
+    def save(self, *args, **kwargs):
+        if self.participant_one_id and self.participant_two_id:
+            self.participant_one, self.participant_two = self.normalize_participants(
+                self.participant_one,
+                self.participant_two,
+            )
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def includes_user(self, user):
+        return user.id in {self.participant_one_id, self.participant_two_id}
+
+    def get_other_participant(self, user):
+        if user.id == self.participant_one_id:
+            return self.participant_two
+        if user.id == self.participant_two_id:
+            return self.participant_one
+        return None
+
+    def __str__(self):
+        return f'{self.participant_one.username} / {self.participant_two.username}'
+
+
+class Message(models.Model):
+    conversation = models.ForeignKey(
+        Conversation,
+        on_delete=models.CASCADE,
+        related_name='messages',
+    )
+    sender = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='sent_messages',
+    )
+    body = models.TextField(max_length=1000)
+    created_at = models.DateTimeField(auto_now_add=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def clean(self):
+        self.body = (self.body or '').strip()
+
+        if not self.body:
+            raise ValidationError({'body': 'Message cannot be empty.'})
+
+        if self.conversation_id and self.sender_id and not self.conversation.includes_user(self.sender):
+            raise ValidationError({'sender': 'Sender must be a participant in the conversation.'})
+
+    def save(self, *args, **kwargs):
+        self.body = (self.body or '').strip()
+        self.full_clean()
+        result = super().save(*args, **kwargs)
+        Conversation.objects.filter(pk=self.conversation_id).update(updated_at=timezone.now())
+        return result
+
+    def __str__(self):
+        return f'Message {self.id} in conversation {self.conversation_id}'
 
 
 # Kit Images (multiple images per kit)

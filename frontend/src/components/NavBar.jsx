@@ -9,7 +9,7 @@ import "../styles/navbar.css";
 
 const API_URL = "http://127.0.0.1:8000";
 
-const NavBar = ({ user, onLoginSuccess, onLogout }) => {
+const NavBar = ({ user, onLoginSuccess, onLogout, unreadMessagesCount = 0 }) => {
 	// State for hamburger menu (mobile)
 	const [isOpen, setIsOpen] = useState(false);
 
@@ -106,6 +106,23 @@ const NavBar = ({ user, onLoginSuccess, onLogout }) => {
 						{user ? (
 							<>
 								<div className="d-flex align-items-center gap-3 w-100 justify-content-center justify-content-lg-end">
+									<Link
+										to="/messages"
+										className="text-decoration-none text-dark position-relative p-2 rounded hover-bg-light"
+										onClick={closeMenu}
+										title="Messages"
+									>
+										<i className="bi bi-chat-dots fs-4"></i>
+										{unreadMessagesCount > 0 && (
+											<span
+												className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+												style={{ fontSize: "0.65rem" }}
+											>
+												{unreadMessagesCount > 99 ? "99+" : unreadMessagesCount}
+											</span>
+										)}
+									</Link>
+
 									{/* Profil Link */}
 									<Link
 										to="/my-collection"
