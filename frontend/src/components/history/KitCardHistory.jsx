@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { deleteKitFromCollection, toggleLike } from "../../services/api";
 import { useState, useEffect, useRef } from "react";
 import Swal from "sweetalert2";
+import { formatLikedByText } from "../utils/likeText";
 
 import "../../styles/profile.css";
 
@@ -15,6 +16,10 @@ const KitCardHistory = ({ item, onDeleteSuccess, user }) => {
 	});
 	const [likesCount, setLikesCount] = useState(item.likes_count || 0);
 	const [likeLoading, setLikeLoading] = useState(false);
+	const likedByText = formatLikedByText({
+		count: likesCount,
+		isLiked,
+	});
 
 	const handleLike = async (e) => {
 		e.stopPropagation();
@@ -197,12 +202,7 @@ const KitCardHistory = ({ item, onDeleteSuccess, user }) => {
 									<i className="bi bi-heart text-muted fs-5"></i> // Empty heart
 								)}
 							</button>
-							<span className="small text-muted">
-								{/* If likesCount is NaN or null, show 0 */}
-								{Number.isNaN(likesCount) || likesCount === null
-									? 0
-									: likesCount}
-							</span>
+							<span className="small text-muted">{likedByText}</span>
 						</div>
 
 						<div className="d-flex align-items-center">

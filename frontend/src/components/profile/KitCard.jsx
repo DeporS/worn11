@@ -9,6 +9,7 @@ import { useState, useEffect, useRef } from "react";
 import Swal from "sweetalert2";
 
 import UserListModal from "./UserListModal";
+import { formatLikedByText } from "../utils/likeText";
 
 import "../../styles/profile.css";
 
@@ -32,6 +33,10 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 	const [modalType, setModalType] = useState(null); // 'likers' or null
 	const [modalUsers, setModalUsers] = useState([]); // Users list for modal
 	const [modalLoading, setModalLoading] = useState(false);
+	const likedByText = formatLikedByText({
+		count: likesCount,
+		isLiked,
+	});
 
 	// Function to open likers modal and load data
 	const openLikersModal = async () => {
@@ -536,32 +541,21 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 									<i className="bi bi-heart text-muted fs-5"></i> // Empty heart
 								)}
 							</button>
-							<span className="small text-muted">
-								{/* If likesCount is NaN or null, show 0 */}
-								<span
-									className="small text-muted cursor-pointer"
-									title="See who liked this"
-									onClick={(e) => {
-										e.stopPropagation();
-										openLikersModal();
-									}}
-									style={{
-										cursor: "pointer",
-										transition: "opacity 0.2s",
-									}}
-									onMouseEnter={(e) =>
-										(e.currentTarget.style.opacity = "0.7")
-									}
-									onMouseLeave={(e) =>
-										(e.currentTarget.style.opacity = "1")
-									}
-								>
-									{Number.isNaN(likesCount) ||
-									likesCount === null
-										? 0
-										: likesCount}
-								</span>
-							</span>
+							<button
+								type="button"
+								className="p-0 bg-transparent border-0 small text-muted text-start"
+								title="See who liked this"
+								onClick={(e) => {
+									e.stopPropagation();
+									openLikersModal();
+								}}
+								style={{
+									cursor: "pointer",
+									lineHeight: 1.2,
+								}}
+							>
+								{likedByText}
+							</button>
 						</div>
 
 						<div>
