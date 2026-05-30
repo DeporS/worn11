@@ -104,6 +104,8 @@ class UserKitSerializer(serializers.ModelSerializer):
         team_name = validated_data.pop('team_name')
         season = validated_data.pop('season')
         kit_type = validated_data.pop('kit_type')
+        if 'in_the_collection' not in self.initial_data:
+            validated_data['in_the_collection'] = True
 
         # Get or create the Team
         # team, _ = Team.objects.get_or_create(name=team_name.title()) - WRONG FC Barcelona -> Fc Barcelona
