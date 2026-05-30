@@ -587,6 +587,142 @@ class PublicUserKitDetailAPITests(APITestCase):
         self.assertEqual(response.status_code, 404)
 
 
+class ExploreKitsAPITests(APITestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.owner = User.objects.create_user(username="explore-owner", password="password123")
+        self.liker_one = User.objects.create_user(username="explore-liker-1", password="password123")
+        self.liker_two = User.objects.create_user(username="explore-liker-2", password="password123")
+        self.team = Team.objects.create(name="Explore FC", is_verified=True)
+
+        self.latest_kit = self.create_user_kit(
+            season="2024/2025",
+            kit_type="Home",
+            added_at=timezone.now() - timedelta(days=1),
+        )
+        self.most_liked_kit = self.create_user_kit(
+            season="2023/2024",
+            kit_type="Away",
+            added_at=timezone.now() - timedelta(days=2),
+            likes=[self.liker_one, self.liker_two],
+            comments=1,
+        )
+        self.for_sale_kit = self.create_user_kit(
+            season="2022/2023",
+            kit_type="Third",
+            added_at=timezone.now() - timedelta(days=3),
+            for_sale=True,
+            likes=[self.liker_one],
+        )
+        self.hidden_kit = self.create_user_kit(
+            season="2021/2022",
+            kit_type="Fourth",
+            added_at=timezone.now() - timedelta(hours=12),
+            in_the_collection=False,
+        )
+
+    def create_user_kit(
+        self,
+        season,
+        kit_type,
+        added_at,
+        for_sale=False,
+        in_the_collection=True,
+        likes=None,
+        comments=0,
+    ):
+        kit = Kit.objects.create(
+            team=self.team,
+            season=season,
+            kit_type=kit_type,
+            estimated_price=Decimal("80.00"),
+        )
+        user_kit = UserKit.objects.create(
+            user=self.owner,
+            kit=kit,
+            shirt_technology="REPLICA",
+            condition="VERY_GOOD",
+            size="L",
+            for_sale=for_sale,
+            in_the_collection=in_the_collection,
+        )
+        UserKit.objects.filter(id=user_kit.id).update(added_at=added_at)
+        user_kit.refresh_from_db()
+        UserKitImage.objects.create(
+            user_kit=user_kit,
+            image=f"user_kit_images/explore-{user_kit.id}.jpg",
+        )
+
+        for liker in likes or []:
+            user_kit.likes.add(liker)
+
+        for index in range(comments):
+            KitComment.objects.create(
+                kit=user_kit,
+                user=self.liker_one,
+                body=f"Comment {index + 1}",
+            )
+
+        return user_kit
+
+    def test_explore_kits_endpoint_returns_public_list(self):
+        response = self.client.get(reverse("explore-kits"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsInstance(response.data, list)
+        self.assertEqual(len(response.data), 3)
+
+    def test_latest_ordering_works(self):
+        response = self.client.get(reverse("explore-kits"), {"sort": "latest"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data[0]["id"], self.latest_kit.id)
+
+    def test_most_liked_ordering_prioritizes_likes(self):
+        response = self.client.get(reverse("explore-kits"), {"sort": "most_liked"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data[0]["id"], self.most_liked_kit.id)
+
+    def test_for_sale_only_returns_sale_kits(self):
+        response = self.client.get(reverse("explore-kits"), {"sort": "for_sale"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["id"], self.for_sale_kit.id)
+
+    def test_invalid_sort_falls_back_to_trending(self):
+        response = self.client.get(reverse("explore-kits"), {"sort": "unknown"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data[0]["id"], self.most_liked_kit.id)
+
+    def test_limit_is_capped(self):
+        for index in range(70):
+            self.create_user_kit(
+                season=f"201{index}/201{index + 1}",
+                kit_type=f"Variant {index}",
+                added_at=timezone.now() - timedelta(days=10 + index),
+            )
+
+        response = self.client.get(reverse("explore-kits"), {"limit": 200})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 60)
+
+    def test_response_includes_required_fields(self):
+        response = self.client.get(reverse("explore-kits"))
+
+        self.assertEqual(response.status_code, 200)
+        item = response.data[0]
+        self.assertIn("id", item)
+        self.assertIn("owner_username", item)
+        self.assertIn("kit", item)
+        self.assertIn("images", item)
+        self.assertIn("likes_count", item)
+        self.assertIn("comments_count", item)
+
+
 class MessagingAPITests(APITestCase):
     def setUp(self):
         self.client = APIClient()

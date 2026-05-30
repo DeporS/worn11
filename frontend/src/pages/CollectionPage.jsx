@@ -1,108 +1,234 @@
-import { useState, useEffect } from 'react';
-import { searchUsers } from '../services/api';
-import UserCard from '../components/UserCard';
-import SearchBar from '../components/SearchBar';
+import { useEffect, useState } from "react";
+
+import { getExploreKits, searchUsers } from "../services/api";
+import SearchBar from "../components/SearchBar";
+import UserCard from "../components/UserCard";
+import ExploreKitCard from "../components/explore/ExploreKitCard";
+
+const EXPLORE_SECTIONS = [
+	{ key: "trending", label: "Trending", sort: "trending" },
+	{ key: "most_liked", label: "Most liked", sort: "most_liked" },
+	{ key: "latest", label: "Latest", sort: "latest" },
+	{ key: "for_sale", label: "For sale", sort: "for_sale" },
+];
+
+const SECTION_LIMIT = 8;
+
+const createSectionState = () =>
+	EXPLORE_SECTIONS.reduce((acc, section) => {
+		acc[section.key] = {
+			items: [],
+			loading: true,
+			error: null,
+		};
+		return acc;
+	}, {});
 
 const CollectionPage = () => {
-    const [users, setUsers] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
-    const [searchQuery, setSearchQuery] = useState('');
+	const [users, setUsers] = useState([]);
+	const [loadingUsers, setLoadingUsers] = useState(false);
+	const [searchError, setSearchError] = useState(null);
+	const [searchQuery, setSearchQuery] = useState("");
+	const [exploreSections, setExploreSections] = useState(createSectionState);
 
-    const isFirstLoad = loading && users.length === 0 && !error;
+	const trimmedQuery = searchQuery.trim();
+	const hasActiveSearch = trimmedQuery.length > 0;
+	const canRunUserSearch = trimmedQuery.length >= 3;
+	const isFirstSearchLoad =
+		loadingUsers && users.length === 0 && !searchError && canRunUserSearch;
 
-    useEffect(() => {
-        // if (!searchQuery) return;
-        if (!searchQuery.trim() || searchQuery.trim().length < 3) {
-            setUsers([]);
-            setLoading(false);
-            return;
-        }
+	useEffect(() => {
+		if (!hasActiveSearch) {
+			setUsers([]);
+			setSearchError(null);
+			setLoadingUsers(false);
+			return;
+		}
 
-        // Delay so we don't spam the API with requests on every keystroke
-        const delayDebounceFn = setTimeout(() => {
+		if (!canRunUserSearch) {
+			setUsers([]);
+			setLoadingUsers(false);
+			return;
+		}
 
-            setLoading(true);
-            setError(null);
+		const delayDebounceFn = window.setTimeout(() => {
+			setLoadingUsers(true);
+			setSearchError(null);
 
-            searchUsers(searchQuery)
-                .then(data => {
-                    setUsers(data);
-                    setLoading(false);
-                })
-                .catch(err => {
-                    console.error(err);
-                    setError('Failed to fetch users.');
-                    setLoading(false);
-                });
+			searchUsers(trimmedQuery)
+				.then((data) => {
+					setUsers(Array.isArray(data) ? data : []);
+					setLoadingUsers(false);
+				})
+				.catch((error) => {
+					console.error(error);
+					setSearchError("Failed to fetch users.");
+					setLoadingUsers(false);
+				});
+		}, 500);
 
-        }, 500); // 500ms debounce
+		return () => window.clearTimeout(delayDebounceFn);
+	}, [trimmedQuery, canRunUserSearch, hasActiveSearch]);
 
-        // Cleanup function to cancel the timeout if query changes before delay
-        return () => clearTimeout(delayDebounceFn);
+	useEffect(() => {
+		if (hasActiveSearch) return;
 
-    }, [searchQuery]); // Run this effect every time searchQuery changes
+		let cancelled = false;
 
-    return (
-        <div className="container py-5">
-            <header className="mb-5 text-center">
-                <h1 className="display-5 fw-bold">Find Collectors 🔍</h1>
-                <p className="text-muted">Start typing to find users</p>
+		const loadExploreSections = async () => {
+			setExploreSections(createSectionState());
 
-                <div className="mt-4 mx-auto" style={{ maxWidth: '600px' }}>
-                    {/* We only pass value and onChange */}
-                    <SearchBar
-                        value={searchQuery}
-                        onChange={setSearchQuery}
-                    />
+			const results = await Promise.allSettled(
+				EXPLORE_SECTIONS.map((section) =>
+					getExploreKits(section.sort, SECTION_LIMIT),
+				),
+			);
 
-                    {/* {loading && users.length > 0 && (
-                        <div className="text-muted small mt-2">
-                            <span className="spinner-border spinner-border-sm me-2"></span>
-                            Updating results...
-                        </div>
-                    )} */}
-                </div>
-            </header>
+			if (cancelled) return;
 
-            {/* Loading (Spinner) */}
-            {/* {loading && (
-                <div className="text-center py-5">
-                    <div className="spinner-border text-primary"></div>
-                </div>
-            )} */}
+			setExploreSections(
+				results.reduce((acc, result, index) => {
+					const section = EXPLORE_SECTIONS[index];
+					if (result.status === "fulfilled") {
+						acc[section.key] = {
+							items: Array.isArray(result.value) ? result.value : [],
+							loading: false,
+							error: null,
+						};
+					} else {
+						console.error(`Failed to load ${section.key} kits`, result.reason);
+						acc[section.key] = {
+							items: [],
+							loading: false,
+							error: "Could not load this section.",
+						};
+					}
+					return acc;
+				}, {}),
+			);
+		};
 
-            {error && <div className="alert alert-danger text-center">{error}</div>}
+		loadExploreSections();
 
-            {isFirstLoad && (
-                <div className="text-center py-5">
-                    <div className="spinner-border text-primary" style={{ width: '3rem', height: '3rem' }}></div>
-                </div>
-            )}
+		return () => {
+			cancelled = true;
+		};
+	}, [hasActiveSearch]);
 
-            {/* List Section */}
-            <div
-                className="row g-4"
-                style={{
-                    opacity: loading && users.length > 0 ? 0.5 : 1,
-                    transition: 'opacity 0.2s ease-in-out'
-                }}
-            >
-                {users.map(user => (
-                    <div key={user.id} className="col-12 col-sm-6 col-md-4 col-lg-3">
-                        <UserCard user={user} />
-                    </div>
-                ))}
+	const renderSearchResults = () => (
+		<section>
+			{searchError && (
+				<div className="alert alert-danger text-center">{searchError}</div>
+			)}
 
-                {/* No results message */}
-                {!loading && users.length === 0 && searchQuery.trim() !== '' && searchQuery.trim().length >= 4 && !error && (
-                    <div className="col-12 text-center text-muted py-5">
-                        <h4>No users found matching "{searchQuery}" 🤷‍♂️</h4>
-                    </div>
-                )}
-            </div>
-        </div>
-    );
+			{isFirstSearchLoad && (
+				<div className="text-center py-5">
+					<div
+						className="spinner-border text-primary"
+						style={{ width: "3rem", height: "3rem" }}
+					></div>
+				</div>
+			)}
+
+			{!canRunUserSearch && (
+				<div className="text-center text-muted py-5">
+					Type at least 3 characters to search collectors.
+				</div>
+			)}
+
+			<div
+				className="row g-4"
+				style={{
+					opacity: loadingUsers && users.length > 0 ? 0.5 : 1,
+					transition: "opacity 0.2s ease-in-out",
+				}}
+			>
+				{users.map((user) => (
+					<div
+						key={user.id}
+						className="col-12 col-sm-6 col-md-4 col-lg-3"
+					>
+						<UserCard user={user} />
+					</div>
+				))}
+
+				{!loadingUsers &&
+					users.length === 0 &&
+					canRunUserSearch &&
+					!searchError && (
+						<div className="col-12 text-center text-muted py-5">
+							<h4 className="mb-0">
+								No users found matching "{trimmedQuery}"
+							</h4>
+						</div>
+					)}
+			</div>
+		</section>
+	);
+
+	const renderExploreSection = (section) => {
+		const sectionState = exploreSections[section.key] || {
+			items: [],
+			loading: true,
+			error: null,
+		};
+
+		return (
+			<section className="mb-5" key={section.key} style={{ marginBottom: "4.5rem" }}>
+				<div className="text-center mb-4 mt-5">
+					<h3 className="h2 fw-bold mb-0">{section.label}</h3>
+				</div>
+
+				{sectionState.loading ? (
+					<div className="text-center py-4">
+						<div className="spinner-border text-dark" role="status"></div>
+					</div>
+				) : sectionState.error ? (
+					<div className="alert alert-danger text-center">
+						{sectionState.error}
+					</div>
+				) : sectionState.items.length === 0 ? (
+					<div className="text-center text-muted py-4">
+						No kits available in this section yet.
+					</div>
+				) : (
+					<div className="row g-3 g-md-4">
+						{sectionState.items.map((item) => (
+							<div
+								key={item.id}
+								className="col-6 col-md-4 col-lg-3"
+							>
+								<ExploreKitCard item={item} />
+							</div>
+						))}
+					</div>
+				)}
+			</section>
+		);
+	};
+
+	return (
+		<div className="container py-4 py-lg-5">
+			<header className="mb-4 text-center">
+				<h1 className="display-6 fw-bold mb-2">Explore Page</h1>
+				<p className="text-muted mb-0">
+					Discover trending kits from collectors around Worn11.
+				</p>
+			</header>
+
+			<div className="mb-4 mx-auto" style={{ maxWidth: "420px" }}>
+				<SearchBar value={searchQuery} onChange={setSearchQuery} />
+			</div>
+
+			{hasActiveSearch ? (
+				renderSearchResults()
+			) : (
+				<div className="explore-section-stack">
+					{EXPLORE_SECTIONS.map((section) => renderExploreSection(section))}
+				</div>
+			)}
+		</div>
+	);
 };
 
 export default CollectionPage;

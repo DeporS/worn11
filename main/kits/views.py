@@ -71,6 +71,22 @@ def get_user_conversations_queryset(user):
         unread_count=Count('messages', filter=Q(messages__read_at__isnull=True) & ~Q(messages__sender=user), distinct=True),
     )
 
+
+def get_public_user_kits_queryset():
+    return UserKit.objects.filter(
+        in_the_collection=True,
+    ).select_related(
+        'kit',
+        'kit__team',
+        'user',
+    ).prefetch_related(
+        'images',
+        'likes',
+    ).annotate(
+        likes_count=Count('likes', distinct=True),
+        comments_count=Count('comments', distinct=True),
+    )
+
 # Current user
 class CurrentUserAPI(generics.RetrieveAPIView):
     serializer_class = UserSerializer
@@ -177,9 +193,37 @@ class PublicUserKitDetailAPI(generics.RetrieveAPIView):
     lookup_url_kwarg = 'userkit_id'
 
     def get_queryset(self):
-        return UserKit.objects.select_related('kit', 'kit__team', 'user')\
-            .prefetch_related('images', 'likes')\
-            .annotate(likes_count=Count('likes', distinct=True), comments_count=Count('comments', distinct=True))
+        return get_public_user_kits_queryset()
+
+
+class ExploreKitsAPI(generics.ListAPIView):
+    serializer_class = UserKitSerializer
+    permission_classes = [permissions.AllowAny]
+    pagination_class = None
+
+    def get_queryset(self):
+        sort = self.request.query_params.get('sort', 'trending').strip().lower()
+        limit = self.request.query_params.get('limit', '24')
+
+        try:
+            limit_value = int(limit)
+        except (TypeError, ValueError):
+            limit_value = 24
+
+        limit_value = max(1, min(limit_value, 60))
+
+        queryset = get_public_user_kits_queryset()
+
+        if sort == 'latest':
+            queryset = queryset.order_by('-added_at')
+        elif sort == 'most_liked':
+            queryset = queryset.order_by('-likes_count', '-comments_count', '-added_at')
+        elif sort == 'for_sale':
+            queryset = queryset.filter(for_sale=True).order_by('-added_at')
+        else:
+            queryset = queryset.order_by('-likes_count', '-comments_count', '-added_at')
+
+        return queryset[:limit_value]
 
 # Endpoint: Catalog of all available kits (e.g., for selection when adding)
 class KitCatalogAPI(generics.ListAPIView):

@@ -7,7 +7,13 @@ import CommentsModal from "../comments/CommentsModal";
 
 import "../../styles/profile.css";
 
-const KitCardHistory = ({ item, onDeleteSuccess, user }) => {
+const KitCardHistory = ({
+	item,
+	onDeleteSuccess,
+	user,
+	compact = false,
+	onCardClick,
+}) => {
 	const [viewerState, setViewerState] = useState({
 		isOpen: false,
 		initialImageIndex: 0,
@@ -32,6 +38,17 @@ const KitCardHistory = ({ item, onDeleteSuccess, user }) => {
 			isOpen: false,
 			initialImageIndex: 0,
 		});
+	};
+
+	const handleMainClick = (initialImageIndex = 0) => {
+		if (compact) {
+			if (onCardClick) {
+				onCardClick(item);
+			}
+			return;
+		}
+
+		openViewer(initialImageIndex);
 	};
 
 	const handleLike = async (e) => {
@@ -115,15 +132,25 @@ const KitCardHistory = ({ item, onDeleteSuccess, user }) => {
 
 	const mainImage = item.images.length > 0 ? item.images[0].image : null;
 
-	return (
+		return (
 		<>
-			<div className="card h-100 shadow-sm border-0 kit-card-relative d-flex flex-column">
+			<div
+				className="card h-100 shadow-sm border-0 kit-card-relative d-flex flex-column"
+				style={{
+					cursor: compact && onCardClick ? "pointer" : "default",
+				}}
+				onClick={compact && onCardClick ? () => onCardClick(item) : undefined}
+				role={compact && onCardClick ? "button" : undefined}
+				tabIndex={compact && onCardClick ? 0 : undefined}
+			>
 				{/* Main photo */}
 				<div
 					className="p-2"
 					style={{ cursor: "pointer" }}
 					onClick={() => {
-						openViewer(0);
+						if (!compact) {
+							handleMainClick(0);
+						}
 					}}
 				>
 					{mainImage ? (
@@ -160,7 +187,49 @@ const KitCardHistory = ({ item, onDeleteSuccess, user }) => {
 					)}
 				</div>
 
-				<div className="card-body d-flex flex-column mt-auto pt-0 p-3">
+				{compact ? (
+					<div className="card-body d-flex flex-column mt-auto pt-0 p-3">
+						<div className="d-flex justify-content-between align-items-start mb-2 gap-2">
+							<div className="min-w-0">
+								<div className="fw-bold text-dark text-truncate">
+									{item.kit?.team?.name || "Unknown team"}
+								</div>
+								<div className="small text-muted text-truncate mt-1">
+									{[item.kit?.season, item.kit?.kit_type]
+										.filter(Boolean)
+										.join(" ")}
+								</div>
+							</div>
+							{item.for_sale ? (
+								<span className="badge text-bg-warning text-dark flex-shrink-0">
+									For sale
+								</span>
+							) : null}
+						</div>
+
+						<div className="d-flex justify-content-between align-items-center small text-muted mb-2">
+							<Link
+								to={`/profile/${item.owner_username}`}
+								className="text-muted text-decoration-none text-truncate me-2"
+								onClick={(e) => e.stopPropagation()}
+							>
+								<i className="bi bi-person me-1"></i>
+								<span className="username">{item.owner_username}</span>
+							</Link>
+							<div className="d-flex align-items-center gap-3 flex-shrink-0">
+								<span>
+									<i className="bi bi-heart me-1"></i>
+									{likesCount}
+								</span>
+								<span>
+									<i className="bi bi-chat me-1"></i>
+									{item.comments_count || 0}
+								</span>
+							</div>
+						</div>
+					</div>
+				) : (
+					<div className="card-body d-flex flex-column mt-auto pt-0 p-3">
 					{/* Likes and Added At */}
 					<div className="d-flex justify-content-between align-items-center mb-2">
 						{/* Likes */}
@@ -231,27 +300,30 @@ const KitCardHistory = ({ item, onDeleteSuccess, user }) => {
 					</div>
 
 					{/* EBAY Button */}
-					<div className="mt-auto">
-						<button
-							onClick={getEbayLink}
-							className="btn w-100 rounded-pill d-flex align-items-center justify-content-center gap-2 ebay-btn"
-							title="Find this kit on eBay"
-						>
-							<span className="fw-bold">Find on eBay</span>
-							<i className="bi bi-search"></i>
-						</button>
+						<div className="mt-auto">
+							<button
+								onClick={getEbayLink}
+								className="btn w-100 rounded-pill d-flex align-items-center justify-content-center gap-2 ebay-btn"
+								title="Find this kit on eBay"
+							>
+								<span className="fw-bold">Find on eBay</span>
+								<i className="bi bi-search"></i>
+							</button>
+						</div>
 					</div>
-				</div>
+				)}
 			</div>
 
-			<CommentsModal
-				isOpen={viewerState.isOpen}
-				onClose={closeViewer}
-				kitId={item.id}
-				currentUser={user}
-				item={item}
-				initialImageIndex={viewerState.initialImageIndex}
-			/>
+			{!compact && (
+				<CommentsModal
+					isOpen={viewerState.isOpen}
+					onClose={closeViewer}
+					kitId={item.id}
+					currentUser={user}
+					item={item}
+					initialImageIndex={viewerState.initialImageIndex}
+				/>
+			)}
 		</>
 	);
 };
