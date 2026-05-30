@@ -10,11 +10,40 @@ from rest_framework.throttling import ScopedRateThrottle
 from .throttles import KitCreationThrottle
 
 from django.shortcuts import get_object_or_404
-from django.db.models import Sum, Count
+from django.db.models import Sum, Count, Exists, OuterRef, Value, BooleanField, Prefetch
 from django.contrib.auth.models import User
 
-from .models import League, UserKit, Kit, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country, Follow
-from .serializers import LeagueSerializer, UserKitSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer, CountrySerializer
+from .models import League, UserKit, Kit, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country, Follow, KitComment, KitCommentLike
+from .serializers import LeagueSerializer, UserKitSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer, CountrySerializer, KitCommentSerializer, KitCommentWriteSerializer
+
+
+def get_comment_like_annotation(user):
+    if user.is_authenticated:
+        return Exists(
+            KitCommentLike.objects.filter(comment_id=OuterRef('pk'), user=user)
+        )
+
+    return Value(False, output_field=BooleanField())
+
+
+def get_comment_base_queryset(user):
+    return KitComment.objects.select_related(
+        'user',
+        'user__profile',
+        'kit',
+    ).annotate(
+        likes_count=Count('comment_likes', distinct=True),
+        is_liked_by_me=get_comment_like_annotation(user),
+        reply_count=Count('replies', distinct=True),
+    )
+
+
+def get_top_level_comments_queryset(user):
+    replies_queryset = get_comment_base_queryset(user).filter(parent__isnull=False)
+
+    return get_comment_base_queryset(user).filter(parent__isnull=True).prefetch_related(
+        Prefetch('replies', queryset=replies_queryset, to_attr='prefetched_replies')
+    )
 
 # Current user
 class CurrentUserAPI(generics.RetrieveAPIView):
@@ -39,7 +68,10 @@ class MyCollectionAPI(generics.ListCreateAPIView):
 
     def get_queryset(self):
         # Return only kits of the logged-in user
-        return UserKit.objects.filter(user=self.request.user).select_related('kit', 'kit__team').order_by('-added_at')
+        return UserKit.objects.filter(user=self.request.user)\
+            .select_related('kit', 'kit__team')\
+            .annotate(likes_count=Count('likes', distinct=True), comments_count=Count('comments', distinct=True))\
+            .order_by('-added_at')
     
     # Override to check pro limits and file uploads safety
     def create(self, request, *args, **kwargs):
@@ -92,7 +124,7 @@ class MyCollectionDetailAPI(generics.RetrieveUpdateDestroyAPIView):
         return UserKit.objects.filter(user=self.request.user)\
             .select_related('kit', 'kit__team')\
             .prefetch_related('images')\
-            .annotate(likes_count=Count('likes', distinct=True))\
+            .annotate(likes_count=Count('likes', distinct=True), comments_count=Count('comments', distinct=True))\
             .order_by('-added_at')
 
 # Endpoint: Show other user's collection
@@ -108,7 +140,7 @@ class UserCollectionAPI(generics.ListAPIView):
         return UserKit.objects.filter(user__username=username)\
             .select_related('kit', 'kit__team')\
             .prefetch_related('images')\
-            .annotate(likes_count=Count('likes', distinct=True))\
+            .annotate(likes_count=Count('likes', distinct=True), comments_count=Count('comments', distinct=True))\
             .order_by('-added_at')
 
 # Endpoint: Catalog of all available kits (e.g., for selection when adding)
@@ -230,6 +262,97 @@ class ToggleLikeAPI(APIView):
             "likes_count": kit.likes.count()
         }, status=status.HTTP_200_OK)
 
+
+class KitCommentsAPI(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, userkit_id):
+        kit = get_object_or_404(UserKit, pk=userkit_id)
+        comments = get_top_level_comments_queryset(request.user).filter(kit=kit)
+        serializer = KitCommentSerializer(comments, many=True, context={'request': request})
+        return Response(serializer.data)
+
+    def post(self, request, userkit_id):
+        if not request.user.is_authenticated:
+            return Response(status=status.HTTP_401_UNAUTHORIZED)
+
+        kit = get_object_or_404(UserKit, pk=userkit_id)
+        serializer = KitCommentWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        comment = serializer.save(kit=kit, user=request.user)
+        response_serializer = KitCommentSerializer(comment, context={'request': request})
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+
+class ReplyToCommentAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, comment_id):
+        parent_comment = get_object_or_404(KitComment, pk=comment_id)
+
+        if parent_comment.parent_id is not None:
+            return Response(
+                {'parent': ['Replies to replies are not allowed.']},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = KitCommentWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        reply = serializer.save(
+            kit=parent_comment.kit,
+            user=request.user,
+            parent=parent_comment,
+        )
+        response_serializer = KitCommentSerializer(reply, context={'request': request})
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+
+class ToggleCommentLikeAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, comment_id):
+        comment = get_object_or_404(KitComment, pk=comment_id)
+        like = KitCommentLike.objects.filter(comment=comment, user=request.user).first()
+
+        liked = False
+        if like:
+            like.delete()
+        else:
+            KitCommentLike.objects.create(comment=comment, user=request.user)
+            liked = True
+
+        return Response(
+            {
+                'liked': liked,
+                'likes_count': comment.comment_likes.count(),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class DeleteCommentAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, comment_id):
+        comment = get_object_or_404(KitComment, pk=comment_id)
+        profile = getattr(request.user, 'profile', None)
+        can_delete = (
+            comment.user_id == request.user.id
+            or request.user.is_staff
+            or bool(profile and profile.is_moderator)
+        )
+
+        if not can_delete:
+            return Response(
+                {'detail': 'You do not have permission to delete this comment.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        comment.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 # Endpoint: List of leagues
 class LeagueListAPI(generics.ListAPIView):
     queryset = League.objects.all().select_related('country').order_by('order', 'name')
@@ -257,7 +380,7 @@ class TopKitsByTeamAPI(generics.ListAPIView):
         return UserKit.objects.filter(kit__team_id=team_id)\
             .select_related('kit', 'kit__team', 'user')\
             .prefetch_related('images', 'likes')\
-            .annotate(likes_count=Count('likes', distinct=True))\
+            .annotate(likes_count=Count('likes', distinct=True), comments_count=Count('comments', distinct=True))\
             .order_by('-likes_count', '-added_at')
 
 # Endpoint: Check username availability
@@ -330,7 +453,7 @@ class KitVariantsAPI(generics.ListAPIView):
         return queryset\
             .select_related('kit', 'kit__team', 'user')\
             .prefetch_related('images', 'likes')\
-            .annotate(likes_count=Count('likes', distinct=True))\
+            .annotate(likes_count=Count('likes', distinct=True), comments_count=Count('comments', distinct=True))\
             .order_by('-likes_count', '-added_at')
 
 # Endpoint: List of followers for a user
@@ -374,14 +497,11 @@ class KitLikersListAPI(generics.ListAPIView):
 
     def get_queryset(self):
         kit_id = self.kwargs['kit_id']
-        
+
         # Get IDs of users who liked this kit
         liker_ids = UserKit.objects.filter(id=kit_id).values_list('likes__id', flat=True)
-        
+
         # Return the list of those users, annotating with their kit count
         return User.objects.filter(id__in=liker_ids).annotate(
             followers_count=Count('followers', distinct=True)
         ).order_by('-followers_count')
-        
-        
-        

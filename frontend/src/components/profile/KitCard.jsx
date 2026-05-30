@@ -5,20 +5,22 @@ import {
 	toggleLike,
 	getKitLikers,
 } from "../../services/api";
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import Swal from "sweetalert2";
 
 import UserListModal from "./UserListModal";
 import { formatLikedByText } from "../utils/likeText";
+import CommentsModal from "../comments/CommentsModal";
 
 import "../../styles/profile.css";
 
 const KitCard = ({ item, onDeleteSuccess, user }) => {
 	const navigate = useNavigate();
 	const [isDeleting, setIsDeleting] = useState(false);
-	const [selectedImageIndex, setSelectedImageIndex] = useState(null);
-
-	const galleryRef = useRef(null);
+	const [viewerState, setViewerState] = useState({
+		isOpen: false,
+		initialImageIndex: 0,
+	});
 
 	const mainImage = item.images.length > 0 ? item.images[0].image : null;
 
@@ -33,10 +35,25 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 	const [modalType, setModalType] = useState(null); // 'likers' or null
 	const [modalUsers, setModalUsers] = useState([]); // Users list for modal
 	const [modalLoading, setModalLoading] = useState(false);
+	const commentsCount = item.comments_count ?? 0;
 	const likedByText = formatLikedByText({
 		count: likesCount,
 		isLiked,
 	});
+
+	const openViewer = (initialImageIndex = 0) => {
+		setViewerState({
+			isOpen: true,
+			initialImageIndex,
+		});
+	};
+
+	const closeViewer = () => {
+		setViewerState({
+			isOpen: false,
+			initialImageIndex: 0,
+		});
+	};
 
 	// Function to open likers modal and load data
 	const openLikersModal = async () => {
@@ -142,20 +159,6 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 		navigate(`/edit-kit/${item.id}`); // navigate to /edit-kit/15
 	};
 
-	const handleNext = (e) => {
-		e.stopPropagation(); // Dont close the modal when clicking next
-		setSelectedImageIndex((prevIndex) => {
-			return prevIndex + 1;
-		});
-	};
-
-	const handlePrev = (e) => {
-		e.stopPropagation();
-		setSelectedImageIndex((prevIndex) => {
-			return prevIndex - 1;
-		});
-	};
-
 	// Helper function to sanitize link (Cybsersecurity)
 	const getSafeLink = (url) => {
 		if (!url) return null;
@@ -167,53 +170,6 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 
 		return null;
 	};
-
-	// Horizontal scroll handling
-	useEffect(() => {
-		const el = galleryRef.current;
-		if (!el) return;
-
-		const handleWheel = (e) => {
-			const canScrollHorizontally = el.scrollWidth > el.clientWidth;
-
-			if (!canScrollHorizontally) return;
-
-			const atStart = el.scrollLeft === 0;
-			const atEnd =
-				Math.abs(el.scrollWidth - el.scrollLeft - el.clientWidth) < 2;
-
-			if ((atStart && e.deltaY < 0) || (atEnd && e.deltaY > 0)) {
-				return;
-			}
-
-			e.preventDefault();
-			el.scrollLeft += e.deltaY;
-		};
-
-		el.addEventListener("wheel", handleWheel, { passive: false });
-
-		return () => {
-			el.removeEventListener("wheel", handleWheel);
-		};
-	}, []);
-
-	// Keyboard handling (arrows)
-	useEffect(() => {
-		const handleKeyDown = (e) => {
-			if (selectedImageIndex === null) return; // if modal is closed, do nothing
-
-			if (e.key === "ArrowRight") handleNext(e);
-			if (e.key === "ArrowLeft") handlePrev(e);
-			if (e.key === "Escape") setSelectedImageIndex(null);
-		};
-
-		window.addEventListener("keydown", handleKeyDown);
-		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, [selectedImageIndex]); // Start listening when modal state changes
-
-	// Get the current image based on the index
-	const activeImage =
-		selectedImageIndex !== null ? item.images[selectedImageIndex] : null;
 
 	return (
 		<>
@@ -230,7 +186,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 					className="p-2 d-none d-md-block"
 					style={{ cursor: "pointer" }}
 					onClick={() => {
-						if (item.images.length > 0) setSelectedImageIndex(0);
+						openViewer(0);
 					}}
 				>
 					{mainImage ? (
@@ -284,9 +240,11 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 							<div
 								key={img.id}
 								className="position-relative"
+								onClick={() => openViewer(index)}
 								style={{
 									flex: "0 0 100%",
 									scrollSnapAlign: "center",
+									cursor: "pointer",
 								}}
 							>
 								<img
@@ -522,10 +480,11 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 					{/* Likes and Added At */}
 					<div className="d-flex justify-content-between mt-1 align-items-center">
 						{/* Likes */}
-						<div
-							className="d-flex align-items-center"
-							style={{ gap: "5px" }}
-						>
+						<div className="d-flex flex-column align-items-start">
+							<div
+								className="d-flex align-items-center"
+								style={{ gap: "5px" }}
+							>
 							<button
 								className="btn btn-link p-0 text-decoration-none"
 								onClick={handleLike}
@@ -555,6 +514,22 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 								}}
 							>
 								{likedByText}
+							</button>
+							</div>
+							<button
+								type="button"
+								className="p-0 bg-transparent border-0 small text-muted text-start mt-1"
+								onClick={(e) => {
+									e.stopPropagation();
+									openViewer(0);
+								}}
+								style={{
+									cursor: "pointer",
+									lineHeight: 1.2,
+								}}
+							>
+								<i className="bi bi-chat me-1" aria-hidden="true"></i>
+								Comments ({commentsCount})
 							</button>
 						</div>
 
@@ -597,45 +572,6 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 				</div>
 			</div>
 
-			{/* Modal for selected image */}
-			{activeImage && (
-				<div
-					className="lightbox-backdrop"
-					onClick={() => setSelectedImageIndex(null)}
-				>
-					<button className="lightbox-close-btn">&times;</button>
-
-					{/* ARROW LEFT IF MORE THAN ONE IMAGE, AND NOT FIRST IMAGE */}
-					{item.images.length > 1 && selectedImageIndex > 0 && (
-						<button
-							className="lightbox-nav-btn nav-prev"
-							onClick={handlePrev}
-						>
-							&#10094; {/* sign id < */}
-						</button>
-					)}
-
-					<div className="lightbox-frame">
-						<img
-							src={activeImage.image}
-							alt="Enlarged view"
-							className="lightbox-img"
-							onClick={(e) => e.stopPropagation()}
-						/>
-					</div>
-
-					{/* ARROW RIGHT IF MORE THAN ONE IMAGE, AND NOT LAST IMAGE */}
-					{item.images.length > 1 &&
-						selectedImageIndex !== item.images.length - 1 && (
-							<button
-								className="lightbox-nav-btn nav-next"
-								onClick={handleNext}
-							>
-								&#10095; {/* sign id > */}
-							</button>
-						)}
-				</div>
-			)}
 			{/* Likers Modal */}
 			<UserListModal
 				isOpen={modalType !== null}
@@ -643,6 +579,14 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 				title={"Liked this kit"}
 				users={modalUsers}
 				loading={modalLoading}
+			/>
+			<CommentsModal
+				isOpen={viewerState.isOpen}
+				onClose={closeViewer}
+				kitId={item.id}
+				currentUser={user}
+				item={item}
+				initialImageIndex={viewerState.initialImageIndex}
 			/>
 		</>
 	);

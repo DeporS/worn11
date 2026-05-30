@@ -274,7 +274,56 @@ class UserKit(models.Model):
     
     def __str__(self):
         return f"{self.user.username}'s {self.kit} ({self.size}, {self.condition})"
-            
+
+
+class KitComment(models.Model):
+    kit = models.ForeignKey(UserKit, on_delete=models.CASCADE, related_name='comments')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='kit_comments')
+    parent = models.ForeignKey('self', on_delete=models.CASCADE, related_name='replies', null=True, blank=True)
+    body = models.TextField(max_length=500)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def clean(self):
+        self.body = (self.body or '').strip()
+
+        if not self.body:
+            raise ValidationError({'body': 'Comment cannot be empty.'})
+
+        if self.parent:
+            if self.parent.kit_id != self.kit_id:
+                raise ValidationError({'parent': 'Reply must belong to the same kit.'})
+
+            if self.parent.parent_id is not None:
+                raise ValidationError({'parent': 'Replies to replies are not allowed.'})
+
+    def save(self, *args, **kwargs):
+        self.body = (self.body or '').strip()
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'Comment by {self.user.username} on kit {self.kit_id}'
+
+
+class KitCommentLike(models.Model):
+    comment = models.ForeignKey(KitComment, on_delete=models.CASCADE, related_name='comment_likes')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='liked_kit_comments')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+        constraints = [
+            models.UniqueConstraint(fields=['comment', 'user'], name='unique_comment_like')
+        ]
+
+    def __str__(self):
+        return f'{self.user.username} liked comment {self.comment_id}'
+
+
 # Kit Images (multiple images per kit)
 class UserKitImage(models.Model):
     user_kit = models.ForeignKey(UserKit, on_delete=models.CASCADE, related_name='images')

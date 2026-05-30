@@ -1,14 +1,18 @@
 import React from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { deleteKitFromCollection, toggleLike } from "../../services/api";
-import { useState, useEffect, useRef } from "react";
+import { Link } from "react-router-dom";
+import { toggleLike } from "../../services/api";
+import { useState } from "react";
 import Swal from "sweetalert2";
 import { formatLikedByText } from "../utils/likeText";
+import CommentsModal from "../comments/CommentsModal";
 
 import "../../styles/profile.css";
 
 const KitCardHistory = ({ item, onDeleteSuccess, user }) => {
-	const [selectedImageIndex, setSelectedImageIndex] = useState(null);
+	const [viewerState, setViewerState] = useState({
+		isOpen: false,
+		initialImageIndex: 0,
+	});
 
 	// Like state
 	const [isLiked, setIsLiked] = useState(() => {
@@ -16,10 +20,25 @@ const KitCardHistory = ({ item, onDeleteSuccess, user }) => {
 	});
 	const [likesCount, setLikesCount] = useState(item.likes_count || 0);
 	const [likeLoading, setLikeLoading] = useState(false);
+	const commentsCount = item.comments_count ?? 0;
 	const likedByText = formatLikedByText({
 		count: likesCount,
 		isLiked,
 	});
+
+	const openViewer = (initialImageIndex = 0) => {
+		setViewerState({
+			isOpen: true,
+			initialImageIndex,
+		});
+	};
+
+	const closeViewer = () => {
+		setViewerState({
+			isOpen: false,
+			initialImageIndex: 0,
+		});
+	};
 
 	const handleLike = async (e) => {
 		e.stopPropagation();
@@ -71,34 +90,6 @@ const KitCardHistory = ({ item, onDeleteSuccess, user }) => {
 		}
 	};
 
-	const handleNext = (e) => {
-		e.stopPropagation(); // Dont close the modal when clicking next
-		setSelectedImageIndex((prevIndex) => {
-			return prevIndex + 1;
-		});
-	};
-
-	const handlePrev = (e) => {
-		e.stopPropagation();
-		setSelectedImageIndex((prevIndex) => {
-			return prevIndex - 1;
-		});
-	};
-
-	// Keyboard handling (arrows)
-	useEffect(() => {
-		const handleKeyDown = (e) => {
-			if (selectedImageIndex === null) return; // if modal is closed, do nothing
-
-			if (e.key === "ArrowRight") handleNext(e);
-			if (e.key === "ArrowLeft") handlePrev(e);
-			if (e.key === "Escape") setSelectedImageIndex(null);
-		};
-
-		window.addEventListener("keydown", handleKeyDown);
-		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, [selectedImageIndex]); // Start listening when modal state changes
-
 	const getEbayLink = (e) => {
 		e.stopPropagation(); // Prevent card click
 
@@ -128,10 +119,6 @@ const KitCardHistory = ({ item, onDeleteSuccess, user }) => {
 		window.open(finalUrl, "_blank", "noopener,noreferrer"); // noopener for security
 	};
 
-	// Get the current image based on the index
-	const activeImage =
-		selectedImageIndex !== null ? item.images[selectedImageIndex] : null;
-
 	const mainImage = item.images.length > 0 ? item.images[0].image : null;
 
 	return (
@@ -142,7 +129,7 @@ const KitCardHistory = ({ item, onDeleteSuccess, user }) => {
 					className="p-2"
 					style={{ cursor: "pointer" }}
 					onClick={() => {
-						if (item.images.length > 0) setSelectedImageIndex(0);
+						openViewer(0);
 					}}
 				>
 					{mainImage ? (
@@ -183,10 +170,11 @@ const KitCardHistory = ({ item, onDeleteSuccess, user }) => {
 					{/* Likes and Added At */}
 					<div className="d-flex justify-content-between align-items-center mb-2">
 						{/* Likes */}
-						<div
-							className="d-flex align-items-center"
-							style={{ gap: "5px" }}
-						>
+						<div className="d-flex flex-column align-items-start">
+							<div
+								className="d-flex align-items-center"
+								style={{ gap: "5px" }}
+							>
 							<button
 								className="btn btn-link p-0 text-decoration-none"
 								onClick={handleLike}
@@ -203,6 +191,18 @@ const KitCardHistory = ({ item, onDeleteSuccess, user }) => {
 								)}
 							</button>
 							<span className="small text-muted">{likedByText}</span>
+							</div>
+							<button
+								type="button"
+								className="p-0 bg-transparent border-0 small text-muted text-start mt-1"
+								onClick={(e) => {
+									e.stopPropagation();
+									openViewer(0);
+								}}
+							>
+								<i className="bi bi-chat me-1" aria-hidden="true"></i>
+								Comments ({commentsCount})
+							</button>
 						</div>
 
 						<div className="d-flex align-items-center">
@@ -261,45 +261,14 @@ const KitCardHistory = ({ item, onDeleteSuccess, user }) => {
 				</div>
 			</div>
 
-			{/* Modal for selected image */}
-			{activeImage && (
-				<div
-					className="lightbox-backdrop"
-					onClick={() => setSelectedImageIndex(null)}
-				>
-					<button className="lightbox-close-btn">&times;</button>
-
-					{/* ARROW LEFT IF MORE THAN ONE IMAGE, AND NOT FIRST IMAGE */}
-					{item.images.length > 1 && selectedImageIndex > 0 && (
-						<button
-							className="lightbox-nav-btn nav-prev"
-							onClick={handlePrev}
-						>
-							&#10094; {/* sign id < */}
-						</button>
-					)}
-
-					<div className="lightbox-frame">
-						<img
-							src={activeImage.image}
-							alt="Enlarged view"
-							className="lightbox-img"
-							onClick={(e) => e.stopPropagation()}
-						/>
-					</div>
-
-					{/* ARROW RIGHT IF MORE THAN ONE IMAGE, AND NOT LAST IMAGE */}
-					{item.images.length > 1 &&
-						selectedImageIndex !== item.images.length - 1 && (
-							<button
-								className="lightbox-nav-btn nav-next"
-								onClick={handleNext}
-							>
-								&#10095; {/* sign id > */}
-							</button>
-						)}
-				</div>
-			)}
+			<CommentsModal
+				isOpen={viewerState.isOpen}
+				onClose={closeViewer}
+				kitId={item.id}
+				currentUser={user}
+				item={item}
+				initialImageIndex={viewerState.initialImageIndex}
+			/>
 		</>
 	);
 };

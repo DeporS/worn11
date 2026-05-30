@@ -128,4 +128,29 @@ export const getKitLikers = async (kitId) => {
 	return response.data.results || response.data;
 };
 
+export const getKitComments = async (kitId) => {
+	const response = await api.get(`/kits/${kitId}/comments/`);
+	return response.data;
+};
+
+export const addKitComment = async (kitId, body) => {
+	const response = await api.post(`/kits/${kitId}/comments/`, { body });
+	return response.data;
+};
+
+export const replyToComment = async (commentId, body) => {
+	const response = await api.post(`/comments/${commentId}/reply/`, { body });
+	return response.data;
+};
+
+export const toggleCommentLike = async (commentId) => {
+	const response = await api.post(`/comments/${commentId}/like/`);
+	return response.data;
+};
+
+export const deleteComment = async (commentId) => {
+	const response = await api.delete(`/comments/${commentId}/`);
+	return response.data;
+};
+
 export default api;

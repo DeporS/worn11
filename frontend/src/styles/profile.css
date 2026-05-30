@@ -228,6 +228,137 @@
 	right: 20px;
 }
 
+.unified-kit-modal {
+	width: 96%;
+	max-width: 1200px;
+	height: min(88vh, 920px);
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+}
+
+.unified-kit-modal .card-body.unified-kit-body {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.unified-kit-media {
+	flex: 1 1 58%;
+	min-width: 0;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.unified-kit-stage {
+	flex: 0 0 auto;
+	min-width: 0;
+	height: clamp(320px, 54vh, 600px);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 1rem 3rem;
+	background: #11161b;
+	overflow: hidden;
+	position: relative;
+}
+
+.unified-kit-comments {
+	flex: 1 1 42%;
+	min-width: 0;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.unified-kit-comments .overflow-auto {
+	min-height: 0;
+}
+
+.unified-kit-stage-inner {
+	width: 100%;
+	height: 100%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.unified-kit-thumbs {
+	display: flex;
+	flex-wrap: nowrap;
+	gap: 0.5rem;
+	overflow-x: auto;
+	overflow-y: hidden;
+	white-space: nowrap;
+	padding-bottom: 0.25rem;
+}
+
+.unified-kit-thumb {
+	width: 68px;
+	height: 68px;
+	padding: 0;
+	border: 2px solid transparent;
+	border-radius: 0.6rem;
+	background: transparent;
+	flex: 0 0 auto;
+	overflow: hidden;
+	opacity: 0.65;
+}
+
+.unified-kit-thumb.active {
+	border-color: rgba(255, 255, 255, 0.95);
+	opacity: 1;
+}
+
+.unified-kit-title {
+	line-height: 1.15;
+}
+
+.unified-kit-stage .lightbox-img {
+	width: auto;
+	height: auto;
+	max-width: 100%;
+	max-height: 100%;
+	object-fit: contain;
+}
+
+@media (max-width: 991.98px) {
+	.unified-kit-modal {
+		width: 100%;
+		max-width: none;
+		max-height: 100vh;
+		height: 100vh;
+		border-radius: 0;
+	}
+
+	.unified-kit-media {
+		flex-basis: auto;
+		min-height: 0;
+	}
+
+	.unified-kit-stage {
+		height: clamp(280px, 40vh, 430px);
+		padding: 0.75rem 2.5rem;
+	}
+
+	.unified-kit-thumb {
+		width: 60px;
+		height: 60px;
+	}
+
+	.unified-kit-comments {
+		max-height: none;
+		min-height: 0;
+	}
+
+	.unified-kit-thumbs {
+		padding-bottom: 0.25rem;
+	}
+}
+
 /* VIEW OFFER BUTTON */
 .minimal-offer-link {
 	display: inline-flex;

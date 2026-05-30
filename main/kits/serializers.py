@@ -1,8 +1,89 @@
 from rest_framework import serializers
-from .models import Country, League, Team, Kit, UserKit, UserKitImage, User, Profile
+from .models import Country, League, Team, Kit, UserKit, UserKitImage, User, Profile, KitComment
 from django.contrib.auth.models import User
 from dj_rest_auth.serializers import UserDetailsSerializer
 import json
+
+
+class CommentAuthorSerializer(serializers.ModelSerializer):
+    avatar = serializers.ImageField(source='profile.avatar', read_only=True)
+
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'avatar']
+
+
+class KitCommentSerializer(serializers.ModelSerializer):
+    user = CommentAuthorSerializer(read_only=True)
+    likes_count = serializers.SerializerMethodField()
+    reply_count = serializers.SerializerMethodField()
+    is_liked_by_me = serializers.SerializerMethodField()
+    can_delete = serializers.SerializerMethodField()
+    replies = serializers.SerializerMethodField()
+
+    class Meta:
+        model = KitComment
+        fields = [
+            'id',
+            'body',
+            'created_at',
+            'updated_at',
+            'user',
+            'likes_count',
+            'is_liked_by_me',
+            'reply_count',
+            'can_delete',
+            'replies',
+        ]
+
+    def get_can_delete(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+
+        profile = getattr(request.user, 'profile', None)
+        return (
+            obj.user_id == request.user.id
+            or request.user.is_staff
+            or bool(profile and profile.is_moderator)
+        )
+
+    def get_likes_count(self, obj):
+        return getattr(obj, 'likes_count', obj.comment_likes.count())
+
+    def get_reply_count(self, obj):
+        return getattr(obj, 'reply_count', obj.replies.count())
+
+    def get_is_liked_by_me(self, obj):
+        annotated_value = getattr(obj, 'is_liked_by_me', None)
+        if annotated_value is not None:
+            return annotated_value
+
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+
+        return obj.comment_likes.filter(user=request.user).exists()
+
+    def get_replies(self, obj):
+        replies = getattr(obj, 'prefetched_replies', None)
+        if replies is None:
+            replies = obj.replies.none()
+
+        serializer = KitCommentSerializer(replies, many=True, context=self.context)
+        return serializer.data
+
+
+class KitCommentWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = KitComment
+        fields = ['body']
+
+    def validate_body(self, value):
+        cleaned = (value or '').strip()
+        if not cleaned:
+            raise serializers.ValidationError('Comment cannot be empty.')
+        return cleaned
 
 # Team Serializer
 class TeamSerializer(serializers.ModelSerializer):
@@ -49,6 +130,7 @@ class UserKitSerializer(serializers.ModelSerializer):
     technology_display = serializers.CharField(source='get_shirt_technology_display', read_only=True)
 
     likes_count = serializers.IntegerField(read_only=True)
+    comments_count = serializers.SerializerMethodField()
     is_liked = serializers.SerializerMethodField() # To check if the current user liked this UserKit
     valuation_warning = serializers.SerializerMethodField()
 
@@ -78,9 +160,9 @@ class UserKitSerializer(serializers.ModelSerializer):
             # Write-only fields
             'team_name', 'season', 'kit_type', 'new_images', 'deleted_images', 'images_order',
             # Modifiable fields
-            'condition', 'shirt_technology', 'size', 'for_sale', 'manual_value', 'likes_count', 'is_liked', 'valuation_warning', 'player_name', 'player_number', 'offer_link', 'in_the_collection'
+            'condition', 'shirt_technology', 'size', 'for_sale', 'manual_value', 'likes_count', 'comments_count', 'is_liked', 'valuation_warning', 'player_name', 'player_number', 'offer_link', 'in_the_collection'
         ]
-        read_only_fields = ['user', 'final_value', 'kit', 'images', 'condition_display', 'technology_display', 'size_display', 'added_at', 'is_owner', 'owner_username', 'likes_count', 'is_liked', 'valuation_warning']
+        read_only_fields = ['user', 'final_value', 'kit', 'images', 'condition_display', 'technology_display', 'size_display', 'added_at', 'is_owner', 'owner_username', 'likes_count', 'comments_count', 'is_liked', 'valuation_warning']
     
     # Getting is_owner field
     def get_is_owner(self, obj):
@@ -95,6 +177,9 @@ class UserKitSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated:
             return obj.likes.filter(id=request.user.id).exists()
         return False
+
+    def get_comments_count(self, obj):
+        return getattr(obj, 'comments_count', obj.comments.count())
 
     def get_valuation_warning(self, obj):
         return obj.get_valuation_warning()
