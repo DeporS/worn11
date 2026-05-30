@@ -74,6 +74,10 @@ CURRENCY_CHOICES = [
     ('GBP', 'British Pound (GBP)'),
 ]
 
+AUTOMATED_VALUATION_UNAVAILABLE_MESSAGE = (
+    "Automated valuation is not available for this kit yet, so its value will be set to 0."
+)
+
 # User profile
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
@@ -234,6 +238,19 @@ class UserKit(models.Model):
         help_text="Final value of the kit, either manual or calculated."
     )
 
+    def is_automated_valuation_available(self):
+        base_price = getattr(self.kit, 'estimated_price', None)
+        return base_price is not None and base_price > 0
+
+    def get_valuation_warning(self):
+        if self.manual_value:
+            return None
+
+        if not self.is_automated_valuation_available():
+            return AUTOMATED_VALUATION_UNAVAILABLE_MESSAGE
+
+        return None
+
     def save(self, *args, **kwargs):
         # Calculate final value if manual_value is not set
         if self.manual_value:
@@ -241,9 +258,9 @@ class UserKit(models.Model):
             self.final_value = self.manual_value
         else:
             # Calculate based on multipliers
-            base_price = self.kit.estimated_price
+            base_price = getattr(self.kit, 'estimated_price', None)
 
-            if base_price and base_price > 0:
+            if base_price is not None and base_price > 0:
                 size_multiplier = SIZE_MULTIPLIERS.get(self.size, Decimal('1.0'))
                 condition_multiplier = CONDITION_MULTIPLIERS.get(self.condition, Decimal('1.0'))
                 technology_multiplier = TECHNOLOGIE_MULTIPLIERS.get(self.shirt_technology, Decimal('1.0'))

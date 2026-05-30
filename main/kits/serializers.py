@@ -50,6 +50,7 @@ class UserKitSerializer(serializers.ModelSerializer):
 
     likes_count = serializers.IntegerField(read_only=True)
     is_liked = serializers.SerializerMethodField() # To check if the current user liked this UserKit
+    valuation_warning = serializers.SerializerMethodField()
 
     # Write-only fields for creating/updating UserKit
     team_name = serializers.CharField(write_only=True)
@@ -77,9 +78,9 @@ class UserKitSerializer(serializers.ModelSerializer):
             # Write-only fields
             'team_name', 'season', 'kit_type', 'new_images', 'deleted_images', 'images_order',
             # Modifiable fields
-            'condition', 'shirt_technology', 'size', 'for_sale', 'manual_value', 'likes_count', 'is_liked', 'player_name', 'player_number', 'offer_link', 'in_the_collection'
+            'condition', 'shirt_technology', 'size', 'for_sale', 'manual_value', 'likes_count', 'is_liked', 'valuation_warning', 'player_name', 'player_number', 'offer_link', 'in_the_collection'
         ]
-        read_only_fields = ['user', 'final_value', 'kit', 'images', 'condition_display', 'technology_display', 'size_display', 'added_at', 'is_owner', 'owner_username', 'likes_count', 'is_liked']
+        read_only_fields = ['user', 'final_value', 'kit', 'images', 'condition_display', 'technology_display', 'size_display', 'added_at', 'is_owner', 'owner_username', 'likes_count', 'is_liked', 'valuation_warning']
     
     # Getting is_owner field
     def get_is_owner(self, obj):
@@ -94,6 +95,9 @@ class UserKitSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated:
             return obj.likes.filter(id=request.user.id).exists()
         return False
+
+    def get_valuation_warning(self, obj):
+        return obj.get_valuation_warning()
 
     # Override create method to handle nested kit creation
     def create(self, validated_data):
@@ -384,4 +388,3 @@ class UserStatsProfileSerializer(serializers.ModelSerializer):
             'facebook_link', 'instagram_link', 'twitter_link', 'youTube_link', 'tiktok_link',
             'vinted_link', 'ebay_link', 'depop_link'
         ]
-

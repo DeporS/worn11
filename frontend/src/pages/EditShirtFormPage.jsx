@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import api from "../services/api";
 import { nanoid } from "nanoid";
+import Swal from "sweetalert2";
 
 import "../styles/photos.css";
 
@@ -354,9 +355,17 @@ const EditShirtFormPage = () => {
 		formData.append("images_order", JSON.stringify(fullOrder));
 
 		try {
-			await api.patch(`/my-collection/${id}/`, formData, {
+			const response = await api.patch(`/my-collection/${id}/`, formData, {
 				headers: { "Content-Type": "multipart/form-data" },
 			});
+			if (response?.data?.valuation_warning) {
+				await Swal.fire({
+					icon: "info",
+					title: "Automated valuation unavailable",
+					text: response.data.valuation_warning,
+					confirmButtonText: "OK",
+				});
+			}
 			navigate("/my-collection");
 		} catch (err) {
 			console.error(err);

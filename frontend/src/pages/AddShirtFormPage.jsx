@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { addKitToCollection } from "../services/api";
 import api from "../services/api";
 import { nanoid } from "nanoid";
+import Swal from "sweetalert2";
 
 import "../styles/photos.css";
 
@@ -341,7 +342,15 @@ const AddShirtFormPage = () => {
 		});
 
 		try {
-			await addKitToCollection(formData);
+			const response = await addKitToCollection(formData);
+			if (response?.valuation_warning) {
+				await Swal.fire({
+					icon: "info",
+					title: "Automated valuation unavailable",
+					text: response.valuation_warning,
+					confirmButtonText: "OK",
+				});
+			}
 			// Success - Redirect to profile
 			navigate("/my-collection");
 		} catch (err) {
