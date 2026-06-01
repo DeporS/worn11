@@ -32,6 +32,10 @@ def get_comment_base_queryset(user):
         'user',
         'user__profile',
         'kit',
+        'parent',
+        'parent__user',
+        'reply_to',
+        'reply_to__user',
     ).annotate(
         likes_count=Count('comment_likes', distinct=True),
         is_liked_by_me=get_comment_like_annotation(user),
@@ -454,21 +458,17 @@ class ReplyToCommentAPI(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, comment_id):
-        parent_comment = get_object_or_404(KitComment, pk=comment_id)
-
-        if parent_comment.parent_id is not None:
-            return Response(
-                {'parent': ['Replies to replies are not allowed.']},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        target_comment = get_object_or_404(KitComment, pk=comment_id)
+        thread_parent = target_comment.parent if target_comment.parent_id is not None else target_comment
 
         serializer = KitCommentWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         reply = serializer.save(
-            kit=parent_comment.kit,
+            kit=target_comment.kit,
             user=request.user,
-            parent=parent_comment,
+            parent=thread_parent,
+            reply_to=target_comment,
         )
         response_serializer = KitCommentSerializer(reply, context={'request': request})
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)

@@ -15,6 +15,9 @@ class CommentAuthorSerializer(serializers.ModelSerializer):
 
 class KitCommentSerializer(serializers.ModelSerializer):
     user = CommentAuthorSerializer(read_only=True)
+    parent_id = serializers.IntegerField(source='parent.id', read_only=True)
+    reply_to_id = serializers.IntegerField(source='reply_to.id', read_only=True)
+    reply_to_username = serializers.SerializerMethodField()
     likes_count = serializers.SerializerMethodField()
     reply_count = serializers.SerializerMethodField()
     is_liked_by_me = serializers.SerializerMethodField()
@@ -29,6 +32,9 @@ class KitCommentSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
             'user',
+            'parent_id',
+            'reply_to_id',
+            'reply_to_username',
             'likes_count',
             'is_liked_by_me',
             'reply_count',
@@ -53,6 +59,20 @@ class KitCommentSerializer(serializers.ModelSerializer):
 
     def get_reply_count(self, obj):
         return getattr(obj, 'reply_count', obj.replies.count())
+
+    def get_reply_to_username(self, obj):
+        if obj.parent_id is None:
+            return None
+
+        reply_to = getattr(obj, 'reply_to', None)
+        if reply_to and reply_to.user_id:
+            return reply_to.user.username
+
+        parent = getattr(obj, 'parent', None)
+        if parent and parent.user_id:
+            return parent.user.username
+
+        return None
 
     def get_is_liked_by_me(self, obj):
         annotated_value = getattr(obj, 'is_liked_by_me', None)

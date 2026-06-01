@@ -10,9 +10,22 @@ const formatCommentDate = (value) => {
 	});
 };
 
+const getReplyMetaLabel = (comment, fallbackReplyToUsername) => {
+	const authorUsername = comment.user?.username || "Unknown";
+	const replyTarget =
+		comment.reply_to_username || fallbackReplyToUsername || "";
+
+	if (!comment.parent_id || !replyTarget) {
+		return authorUsername;
+	}
+
+	return `${authorUsername} > ${replyTarget}`;
+};
+
 const CommentItem = ({
 	comment,
 	isReply = false,
+	parentAuthorUsername = "",
 	currentUser,
 	activeReplyId,
 	replyDraft,
@@ -26,6 +39,12 @@ const CommentItem = ({
 	const avatar = comment.user?.avatar;
 	const username = comment.user?.username || "Unknown";
 	const isReplyBoxOpen = activeReplyId === comment.id;
+	const replyMetaLabel = getReplyMetaLabel(comment, parentAuthorUsername);
+	const replyTargetLabel =
+		comment.user?.username ||
+		comment.reply_to_username ||
+		parentAuthorUsername ||
+		"Unknown";
 
 	return (
 		<div className={`${isReply ? "ms-4 mt-3 ps-3 border-start" : ""}`}>
@@ -59,8 +78,12 @@ const CommentItem = ({
 					<div className="bg-light rounded-4 px-3 py-2">
 						<div className="d-flex justify-content-between gap-3 align-items-start">
 							<div>
-								<div className="fw-semibold small">{username}</div>
-								<div className="small text-dark">{comment.body}</div>
+								<div className="fw-semibold small">
+									{replyMetaLabel}
+								</div>
+								<div className="small text-dark">
+									{comment.body}
+								</div>
 							</div>
 							<small className="text-muted text-nowrap">
 								{formatCommentDate(comment.created_at)}
@@ -80,7 +103,7 @@ const CommentItem = ({
 							{comment.likes_count || 0}
 						</button>
 
-						{!isReply && currentUser && (
+						{currentUser && (
 							<button
 								type="button"
 								className="btn btn-link p-0 text-decoration-none small text-muted"
@@ -103,12 +126,16 @@ const CommentItem = ({
 
 					{isReplyBoxOpen && (
 						<div className="mt-3">
+							<div className="small text-muted mb-2">
+								Replying to {replyTargetLabel}
+							</div>
 							<textarea
 								className="form-control form-control-sm"
 								rows="2"
-								placeholder={`Reply to ${username}...`}
+								placeholder={`Add a comment...`}
 								value={replyDraft}
 								onChange={(e) => onReplyChange(e.target.value)}
+								style={{ resize: "none" }}
 							/>
 							<div className="d-flex justify-content-end gap-2 mt-2">
 								<button
@@ -121,7 +148,7 @@ const CommentItem = ({
 								<button
 									type="button"
 									className="btn btn-sm btn-primary rounded-pill"
-									onClick={() => onReplySubmit(comment.id)}
+									onClick={onReplySubmit}
 									disabled={replySubmitting}
 								>
 									{replySubmitting ? "Replying..." : "Reply"}
@@ -136,6 +163,7 @@ const CommentItem = ({
 								key={reply.id}
 								comment={reply}
 								isReply
+								parentAuthorUsername={username}
 								currentUser={currentUser}
 								activeReplyId={activeReplyId}
 								replyDraft={replyDraft}

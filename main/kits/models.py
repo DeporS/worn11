@@ -300,6 +300,13 @@ class KitComment(models.Model):
     kit = models.ForeignKey(UserKit, on_delete=models.CASCADE, related_name='comments')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='kit_comments')
     parent = models.ForeignKey('self', on_delete=models.CASCADE, related_name='replies', null=True, blank=True)
+    reply_to = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        related_name='direct_replies',
+        null=True,
+        blank=True,
+    )
     body = models.TextField(max_length=500)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -313,12 +320,37 @@ class KitComment(models.Model):
         if not self.body:
             raise ValidationError({'body': 'Comment cannot be empty.'})
 
+        if self.parent_id is None:
+            self.reply_to = None
+            return
+
+        thread_root = self.parent.parent if self.parent.parent_id is not None else self.parent
+        if thread_root.kit_id != self.kit_id:
+            raise ValidationError({'parent': 'Reply must belong to the same kit.'})
+
+        if thread_root.parent_id is not None:
+            raise ValidationError({'parent': 'Parent must be a top-level comment.'})
+
+        self.parent = thread_root
+
+        if self.reply_to_id is None:
+            self.reply_to = thread_root
+        else:
+            if self.reply_to.kit_id != self.kit_id:
+                raise ValidationError({'reply_to': 'Reply target must belong to the same kit.'})
+
+            if self.reply_to_id == self.id:
+                raise ValidationError({'reply_to': 'Reply target cannot be the comment itself.'})
+
+            if self.reply_to.parent_id is None:
+                if self.reply_to_id != thread_root.id:
+                    raise ValidationError({'reply_to': 'Top-level reply target must match the thread root.'})
+            elif self.reply_to.parent_id != thread_root.id:
+                raise ValidationError({'reply_to': 'Reply target must belong to the same thread.'})
+
         if self.parent:
             if self.parent.kit_id != self.kit_id:
                 raise ValidationError({'parent': 'Reply must belong to the same kit.'})
-
-            if self.parent.parent_id is not None:
-                raise ValidationError({'parent': 'Replies to replies are not allowed.'})
 
     def save(self, *args, **kwargs):
         self.body = (self.body or '').strip()
