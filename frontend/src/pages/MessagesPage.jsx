@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import Swal from "sweetalert2";
 
@@ -9,6 +9,7 @@ import {
 	getConversations,
 	sendConversationMessage,
 } from "../services/api";
+import "../styles/messages.css";
 
 const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 	const { conversationId } = useParams();
@@ -21,6 +22,80 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 	const [draft, setDraft] = useState("");
 	const [sending, setSending] = useState(false);
 	const [pageError, setPageError] = useState("");
+	const [navbarHeight, setNavbarHeight] = useState(0);
+	const messageListRef = useRef(null);
+	const scrollTimeoutRef = useRef(null);
+	const scrollRafRef = useRef(null);
+
+	useEffect(() => {
+		const navbar = document.querySelector(".navbar");
+		if (!navbar) return undefined;
+
+		const updateNavbarHeight = () => {
+			setNavbarHeight(navbar.getBoundingClientRect().height);
+		};
+
+		updateNavbarHeight();
+
+		const resizeObserver =
+			typeof ResizeObserver !== "undefined"
+				? new ResizeObserver(updateNavbarHeight)
+				: null;
+
+		if (resizeObserver) {
+			resizeObserver.observe(navbar);
+		}
+
+		window.addEventListener("resize", updateNavbarHeight);
+
+		return () => {
+			window.removeEventListener("resize", updateNavbarHeight);
+			if (resizeObserver) {
+				resizeObserver.disconnect();
+			}
+		};
+	}, []);
+
+	useEffect(() => {
+		if (!selectedConversation || loadingMessages) return undefined;
+
+		const scrollMessagesToBottom = () => {
+			const container = messageListRef.current;
+			if (!container) return;
+
+			container.scrollTop = container.scrollHeight;
+		};
+
+		const scheduleScroll = () => {
+			if (scrollRafRef.current) {
+				window.cancelAnimationFrame(scrollRafRef.current);
+			}
+
+			scrollRafRef.current = window.requestAnimationFrame(() => {
+				scrollMessagesToBottom();
+
+				scrollRafRef.current = window.requestAnimationFrame(() => {
+					scrollMessagesToBottom();
+				});
+			});
+		};
+
+		if (scrollTimeoutRef.current) {
+			window.clearTimeout(scrollTimeoutRef.current);
+		}
+
+		scrollTimeoutRef.current = window.setTimeout(scheduleScroll, 0);
+
+		return () => {
+			if (scrollTimeoutRef.current) {
+				window.clearTimeout(scrollTimeoutRef.current);
+			}
+
+			if (scrollRafRef.current) {
+				window.cancelAnimationFrame(scrollRafRef.current);
+			}
+		};
+	}, [messages, selectedConversation, conversationId, loadingMessages]);
 
 	useEffect(() => {
 		const loadConversations = async () => {
@@ -130,16 +205,57 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 		}
 	};
 
-	return (
-		<div className="container py-4 py-lg-5">
-			<div className="row g-4">
-				<div className="col-12 col-lg-4">
-					<div className="card shadow-sm border-0 h-100">
-						<div className="card-body p-0">
-							<div className="p-3 border-bottom">
-								<h1 className="h4 fw-bold mb-0">Messages</h1>
-							</div>
+	const formatMessageTime = (value) => {
+		if (!value) return "";
 
+		const date = new Date(value);
+		if (Number.isNaN(date.getTime())) return "";
+
+		const now = new Date();
+		const diffMs = now - date;
+		if (diffMs < 0) {
+			return date.toLocaleString("en-GB", {
+				day: "numeric",
+				month: "short",
+				hour: "2-digit",
+				minute: "2-digit",
+			});
+		}
+
+		const diffMinutes = Math.floor(diffMs / 60000);
+		const diffHours = Math.floor(diffMinutes / 60);
+
+		if (diffMinutes < 1) return "just now";
+		if (diffMinutes < 60) {
+			return `${diffMinutes} ${diffMinutes === 1 ? "min" : "mins"} ago`;
+		}
+		if (diffHours < 24) {
+			return `${diffHours} ${diffHours === 1 ? "hour" : "hours"} ago`;
+		}
+
+		return date.toLocaleString("en-GB", {
+			day: "numeric",
+			month: "short",
+			hour: "2-digit",
+			minute: "2-digit",
+		});
+	};
+
+	return (
+		<div
+			className="messages-page py-3 py-lg-4"
+			style={{
+				"--messages-navbar-height": `${navbarHeight}px`,
+			}}
+		>
+			<div className="messages-shell row g-4">
+				<div className="col-12 col-lg-4 messages-sidebar">
+					<div className="card shadow-sm border-0 messages-panel messages-sidebar-panel">
+						<div className="p-3 border-bottom">
+							<h1 className="h4 fw-bold mb-0">Messages</h1>
+						</div>
+
+						<div className="messages-sidebar-scroll">
 							{loadingConversations ? (
 								<div className="text-center py-5">
 									<div className="spinner-border text-primary" role="status"></div>
@@ -191,9 +307,9 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 					</div>
 				</div>
 
-				<div className="col-12 col-lg-8">
-					<div className="card shadow-sm border-0 h-100">
-						<div className="card-body d-flex flex-column p-0" style={{ minHeight: "70vh" }}>
+				<div className="col-12 col-lg-8 messages-thread">
+					<div className="card shadow-sm border-0 messages-panel messages-thread-panel">
+						<div className="card-body d-flex flex-column p-0 messages-thread-content">
 							{pageError ? (
 								<div className="text-center text-danger py-5 px-4">
 									{pageError}
@@ -208,7 +324,7 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 								</div>
 							) : selectedConversation ? (
 								<>
-									<div className="d-flex align-items-center gap-3 p-3 border-bottom">
+									<div className="messages-thread-header d-flex align-items-center gap-3 p-3 border-bottom">
 										<UserAvatar
 											user={selectedConversation.other_user}
 											size={48}
@@ -226,7 +342,10 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 										</div>
 									</div>
 
-									<div className="flex-grow-1 overflow-auto p-3 bg-light-subtle">
+									<div
+										ref={messageListRef}
+										className="messages-thread-body p-3 bg-light-subtle"
+									>
 										{messages.length === 0 ? (
 											<div className="text-center text-muted py-5">
 												No messages yet. Say hello.
@@ -246,12 +365,7 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 															<div
 																className={`small mt-1 ${message.is_mine ? "text-white-50" : "text-muted"}`}
 															>
-																{new Date(message.created_at).toLocaleString("en-GB", {
-																	day: "numeric",
-																	month: "short",
-																	hour: "2-digit",
-																	minute: "2-digit",
-																})}
+																{formatMessageTime(message.created_at)}
 															</div>
 														</div>
 													</div>
@@ -260,9 +374,9 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 										)}
 									</div>
 
-									<div className="border-top p-3">
-										<div className="d-flex gap-2">
-												<textarea
+									<div className="messages-thread-composer border-top p-3">
+										<div className="d-flex gap-2 align-items-end">
+											<textarea
 												className="form-control"
 												rows="2"
 												style={{ resize: "none" }}
