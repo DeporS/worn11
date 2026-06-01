@@ -267,10 +267,13 @@ class KitCommentAPITests(APITestCase):
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["body"], "Reply text")
+        self.assertEqual(response.data["parent_id"], parent.id)
+        self.assertEqual(response.data["reply_to_id"], parent.id)
+        self.assertEqual(response.data["reply_to_username"], self.other_user.username)
         self.assertEqual(response.data["reply_count"], 0)
         self.assertEqual(parent.replies.count(), 1)
 
-    def test_replying_to_a_reply_is_blocked(self):
+    def test_authenticated_user_can_reply_to_reply(self):
         parent = KitComment.objects.create(
             kit=self.user_kit,
             user=self.other_user,
@@ -281,6 +284,7 @@ class KitCommentAPITests(APITestCase):
             user=self.user,
             body="Reply",
             parent=parent,
+            reply_to=parent,
         )
         self.client.force_authenticate(user=self.other_user)
 
@@ -290,8 +294,64 @@ class KitCommentAPITests(APITestCase):
             format="json",
         )
 
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("parent", response.data)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["parent_id"], parent.id)
+        self.assertEqual(response.data["reply_to_id"], reply.id)
+        self.assertEqual(response.data["reply_to_username"], self.user.username)
+        created_reply = KitComment.objects.get(pk=response.data["id"])
+        self.assertEqual(created_reply.parent_id, parent.id)
+        self.assertEqual(created_reply.reply_to_id, reply.id)
+
+    def test_reply_to_reply_is_grouped_under_original_top_level_comment(self):
+        parent = KitComment.objects.create(
+            kit=self.user_kit,
+            user=self.other_user,
+            body="Top level",
+        )
+        reply = KitComment.objects.create(
+            kit=self.user_kit,
+            user=self.user,
+            body="Reply",
+            parent=parent,
+            reply_to=parent,
+        )
+        self.client.force_authenticate(user=self.other_user)
+        self.client.post(
+            reverse("comment-reply", args=[reply.id]),
+            {"body": "Nested reply"},
+            format="json",
+        )
+
+        response = self.client.get(reverse("kit-comments", args=[self.user_kit.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["id"], parent.id)
+        self.assertEqual(len(response.data[0]["replies"]), 2)
+        nested_reply_payload = response.data[0]["replies"][1]
+        self.assertEqual(nested_reply_payload["parent_id"], parent.id)
+        self.assertEqual(nested_reply_payload["reply_to_id"], reply.id)
+        self.assertEqual(nested_reply_payload["reply_to_username"], self.user.username)
+        self.assertEqual(nested_reply_payload["replies"], [])
+
+    def test_comments_list_falls_back_to_parent_username_for_legacy_reply(self):
+        parent = KitComment.objects.create(
+            kit=self.user_kit,
+            user=self.other_user,
+            body="Top level",
+        )
+        KitComment.objects.create(
+            kit=self.user_kit,
+            user=self.user,
+            body="Legacy reply",
+            parent=parent,
+        )
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.get(reverse("kit-comments", args=[self.user_kit.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data[0]["replies"][0]["reply_to_username"], self.other_user.username)
 
     def test_user_can_like_and_unlike_comment(self):
         comment = KitComment.objects.create(
@@ -378,6 +438,27 @@ class KitCommentAPITests(APITestCase):
                 user=self.user,
                 body="Invalid reply",
                 parent=foreign_parent,
+            )
+
+    def test_reply_target_must_belong_to_same_kit(self):
+        parent = KitComment.objects.create(
+            kit=self.user_kit,
+            user=self.other_user,
+            body="Top level",
+        )
+        foreign_reply_target = KitComment.objects.create(
+            kit=self.other_user_kit,
+            user=self.other_user,
+            body="Other kit reply target",
+        )
+
+        with self.assertRaisesMessage(ValidationError, "Reply target must belong to the same kit."):
+            KitComment.objects.create(
+                kit=self.user_kit,
+                user=self.user,
+                body="Invalid reply target",
+                parent=parent,
+                reply_to=foreign_reply_target,
             )
 
 

@@ -36,6 +36,32 @@ const updateCommentTree = (items, commentId, updater) =>
 		return comment;
 	});
 
+const findCommentById = (items, commentId) => {
+	for (const comment of items) {
+		if (comment.id === commentId) {
+			return comment;
+		}
+
+		const reply = comment.replies?.find((item) => item.id === commentId);
+		if (reply) {
+			return reply;
+		}
+	}
+
+	return null;
+};
+
+const appendReplyToThread = (items, reply) =>
+	items.map((comment) =>
+		comment.id === reply.parent_id
+			? {
+					...comment,
+					replies: [...(comment.replies || []), reply],
+					reply_count: (comment.reply_count || 0) + 1,
+				}
+			: comment,
+	);
+
 const removeCommentFromTree = (items, commentId) =>
 	items
 		.filter((comment) => comment.id !== commentId)
@@ -70,7 +96,7 @@ const CommentsModal = ({
 	const [comments, setComments] = useState([]);
 	const [loading, setLoading] = useState(false);
 	const [draft, setDraft] = useState("");
-	const [activeReplyId, setActiveReplyId] = useState(null);
+	const [activeReplyTarget, setActiveReplyTarget] = useState(null);
 	const [replyDraft, setReplyDraft] = useState("");
 	const [submitting, setSubmitting] = useState(false);
 	const [replySubmitting, setReplySubmitting] = useState(false);
@@ -178,31 +204,23 @@ const CommentsModal = ({
 		}
 	};
 
-	const handleReplySubmit = async (commentId) => {
+	const handleReplySubmit = async () => {
 		const body = replyDraft.trim();
 		if (!body) return;
 		if (!ensureAuthenticated()) return;
+		if (!activeReplyTarget?.id) return;
 
 		try {
 			setReplySubmitting(true);
-			const created = await replyToComment(commentId, body);
-			setComments((prev) =>
-				prev.map((comment) =>
-					comment.id === commentId
-						? {
-								...comment,
-								replies: [...(comment.replies || []), created],
-								reply_count: (comment.reply_count || 0) + 1,
-							}
-						: comment,
-				),
-			);
+			const created = await replyToComment(activeReplyTarget.id, body);
+			setComments((prev) => appendReplyToThread(prev, created));
 			setReplyDraft("");
-			setActiveReplyId(null);
+			setActiveReplyTarget(null);
 		} catch (error) {
 			console.error("Failed to add reply", error);
 			const message =
 				error?.response?.data?.parent?.[0] ||
+				error?.response?.data?.reply_to?.[0] ||
 				"Could not add your reply.";
 			Swal.fire("Error", message, "error");
 		} finally {
@@ -460,14 +478,26 @@ const CommentsModal = ({
 												key={comment.id}
 												comment={comment}
 												currentUser={currentUser}
-												activeReplyId={activeReplyId}
+												activeReplyId={activeReplyTarget?.id || null}
 												replyDraft={replyDraft}
 												replySubmitting={replySubmitting}
 												onReplyStart={(commentId) => {
-													setActiveReplyId(commentId);
 													if (commentId === null) {
+														setActiveReplyTarget(null);
 														setReplyDraft("");
+														return;
 													}
+
+													const targetComment = findCommentById(comments, commentId);
+													setActiveReplyTarget(
+														targetComment
+															? {
+																	id: targetComment.id,
+																	username:
+																		targetComment.user?.username || "Unknown",
+																}
+															: { id: commentId, username: "Unknown" },
+													);
 												}}
 												onReplyChange={setReplyDraft}
 												onReplySubmit={handleReplySubmit}
