@@ -103,8 +103,16 @@ export const getConversation = async (conversationId) => {
 	return response.data;
 };
 
-export const getConversationMessages = async (conversationId) => {
-	const response = await api.get(`/conversations/${conversationId}/messages/`);
+export const getConversationMessages = async (
+	conversationId,
+	{ limit, before } = {},
+) => {
+	const response = await api.get(`/conversations/${conversationId}/messages/`, {
+		params: {
+			...(limit ? { limit } : {}),
+			...(before ? { before } : {}),
+		},
+	});
 	return response.data;
 };
 

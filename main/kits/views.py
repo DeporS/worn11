@@ -350,6 +350,8 @@ class ConversationDetailAPI(generics.RetrieveAPIView):
 
 class ConversationMessagesAPI(APIView):
     permission_classes = [IsAuthenticated]
+    DEFAULT_LIMIT = 30
+    MAX_LIMIT = 100
 
     def _get_user_conversation(self, request, conversation_id):
         queryset = Conversation.objects.select_related(
@@ -362,6 +364,21 @@ class ConversationMessagesAPI(APIView):
         )
         return get_object_or_404(queryset, pk=conversation_id)
 
+    def _get_limit(self, request):
+        raw_limit = request.query_params.get('limit')
+        if raw_limit is None:
+            return self.DEFAULT_LIMIT
+
+        try:
+            limit = int(raw_limit)
+        except (TypeError, ValueError):
+            return self.DEFAULT_LIMIT
+
+        if limit <= 0:
+            return self.DEFAULT_LIMIT
+
+        return min(limit, self.MAX_LIMIT)
+
     def get(self, request, conversation_id):
         conversation = self._get_user_conversation(request, conversation_id)
         conversation.messages.filter(
@@ -371,9 +388,54 @@ class ConversationMessagesAPI(APIView):
         ).update(
             read_at=timezone.now()
         )
-        messages = conversation.messages.select_related('sender').order_by('created_at')
+
+        limit = self._get_limit(request)
+        before = request.query_params.get('before')
+        messages_queryset = conversation.messages.select_related('sender')
+
+        if before is not None:
+            try:
+                before_id = int(before)
+            except (TypeError, ValueError):
+                return Response(
+                    {'before': ['before must be a valid message id.']},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            anchor_message = Message.objects.filter(pk=before_id).first()
+            if anchor_message is None:
+                return Response(
+                    {'before': ['Message not found.']},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if anchor_message.conversation_id != conversation.id:
+                return Response(
+                    {'before': ['Message does not belong to this conversation.']},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            messages_queryset = messages_queryset.filter(id__lt=before_id)
+
+        messages_desc = list(
+            messages_queryset.order_by('-created_at', '-id')[:limit]
+        )
+        messages = list(reversed(messages_desc))
+
+        if messages:
+            first_message = messages[0]
+            has_more = messages_queryset.filter(
+                Q(created_at__lt=first_message.created_at) |
+                Q(created_at=first_message.created_at, id__lt=first_message.id)
+            ).exists()
+        else:
+            has_more = False
+
         serializer = MessageSerializer(messages, many=True, context={'request': request})
-        return Response(serializer.data)
+        return Response({
+            'results': serializer.data,
+            'has_more': has_more,
+        })
 
     def post(self, request, conversation_id):
         conversation = self._get_user_conversation(request, conversation_id)

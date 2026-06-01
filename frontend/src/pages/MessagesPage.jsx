@@ -12,13 +12,16 @@ import {
 import "../styles/messages.css";
 
 const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
+	const MESSAGES_PAGE_SIZE = 30;
 	const { conversationId } = useParams();
 	const navigate = useNavigate();
 	const [conversations, setConversations] = useState([]);
 	const [loadingConversations, setLoadingConversations] = useState(true);
 	const [selectedConversation, setSelectedConversation] = useState(null);
 	const [messages, setMessages] = useState([]);
+	const [hasMoreMessages, setHasMoreMessages] = useState(false);
 	const [loadingMessages, setLoadingMessages] = useState(false);
+	const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
 	const [draft, setDraft] = useState("");
 	const [sending, setSending] = useState(false);
 	const [pageError, setPageError] = useState("");
@@ -26,6 +29,9 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 	const messageListRef = useRef(null);
 	const scrollTimeoutRef = useRef(null);
 	const scrollRafRef = useRef(null);
+	const shouldScrollToBottomRef = useRef(false);
+	const prependScrollStateRef = useRef(null);
+	const hasInitialScrolledToBottomRef = useRef(false);
 
 	useEffect(() => {
 		const navbar = document.querySelector(".navbar");
@@ -66,7 +72,19 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 			container.scrollTop = container.scrollHeight;
 		};
 
-		const scheduleScroll = () => {
+		const restorePrependedScrollPosition = () => {
+			const container = messageListRef.current;
+			const scrollState = prependScrollStateRef.current;
+			if (!container || !scrollState) return;
+
+			container.scrollTop =
+				container.scrollHeight -
+				scrollState.previousScrollHeight +
+				scrollState.previousScrollTop;
+			prependScrollStateRef.current = null;
+		};
+
+		const scheduleBottomScroll = () => {
 			if (scrollRafRef.current) {
 				window.cancelAnimationFrame(scrollRafRef.current);
 			}
@@ -84,7 +102,18 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 			window.clearTimeout(scrollTimeoutRef.current);
 		}
 
-		scrollTimeoutRef.current = window.setTimeout(scheduleScroll, 0);
+		scrollTimeoutRef.current = window.setTimeout(() => {
+			if (prependScrollStateRef.current) {
+				restorePrependedScrollPosition();
+				return;
+			}
+
+			if (shouldScrollToBottomRef.current) {
+				shouldScrollToBottomRef.current = false;
+				hasInitialScrolledToBottomRef.current = true;
+				scheduleBottomScroll();
+			}
+		}, 0);
 
 		return () => {
 			if (scrollTimeoutRef.current) {
@@ -120,6 +149,8 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 		if (!conversationId) {
 			setSelectedConversation(null);
 			setMessages([]);
+			setHasMoreMessages(false);
+			hasInitialScrolledToBottomRef.current = false;
 			return;
 		}
 
@@ -139,14 +170,21 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 		const loadConversation = async () => {
 			setLoadingMessages(true);
 			setPageError("");
+			setMessages([]);
+			setHasMoreMessages(false);
+			hasInitialScrolledToBottomRef.current = false;
 
 			try {
 				const [conversationData, messagesData] = await Promise.all([
 					getConversation(conversationId),
-					getConversationMessages(conversationId),
+					getConversationMessages(conversationId, {
+						limit: MESSAGES_PAGE_SIZE,
+					}),
 				]);
+				shouldScrollToBottomRef.current = true;
 				setSelectedConversation(conversationData);
-				setMessages(Array.isArray(messagesData) ? messagesData : []);
+				setMessages(Array.isArray(messagesData?.results) ? messagesData.results : []);
+				setHasMoreMessages(Boolean(messagesData?.has_more));
 				markConversationAsReadLocally(conversationId);
 				if (refreshUnreadMessagesCount) {
 					await refreshUnreadMessagesCount();
@@ -182,6 +220,7 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 		try {
 			setSending(true);
 			const created = await sendConversationMessage(conversationId, body);
+			shouldScrollToBottomRef.current = true;
 			setMessages((prev) => [...prev, created]);
 			setDraft("");
 			await refreshConversations();
@@ -195,6 +234,64 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 			Swal.fire("Error", message, "error");
 		} finally {
 			setSending(false);
+		}
+	};
+
+	const handleLoadOlderMessages = async () => {
+		if (!conversationId || loadingOlderMessages || !hasMoreMessages || messages.length === 0) {
+			return;
+		}
+
+		const container = messageListRef.current;
+		const oldestMessageId = messages[0]?.id;
+		if (!oldestMessageId) return;
+
+		prependScrollStateRef.current = {
+			previousScrollHeight: container?.scrollHeight ?? 0,
+			previousScrollTop: container?.scrollTop ?? 0,
+		};
+
+		try {
+			setLoadingOlderMessages(true);
+			const data = await getConversationMessages(conversationId, {
+				limit: MESSAGES_PAGE_SIZE,
+				before: oldestMessageId,
+			});
+			const olderMessages = Array.isArray(data?.results) ? data.results : [];
+
+			if (olderMessages.length === 0) {
+				prependScrollStateRef.current = null;
+				setHasMoreMessages(Boolean(data?.has_more));
+				return;
+			}
+
+			setMessages((prev) => [...olderMessages, ...prev]);
+			setHasMoreMessages(Boolean(data?.has_more));
+		} catch (error) {
+			prependScrollStateRef.current = null;
+			console.error("Failed to load older messages", error);
+			Swal.fire("Error", "Could not load older messages.", "error");
+		} finally {
+			setLoadingOlderMessages(false);
+		}
+	};
+
+	const handleMessagesScroll = () => {
+		if (
+			!selectedConversation ||
+			!hasInitialScrolledToBottomRef.current ||
+			loadingMessages ||
+			loadingOlderMessages ||
+			!hasMoreMessages
+		) {
+			return;
+		}
+
+		const container = messageListRef.current;
+		if (!container) return;
+
+		if (container.scrollTop <= 80) {
+			handleLoadOlderMessages();
 		}
 	};
 
@@ -342,10 +439,17 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 										</div>
 									</div>
 
-									<div
-										ref={messageListRef}
+										<div
+											ref={messageListRef}
 										className="messages-thread-body p-3 bg-light-subtle"
+											onScroll={handleMessagesScroll}
 									>
+										{loadingOlderMessages && (
+											<div className="d-flex justify-content-center mb-3 small text-muted">
+												Loading older messages...
+											</div>
+										)}
+
 										{messages.length === 0 ? (
 											<div className="text-center text-muted py-5">
 												No messages yet. Say hello.

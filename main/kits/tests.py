@@ -918,8 +918,140 @@ class MessagingAPITests(APITestCase):
         response = self.client.get(reverse("conversation-messages", args=[conversation.id]))
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["body"], "Hello there")
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertFalse(response.data["has_more"])
+        self.assertEqual(response.data["results"][0]["body"], "Hello there")
+
+    def test_initial_message_request_returns_latest_limit_in_ascending_order(self):
+        conversation = Conversation.get_or_create_between(self.user, self.other_user)
+        for index in range(35):
+            Message.objects.create(
+                conversation=conversation,
+                sender=self.user if index % 2 == 0 else self.other_user,
+                body=f"Message {index + 1}",
+            )
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.get(
+            reverse("conversation-messages", args=[conversation.id]),
+            {"limit": 30},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["results"]), 30)
+        self.assertEqual(response.data["results"][0]["body"], "Message 6")
+        self.assertEqual(response.data["results"][-1]["body"], "Message 35")
+        self.assertEqual(
+            [item["id"] for item in response.data["results"]],
+            sorted(item["id"] for item in response.data["results"]),
+        )
+        self.assertTrue(response.data["has_more"])
+
+    def test_before_message_id_returns_older_messages(self):
+        conversation = Conversation.get_or_create_between(self.user, self.other_user)
+        created_messages = [
+            Message.objects.create(
+                conversation=conversation,
+                sender=self.user if index % 2 == 0 else self.other_user,
+                body=f"Message {index + 1}",
+            )
+            for index in range(10)
+        ]
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.get(
+            reverse("conversation-messages", args=[conversation.id]),
+            {"limit": 3, "before": created_messages[8].id},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["body"] for item in response.data["results"]],
+            ["Message 6", "Message 7", "Message 8"],
+        )
+        self.assertTrue(response.data["has_more"])
+
+    def test_has_more_is_false_when_older_messages_are_exhausted(self):
+        conversation = Conversation.get_or_create_between(self.user, self.other_user)
+        created_messages = [
+            Message.objects.create(
+                conversation=conversation,
+                sender=self.other_user,
+                body=f"Message {index + 1}",
+            )
+            for index in range(3)
+        ]
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.get(
+            reverse("conversation-messages", args=[conversation.id]),
+            {"limit": 5, "before": created_messages[2].id},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["body"] for item in response.data["results"]],
+            ["Message 1", "Message 2"],
+        )
+        self.assertFalse(response.data["has_more"])
+
+    def test_message_limit_is_capped(self):
+        conversation = Conversation.get_or_create_between(self.user, self.other_user)
+        for index in range(120):
+            Message.objects.create(
+                conversation=conversation,
+                sender=self.user,
+                body=f"Message {index + 1}",
+            )
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.get(
+            reverse("conversation-messages", args=[conversation.id]),
+            {"limit": 999},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["results"]), 100)
+
+    def test_invalid_before_message_id_returns_400(self):
+        conversation = Conversation.get_or_create_between(self.user, self.other_user)
+        Message.objects.create(
+            conversation=conversation,
+            sender=self.user,
+            body="Hello there",
+        )
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.get(
+            reverse("conversation-messages", args=[conversation.id]),
+            {"before": "not-a-number"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("before", response.data)
+
+    def test_before_message_id_from_another_conversation_returns_400(self):
+        conversation = Conversation.get_or_create_between(self.user, self.other_user)
+        other_conversation = Conversation.get_or_create_between(self.user, self.third_user)
+        foreign_message = Message.objects.create(
+            conversation=other_conversation,
+            sender=self.third_user,
+            body="Wrong thread",
+        )
+        Message.objects.create(
+            conversation=conversation,
+            sender=self.other_user,
+            body="Right thread",
+        )
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.get(
+            reverse("conversation-messages", args=[conversation.id]),
+            {"before": foreign_message.id},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("before", response.data)
 
     def test_non_participant_cannot_list_messages(self):
         conversation = Conversation.get_or_create_between(self.user, self.other_user)
