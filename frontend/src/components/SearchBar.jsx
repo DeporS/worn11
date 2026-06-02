@@ -6,7 +6,9 @@ const SearchBar = ({ value, onChange }) => {
     return (
         <div style={{ maxWidth: '400px', margin: '0 auto' }}>
             <div className="input-group">
-                <span className="input-group-text bg-white">@</span>
+                <span className="input-group-text bg-white">
+                    <i className="bi bi-search"></i>
+                </span>
                 <input
                     type="text"
                     className="form-control"

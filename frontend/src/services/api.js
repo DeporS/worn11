@@ -78,6 +78,16 @@ export const searchUsers = async (query) => {
 	return response.data;
 };
 
+export const searchKitSuggestions = async (query, limit = 8) => {
+	const response = await api.get("/search/kits/", {
+		params: {
+			q: query,
+			limit,
+		},
+	});
+	return response.data;
+};
+
 export const getExploreKits = async (sort = "trending", limit = 24) => {
 	const response = await api.get("/explore/kits/", {
 		params: {

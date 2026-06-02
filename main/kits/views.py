@@ -13,9 +13,402 @@ from django.shortcuts import get_object_or_404
 from django.db.models import Sum, Count, Exists, OuterRef, Value, BooleanField, Prefetch, Q, Subquery
 from django.contrib.auth.models import User
 from django.utils import timezone
+from urllib.parse import urlencode
+import re
 
 from .models import League, UserKit, Kit, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country, Follow, KitComment, KitCommentLike, KitReport, Conversation, Message
-from .serializers import LeagueSerializer, UserKitSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer, CountrySerializer, KitCommentSerializer, KitCommentWriteSerializer, KitReportSerializer, ConversationListSerializer, ConversationDetailSerializer, ConversationStartSerializer, MessageSerializer, MessageWriteSerializer
+from .serializers import LeagueSerializer, UserKitSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer, CountrySerializer, KitCommentSerializer, KitCommentWriteSerializer, KitReportSerializer, ConversationListSerializer, ConversationDetailSerializer, ConversationStartSerializer, MessageSerializer, MessageWriteSerializer, KitSearchSuggestionSerializer
+
+
+SUPPORTED_KIT_TYPES = [
+    'Home',
+    'Away',
+    'Third',
+    'Goalkeeper',
+    'Fourth',
+    'Cup',
+    'Training',
+    'Special',
+]
+
+MIN_SEASON_START_YEAR = 1940
+
+KIT_TYPE_ALIASES = {
+    'home': 'Home',
+    'away': 'Away',
+    'third': 'Third',
+    'goalkeeper': 'Goalkeeper',
+    'gk': 'Goalkeeper',
+    'keeper': 'Goalkeeper',
+    'goalie': 'Goalkeeper',
+    'fourth': 'Fourth',
+    'cup': 'Cup',
+    'training': 'Training',
+    'special': 'Special',
+    'special edition': 'Special',
+}
+
+KIT_TYPE_ORDER = {
+    kit_type: index for index, kit_type in enumerate(SUPPORTED_KIT_TYPES)
+}
+
+EXACT_SEASON_PATTERN = re.compile(r'\b(\d{4})\s*/\s*(\d{4})\b')
+SHORT_SEASON_PATTERN = re.compile(r'\b(\d{2})\s*/\s*(\d{2})\b')
+SPACE_SEASON_PATTERN = re.compile(r'(?<!\d)(\d{2}|\d{4})\s+(\d{2}|\d{4})(?!\d)')
+SEASON_PREFIX_PATTERN = re.compile(r'(?<!\d)(\d{2}|\d{4})\s*/\s*(\d{0,4})(?!\d)')
+SPACE_SEASON_PREFIX_PATTERN = re.compile(r'(?<!\d)(\d{2}|\d{4})\s+(\d{1,4})(?!\d)')
+YEAR_PATTERN = re.compile(r'\b(19|20)\d{2}\b')
+YEAR_FRAGMENT_PATTERN = re.compile(r'\b\d{1,4}\b')
+
+
+def normalize_search_query(value):
+    return ' '.join((value or '').strip().split())
+
+
+def get_full_year_from_token(token):
+    if len(token) == 4:
+        return int(token)
+    if len(token) == 2:
+        return get_likely_full_year_from_two_digit_token(token)
+    return None
+
+
+def get_likely_full_year_from_two_digit_token(token):
+    if len(token) != 2 or not token.isdigit():
+        return None
+
+    upcoming_year_two_digits = (timezone.now().year + 1) % 100
+    token_value = int(token)
+
+    if token_value <= upcoming_year_two_digits:
+        return 2000 + token_value
+
+    return 1900 + token_value
+
+
+def normalize_year_fragment(token):
+    cleaned_token = (token or '').strip()
+    if len(cleaned_token) != 2 or not cleaned_token.isdigit():
+        return cleaned_token
+
+    if cleaned_token in {'19', '20'}:
+        return cleaned_token
+
+    likely_year = get_likely_full_year_from_two_digit_token(cleaned_token)
+    return str(likely_year) if likely_year is not None else cleaned_token
+
+
+def normalize_season_tokens(start_token, end_token):
+    start_year = get_full_year_from_token(start_token)
+    if start_year is None:
+        return None
+
+    if len(end_token) == 4:
+        end_year = int(end_token)
+    elif len(end_token) == 2:
+        century = (start_year // 100) * 100
+        end_year = century + int(end_token)
+        if end_year < start_year:
+            end_year += 100
+    else:
+        return None
+
+    return f"{start_year}/{end_year}"
+
+
+def is_exact_season_pair_tokens(start_token, end_token):
+    if not start_token or not end_token:
+        return False
+
+    if len(start_token) == 2 and len(end_token) == 2:
+        return True
+
+    if len(start_token) == 4 and len(end_token) == 4:
+        return True
+
+    if len(start_token) == 4 and len(end_token) == 2:
+        start_year = int(start_token)
+        expected_end_suffix = str((start_year + 1) % 100).zfill(2)
+        return end_token == expected_end_suffix
+
+    return False
+
+
+def normalize_season_prefix(start_token, end_fragment):
+    start_year = get_full_year_from_token(start_token)
+    if start_year is None:
+        return None
+
+    cleaned_end_fragment = (end_fragment or '').strip()
+    return f"{start_year}/{cleaned_end_fragment}"
+
+
+def get_matching_kit_types_for_prefix(type_fragment):
+    normalized_fragment = (type_fragment or '').strip().lower()
+    if not normalized_fragment:
+        return []
+
+    matched_types = []
+    for kit_type in SUPPORTED_KIT_TYPES:
+        if kit_type.lower().startswith(normalized_fragment):
+            matched_types.append(kit_type)
+
+    for alias, canonical_type in KIT_TYPE_ALIASES.items():
+        if alias.startswith(normalized_fragment) and canonical_type not in matched_types:
+            matched_types.append(canonical_type)
+
+    return sorted(matched_types, key=get_kit_type_order)
+
+
+def extract_trailing_kit_type(query):
+    normalized_query = normalize_search_query(query)
+    if not normalized_query:
+        return normalized_query, []
+
+    lowered_query = normalized_query.lower()
+    for alias, canonical_type in sorted(KIT_TYPE_ALIASES.items(), key=lambda item: len(item[0]), reverse=True):
+        suffix = f" {alias}"
+        if lowered_query == alias or lowered_query.endswith(suffix):
+            trimmed_query = normalized_query[: -len(alias)].strip()
+            return trimmed_query, [canonical_type]
+
+    tokens = normalized_query.split()
+    if not tokens:
+        return normalized_query, []
+
+    trailing_token = tokens[-1]
+    matched_types = get_matching_kit_types_for_prefix(trailing_token)
+    if matched_types:
+        return normalize_search_query(' '.join(tokens[:-1])), matched_types
+
+    return normalized_query, []
+
+
+def parse_kit_search_query(query):
+    normalized_query = normalize_search_query(query)
+
+    parsed = {
+        'normalized_query': normalized_query,
+        'team_text': normalized_query,
+        'kit_types': [],
+        'exact_season': None,
+        'season_prefix': None,
+        'year_fragment': None,
+    }
+
+    if not normalized_query:
+        parsed['team_text'] = ''
+        return parsed
+
+    normalized_query, matched_kit_types = extract_trailing_kit_type(normalized_query)
+    parsed['kit_types'] = matched_kit_types
+
+    exact_season_match = EXACT_SEASON_PATTERN.search(normalized_query)
+    if exact_season_match:
+        start_year, end_year = exact_season_match.groups()
+        parsed['exact_season'] = f"{start_year}/{end_year}"
+        normalized_query = EXACT_SEASON_PATTERN.sub(' ', normalized_query, count=1)
+    else:
+        short_season_match = SHORT_SEASON_PATTERN.search(normalized_query)
+        if short_season_match:
+            start_year, end_year = short_season_match.groups()
+            parsed['exact_season'] = normalize_season_tokens(start_year, end_year)
+            normalized_query = SHORT_SEASON_PATTERN.sub(' ', normalized_query, count=1)
+        else:
+            space_season_match = SPACE_SEASON_PATTERN.search(normalized_query)
+            if space_season_match:
+                start_year, end_year = space_season_match.groups()
+                normalized_season = normalize_season_tokens(start_year, end_year)
+                if normalized_season and is_exact_season_pair_tokens(start_year, end_year):
+                    parsed['exact_season'] = normalized_season
+                    normalized_query = SPACE_SEASON_PATTERN.sub(' ', normalized_query, count=1)
+
+    if not parsed['exact_season']:
+        season_prefix_match = SEASON_PREFIX_PATTERN.search(normalized_query)
+        if season_prefix_match:
+            start_year, end_fragment = season_prefix_match.groups()
+            normalized_prefix = normalize_season_prefix(start_year, end_fragment)
+            if normalized_prefix and end_fragment != '':
+                parsed['season_prefix'] = normalized_prefix
+                normalized_query = SEASON_PREFIX_PATTERN.sub(' ', normalized_query, count=1)
+            elif normalized_prefix and normalized_query.find('/') != -1:
+                parsed['season_prefix'] = normalized_prefix
+                normalized_query = SEASON_PREFIX_PATTERN.sub(' ', normalized_query, count=1)
+        else:
+            space_season_prefix_match = SPACE_SEASON_PREFIX_PATTERN.search(normalized_query)
+            if space_season_prefix_match:
+                start_year, end_fragment = space_season_prefix_match.groups()
+                normalized_prefix = normalize_season_prefix(start_year, end_fragment)
+                if normalized_prefix and 0 < len(end_fragment) < 4:
+                    parsed['season_prefix'] = normalized_prefix
+                    normalized_query = SPACE_SEASON_PREFIX_PATTERN.sub(' ', normalized_query, count=1)
+
+    if not parsed['exact_season'] and not parsed['season_prefix']:
+        year_match = YEAR_PATTERN.search(normalized_query)
+        if year_match:
+            parsed['year_fragment'] = year_match.group(0)
+            normalized_query = YEAR_PATTERN.sub(' ', normalized_query, count=1)
+        else:
+            year_fragment_match = YEAR_FRAGMENT_PATTERN.search(normalized_query)
+            if year_fragment_match:
+                parsed['year_fragment'] = normalize_year_fragment(year_fragment_match.group(0))
+                normalized_query = YEAR_FRAGMENT_PATTERN.sub(' ', normalized_query, count=1)
+
+    parsed['team_text'] = normalize_search_query(normalized_query)
+    return parsed
+
+
+def parse_season_years(season):
+    season_text = (season or '').strip()
+    if not season_text:
+        return []
+
+    parts = re.findall(r'\d{2,4}', season_text)
+    if len(parts) < 2:
+        return []
+
+    first_part, second_part = parts[0], parts[1]
+
+    start_year = get_full_year_from_token(first_part)
+    if start_year is None:
+        return []
+
+    if len(second_part) == 4:
+        end_year = int(second_part)
+    elif len(second_part) == 2:
+        century = (start_year // 100) * 100
+        end_year = century + int(second_part)
+        if end_year < start_year:
+            end_year += 100
+    else:
+        return []
+
+    return [start_year, end_year]
+
+
+def normalize_season_value(season):
+    season_years = parse_season_years(season)
+    if len(season_years) == 2:
+        return f"{season_years[0]}/{season_years[1]}"
+    return normalize_search_query(season)
+
+
+def season_matches_exact(season, exact_season):
+    if not exact_season:
+        return False
+    return normalize_season_value(season) == normalize_season_value(exact_season)
+
+
+def season_matches_prefix(season, season_prefix):
+    if not season_prefix:
+        return False
+    return normalize_season_value(season).startswith(normalize_search_query(season_prefix))
+
+
+def season_matches_year_fragment(season, year_fragment):
+    if not year_fragment:
+        return False
+
+    return any(str(year).startswith(year_fragment) for year in parse_season_years(season))
+
+
+def get_season_sort_year(season):
+    season_years = parse_season_years(season)
+    if season_years:
+        return season_years[0]
+    return 0
+
+
+def get_team_match_rank(team_name, team_query):
+    lowered_name = (team_name or '').lower()
+    lowered_query = (team_query or '').lower()
+
+    if not lowered_query:
+        return 0
+    if lowered_name == lowered_query:
+        return 0
+    if lowered_name.startswith(lowered_query):
+        return 1
+    if lowered_query in lowered_name:
+        return 2
+    return 3
+
+
+def get_season_match_rank(kit, parsed_query):
+    if parsed_query['exact_season']:
+        return 0 if season_matches_exact(kit.season, parsed_query['exact_season']) else 1
+    if parsed_query['year_fragment']:
+        season_years = parse_season_years(kit.season)
+        if len(season_years) == 2:
+            if str(season_years[0]).startswith(parsed_query['year_fragment']):
+                return 0
+            if str(season_years[1]).startswith(parsed_query['year_fragment']):
+                return 1
+        return 2
+    return 0
+
+
+def get_kit_type_order(kit_type):
+    normalized_type = (kit_type or '').strip()
+    if normalized_type in KIT_TYPE_ORDER:
+        return KIT_TYPE_ORDER[normalized_type]
+    for prefix, order in KIT_TYPE_ORDER.items():
+        if normalized_type.lower().startswith(prefix.lower()):
+            return order
+    return 99
+
+
+def build_season_label(start_year):
+    return f"{start_year}/{start_year + 1}"
+
+
+def get_generated_seasons():
+    min_start_year = MIN_SEASON_START_YEAR
+    max_start_year = timezone.now().year
+    return [build_season_label(start_year) for start_year in range(min_start_year, max_start_year + 1)]
+
+
+def get_generated_suggestion(team, season, kit_type):
+    query_string = urlencode({
+        'season': season,
+        'type': kit_type,
+    })
+    return {
+        'team_id': team.id,
+        'team_name': team.name,
+        'season': season,
+        'kit_type': kit_type,
+        'label': f"{team.name} {season} {kit_type}",
+        'url': f"/history/team/{team.id}/variants?{query_string}",
+    }
+
+
+def get_generated_season_match_rank(season, parsed_query):
+    if parsed_query['exact_season']:
+        return 0 if season_matches_exact(season, parsed_query['exact_season']) else 1
+    if parsed_query['season_prefix']:
+        return 0 if season_matches_prefix(season, parsed_query['season_prefix']) else 1
+    if parsed_query['year_fragment']:
+        season_years = parse_season_years(season)
+        if len(season_years) == 2:
+            if str(season_years[0]).startswith(parsed_query['year_fragment']):
+                return 0
+            if str(season_years[1]).startswith(parsed_query['year_fragment']):
+                return 1
+        return 2
+    return 0
+
+
+def get_history_type_filter(kit_type):
+    normalized_type = normalize_search_query(kit_type)
+
+    if normalized_type == 'Goalkeeper':
+        return Q(kit__kit_type__iexact='GK') | Q(kit__kit_type__iexact='Goalkeeper')
+
+    if normalized_type == 'Special':
+        return Q(kit__kit_type__iexact='Special') | Q(kit__kit_type__istartswith='Special')
+
+    return Q(kit__kit_type__iexact=normalized_type)
 
 
 def get_comment_like_annotation(user):
@@ -316,6 +709,102 @@ class UserSearchAPI(generics.ListAPIView):
         ).annotate(
             kits_count=Count('collection') # Count kits for each user
         ).order_by('-kits_count')[:10] # Limit to top 10 results
+
+
+class KitSearchSuggestionsAPI(generics.ListAPIView):
+    serializer_class = KitSearchSuggestionSerializer
+    permission_classes = [permissions.AllowAny]
+    pagination_class = None
+    DEFAULT_LIMIT = 20
+    MAX_LIMIT = 50
+    MIN_QUERY_LENGTH = 2
+
+    def get_limit_value(self):
+        limit = self.request.query_params.get('limit', self.DEFAULT_LIMIT)
+
+        try:
+            limit_value = int(limit)
+        except (TypeError, ValueError):
+            limit_value = self.DEFAULT_LIMIT
+
+        return max(1, min(limit_value, self.MAX_LIMIT))
+
+    def get_matching_teams(self, parsed_query):
+        team_text = parsed_query['team_text']
+        if not team_text:
+            return []
+
+        return list(
+            Team.objects.filter(
+                is_verified=True,
+                name__icontains=team_text,
+            )
+        )
+
+    def get_matching_seasons(self, parsed_query):
+        generated_seasons = get_generated_seasons()
+
+        if parsed_query['exact_season']:
+            return [
+                season for season in generated_seasons
+                if season_matches_exact(season, parsed_query['exact_season'])
+            ]
+
+        if parsed_query['season_prefix']:
+            return [
+                season for season in generated_seasons
+                if season_matches_prefix(season, parsed_query['season_prefix'])
+            ]
+
+        if parsed_query['year_fragment']:
+            return [
+                season for season in generated_seasons
+                if season_matches_year_fragment(season, parsed_query['year_fragment'])
+            ]
+
+        return generated_seasons
+
+    def get_matching_kit_types(self, parsed_query):
+        if parsed_query['kit_types']:
+            return parsed_query['kit_types']
+        return SUPPORTED_KIT_TYPES
+
+    def get_queryset(self):
+        parsed_query = parse_kit_search_query(self.request.query_params.get('q', ''))
+        normalized_query = parsed_query['normalized_query']
+
+        if len(normalized_query) < self.MIN_QUERY_LENGTH:
+            return []
+
+        matching_teams = self.get_matching_teams(parsed_query)
+        if not matching_teams:
+            return []
+
+        matching_seasons = self.get_matching_seasons(parsed_query)
+        if not matching_seasons:
+            return []
+
+        matching_kit_types = self.get_matching_kit_types(parsed_query)
+
+        suggestions = [
+            get_generated_suggestion(team, season, kit_type)
+            for team in matching_teams
+            for season in matching_seasons
+            for kit_type in matching_kit_types
+        ]
+
+        ranked_suggestions = sorted(
+            suggestions,
+            key=lambda suggestion: (
+                get_team_match_rank(suggestion['team_name'], parsed_query['team_text']),
+                get_generated_season_match_rank(suggestion['season'], parsed_query),
+                -get_season_sort_year(suggestion['season']),
+                get_kit_type_order(suggestion['kit_type']),
+                suggestion['team_name'].lower(),
+            ),
+        )
+
+        return ranked_suggestions[:self.get_limit_value()]
 
 
 class ConversationListAPI(generics.ListAPIView):
@@ -697,7 +1186,7 @@ class KitVariantsAPI(generics.ListAPIView):
         if season:
             queryset = queryset.filter(kit__season=season)
         if kit_type:
-            queryset = queryset.filter(kit__kit_type=kit_type)
+            queryset = queryset.filter(get_history_type_filter(kit_type))
 
         return queryset\
             .select_related('kit', 'kit__team', 'user')\

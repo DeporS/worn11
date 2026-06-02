@@ -271,6 +271,15 @@ class KitSerializer(serializers.ModelSerializer):
         model = Kit
         fields = ['id', 'team', 'season', 'kit_type', 'estimated_price', 'main_image']
 
+
+class KitSearchSuggestionSerializer(serializers.Serializer):
+    team_id = serializers.IntegerField(read_only=True)
+    team_name = serializers.CharField(read_only=True)
+    season = serializers.CharField(read_only=True)
+    kit_type = serializers.CharField(read_only=True)
+    label = serializers.CharField(read_only=True)
+    url = serializers.CharField(read_only=True)
+
 # UserKit Image Serializer
 class UserKitImageSerializer(serializers.ModelSerializer):
     class Meta:

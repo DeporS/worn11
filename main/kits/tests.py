@@ -1,5 +1,6 @@
 from decimal import Decimal
 from datetime import timedelta
+from urllib.parse import urlencode
 
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
@@ -1250,3 +1251,555 @@ class MessagingAPITests(APITestCase):
         response = self.client.get(reverse("conversation-unread-count"))
 
         self.assertEqual(response.status_code, 401)
+
+
+class KitSearchSuggestionsAPITests(APITestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.url = reverse("kit-search-suggestions")
+        self.arsenal = Team.objects.create(name="Arsenal F.C.", is_verified=True)
+        self.barcelona = Team.objects.create(name="Barcelona", is_verified=True)
+        self.unverified_team = Team.objects.create(name="Arsenal Legends", is_verified=False)
+
+        self.create_kit(self.arsenal, "2018/2019", "Home")
+        self.create_kit(self.arsenal, "2017/2018", "Away")
+        self.create_kit(self.arsenal, "2011/2012", "Home")
+        self.create_kit(self.arsenal, "2010/2011", "Away")
+        self.create_kit(self.barcelona, "2011/2012", "Home")
+        self.create_kit(self.unverified_team, "2018/2019", "Home")
+
+    def create_kit(self, team, season, kit_type):
+        return Kit.objects.create(
+            team=team,
+            season=season,
+            kit_type=kit_type,
+            estimated_price=Decimal("100.00"),
+        )
+
+    def test_team_name_search_returns_kit_suggestions(self):
+        response = self.client.get(self.url, {"q": "Arsenal"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertGreater(len(response.data), 0)
+        self.assertTrue(all(item["team_name"] == "Arsenal F.C." for item in response.data))
+
+    def test_single_digit_year_prefix_returns_recent_generated_seasons(self):
+        current_year = timezone.now().year
+        response = self.client.get(self.url, {"q": "Arsenal 2", "limit": "4"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["label"] for item in response.data],
+            [
+                f"Arsenal F.C. {current_year}/{current_year + 1} Home",
+                f"Arsenal F.C. {current_year}/{current_year + 1} Away",
+                f"Arsenal F.C. {current_year}/{current_year + 1} Third",
+                f"Arsenal F.C. {current_year}/{current_year + 1} Goalkeeper",
+            ],
+        )
+
+    def test_two_digit_year_prefix_returns_generated_20xx_seasons(self):
+        current_year = timezone.now().year
+        response = self.client.get(self.url, {"q": "Arsenal 20", "limit": "2"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["season"] for item in response.data],
+            [
+                f"{current_year}/{current_year + 1}",
+                f"{current_year}/{current_year + 1}",
+            ],
+        )
+
+    def test_two_digit_year_shorthand_returns_2021_related_seasons(self):
+        response = self.client.get(self.url, {"q": "Arsenal 21", "limit": "10"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["label"] for item in response.data[:10]],
+            [
+                "Arsenal F.C. 2021/2022 Home",
+                "Arsenal F.C. 2021/2022 Away",
+                "Arsenal F.C. 2021/2022 Third",
+                "Arsenal F.C. 2021/2022 Goalkeeper",
+                "Arsenal F.C. 2021/2022 Fourth",
+                "Arsenal F.C. 2021/2022 Cup",
+                "Arsenal F.C. 2021/2022 Training",
+                "Arsenal F.C. 2021/2022 Special",
+                "Arsenal F.C. 2020/2021 Home",
+                "Arsenal F.C. 2020/2021 Away",
+            ],
+        )
+
+    def test_two_digit_year_shorthand_with_home_narrows_results(self):
+        response = self.client.get(self.url, {"q": "Arsenal 21 home"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["label"] for item in response.data],
+            [
+                "Arsenal F.C. 2021/2022 Home",
+                "Arsenal F.C. 2020/2021 Home",
+            ],
+        )
+
+    def test_two_digit_year_shorthand_with_goalkeeper_alias_narrows_results(self):
+        response = self.client.get(self.url, {"q": "Arsenal 21 gk"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["label"] for item in response.data],
+            [
+                "Arsenal F.C. 2021/2022 Goalkeeper",
+                "Arsenal F.C. 2020/2021 Goalkeeper",
+            ],
+        )
+
+    def test_three_digit_year_prefix_matches_202x_seasons(self):
+        response = self.client.get(self.url, {"q": "Arsenal 202", "limit": "3"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["label"] for item in response.data],
+            [
+                "Arsenal F.C. 2026/2027 Home",
+                "Arsenal F.C. 2026/2027 Away",
+                "Arsenal F.C. 2026/2027 Third",
+            ],
+        )
+
+    def test_single_year_search_returns_seasons_containing_that_year(self):
+        response = self.client.get(self.url, {"q": "Arsenal 2011"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["label"] for item in response.data[:8]],
+            [
+                "Arsenal F.C. 2011/2012 Home",
+                "Arsenal F.C. 2011/2012 Away",
+                "Arsenal F.C. 2011/2012 Third",
+                "Arsenal F.C. 2011/2012 Goalkeeper",
+                "Arsenal F.C. 2011/2012 Fourth",
+                "Arsenal F.C. 2011/2012 Cup",
+                "Arsenal F.C. 2011/2012 Training",
+                "Arsenal F.C. 2011/2012 Special",
+            ],
+        )
+
+    def test_full_year_query_returns_both_matching_seasons(self):
+        response = self.client.get(self.url, {"q": "Arsenal 2020", "limit": "16"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["label"] for item in response.data[:10]],
+            [
+                "Arsenal F.C. 2020/2021 Home",
+                "Arsenal F.C. 2020/2021 Away",
+                "Arsenal F.C. 2020/2021 Third",
+                "Arsenal F.C. 2020/2021 Goalkeeper",
+                "Arsenal F.C. 2020/2021 Fourth",
+                "Arsenal F.C. 2020/2021 Cup",
+                "Arsenal F.C. 2020/2021 Training",
+                "Arsenal F.C. 2020/2021 Special",
+                "Arsenal F.C. 2019/2020 Home",
+                "Arsenal F.C. 2019/2020 Away",
+            ],
+        )
+
+    def test_historical_year_returns_1960_related_seasons(self):
+        response = self.client.get(self.url, {"q": "Arsenal 1960", "limit": "10"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["label"] for item in response.data[:10]],
+            [
+                "Arsenal F.C. 1960/1961 Home",
+                "Arsenal F.C. 1960/1961 Away",
+                "Arsenal F.C. 1960/1961 Third",
+                "Arsenal F.C. 1960/1961 Goalkeeper",
+                "Arsenal F.C. 1960/1961 Fourth",
+                "Arsenal F.C. 1960/1961 Cup",
+                "Arsenal F.C. 1960/1961 Training",
+                "Arsenal F.C. 1960/1961 Special",
+                "Arsenal F.C. 1959/1960 Home",
+                "Arsenal F.C. 1959/1960 Away",
+            ],
+        )
+
+    def test_historical_year_with_home_narrows_results(self):
+        response = self.client.get(self.url, {"q": "Arsenal 1960 home"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["label"] for item in response.data],
+            [
+                "Arsenal F.C. 1960/1961 Home",
+                "Arsenal F.C. 1959/1960 Home",
+            ],
+        )
+
+    def test_minimum_supported_generated_year_is_1940(self):
+        response = self.client.get(self.url, {"q": "Arsenal 1940", "limit": "10"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Arsenal F.C. 1940/1941 Home", [item["label"] for item in response.data])
+        self.assertTrue(all(not item["season"].startswith("1939/") for item in response.data))
+
+    def test_partial_slash_season_prefix_returns_only_starting_season(self):
+        response = self.client.get(self.url, {"q": "Arsenal 2020/", "limit": "8"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["label"] for item in response.data],
+            [
+                "Arsenal F.C. 2020/2021 Home",
+                "Arsenal F.C. 2020/2021 Away",
+                "Arsenal F.C. 2020/2021 Third",
+                "Arsenal F.C. 2020/2021 Goalkeeper",
+                "Arsenal F.C. 2020/2021 Fourth",
+                "Arsenal F.C. 2020/2021 Cup",
+                "Arsenal F.C. 2020/2021 Training",
+                "Arsenal F.C. 2020/2021 Special",
+            ],
+        )
+        self.assertNotIn("Arsenal F.C. 2019/2020 Home", [item["label"] for item in response.data])
+
+    def test_partial_slash_season_prefix_with_second_year_fragment_returns_matching_season(self):
+        for query in ["Arsenal 2020/2", "Arsenal 2020/20", "Arsenal 2020/202", "Arsenal 2020/2021"]:
+            with self.subTest(query=query):
+                response = self.client.get(self.url, {"q": query, "limit": "2"})
+
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(
+                    [item["label"] for item in response.data],
+                    [
+                        "Arsenal F.C. 2020/2021 Home",
+                        "Arsenal F.C. 2020/2021 Away",
+                    ],
+                )
+
+    def test_space_separated_full_season_query_returns_exact_season(self):
+        response = self.client.get(self.url, {"q": "Arsenal 2020 2021", "limit": "8"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["label"] for item in response.data],
+            [
+                "Arsenal F.C. 2020/2021 Home",
+                "Arsenal F.C. 2020/2021 Away",
+                "Arsenal F.C. 2020/2021 Third",
+                "Arsenal F.C. 2020/2021 Goalkeeper",
+                "Arsenal F.C. 2020/2021 Fourth",
+                "Arsenal F.C. 2020/2021 Cup",
+                "Arsenal F.C. 2020/2021 Training",
+                "Arsenal F.C. 2020/2021 Special",
+            ],
+        )
+
+    def test_space_separated_short_season_query_normalizes_to_exact_season(self):
+        response = self.client.get(self.url, {"q": "Arsenal 20 21", "limit": "2"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["label"] for item in response.data],
+            [
+                "Arsenal F.C. 2020/2021 Home",
+                "Arsenal F.C. 2020/2021 Away",
+            ],
+        )
+
+    def test_two_digit_space_season_pair_normalizes_to_1991_1992(self):
+        response = self.client.get(self.url, {"q": "Arsenal 91 92", "limit": "8"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["label"] for item in response.data],
+            [
+                "Arsenal F.C. 1991/1992 Home",
+                "Arsenal F.C. 1991/1992 Away",
+                "Arsenal F.C. 1991/1992 Third",
+                "Arsenal F.C. 1991/1992 Goalkeeper",
+                "Arsenal F.C. 1991/1992 Fourth",
+                "Arsenal F.C. 1991/1992 Cup",
+                "Arsenal F.C. 1991/1992 Training",
+                "Arsenal F.C. 1991/1992 Special",
+            ],
+        )
+
+    def test_two_digit_slash_season_pair_normalizes_to_1991_1992(self):
+        response = self.client.get(self.url, {"q": "Arsenal 91/92", "limit": "2"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["label"] for item in response.data],
+            [
+                "Arsenal F.C. 1991/1992 Home",
+                "Arsenal F.C. 1991/1992 Away",
+            ],
+        )
+
+    def test_two_digit_space_season_pair_with_type_returns_only_matching_type(self):
+        response = self.client.get(self.url, {"q": "Arsenal 91 92 home"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["label"] for item in response.data],
+            ["Arsenal F.C. 1991/1992 Home"],
+        )
+
+    def test_minimum_two_digit_slash_season_pair_normalizes_to_1940_1941(self):
+        response = self.client.get(self.url, {"q": "Arsenal 40/41", "limit": "8"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["label"] for item in response.data],
+            [
+                "Arsenal F.C. 1940/1941 Home",
+                "Arsenal F.C. 1940/1941 Away",
+                "Arsenal F.C. 1940/1941 Third",
+                "Arsenal F.C. 1940/1941 Goalkeeper",
+                "Arsenal F.C. 1940/1941 Fourth",
+                "Arsenal F.C. 1940/1941 Cup",
+                "Arsenal F.C. 1940/1941 Training",
+                "Arsenal F.C. 1940/1941 Special",
+            ],
+        )
+
+    def test_minimum_two_digit_space_season_pair_normalizes_to_1940_1941(self):
+        response = self.client.get(self.url, {"q": "Arsenal 40 41", "limit": "2"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["label"] for item in response.data],
+            [
+                "Arsenal F.C. 1940/1941 Home",
+                "Arsenal F.C. 1940/1941 Away",
+            ],
+        )
+
+    def test_minimum_two_digit_slash_season_pair_with_type_returns_only_matching_type(self):
+        response = self.client.get(self.url, {"q": "Arsenal 40/41 away"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["label"] for item in response.data],
+            ["Arsenal F.C. 1940/1941 Away"],
+        )
+
+    def test_full_year_with_partial_second_year_space_prefix_returns_1940_1941(self):
+        for query in ["Arsenal 1940 1", "Arsenal 1940 19", "Arsenal 1940 194", "Arsenal 1940 1941"]:
+            with self.subTest(query=query):
+                response = self.client.get(self.url, {"q": query, "limit": "2"})
+
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(
+                    [item["label"] for item in response.data],
+                    [
+                        "Arsenal F.C. 1940/1941 Home",
+                        "Arsenal F.C. 1940/1941 Away",
+                    ],
+                )
+
+    def test_full_year_with_partial_second_year_space_prefix_and_type_returns_only_matching_type(self):
+        response = self.client.get(self.url, {"q": "Arsenal 1940 1 gk"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["label"] for item in response.data],
+            ["Arsenal F.C. 1940/1941 Goalkeeper"],
+        )
+
+    def test_single_year_and_type_query_narrows_to_home(self):
+        response = self.client.get(self.url, {"q": "Arsenal 2020 home"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["label"] for item in response.data],
+            [
+                "Arsenal F.C. 2020/2021 Home",
+                "Arsenal F.C. 2019/2020 Home",
+            ],
+        )
+
+    def test_space_separated_exact_season_and_type_query_returns_only_that_type(self):
+        response = self.client.get(self.url, {"q": "Arsenal 2020 2021 home"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["label"] for item in response.data],
+            ["Arsenal F.C. 2020/2021 Home"],
+        )
+
+    def test_space_separated_short_exact_season_and_type_query_returns_only_that_type(self):
+        response = self.client.get(self.url, {"q": "Arsenal 20 21 away"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["label"] for item in response.data],
+            ["Arsenal F.C. 2020/2021 Away"],
+        )
+
+    def test_single_year_and_goalkeeper_query_uses_full_label(self):
+        response = self.client.get(self.url, {"q": "Arsenal 2020 goalkeeper"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["label"] for item in response.data],
+            [
+                "Arsenal F.C. 2020/2021 Goalkeeper",
+                "Arsenal F.C. 2019/2020 Goalkeeper",
+            ],
+        )
+
+    def test_single_year_and_gk_query_uses_goalkeeper_alias(self):
+        response = self.client.get(self.url, {"q": "Arsenal 2020 gk"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["kit_type"] for item in response.data],
+            ["Goalkeeper", "Goalkeeper"],
+        )
+
+    def test_partial_home_prefix_narrows_immediately(self):
+        for query in ["Arsenal 2020 h", "Arsenal 2020 ho", "Arsenal 2020 hom", "Arsenal 2020 home"]:
+            with self.subTest(query=query):
+                response = self.client.get(self.url, {"q": query})
+
+                self.assertEqual(response.status_code, 200)
+                self.assertTrue(all(item["kit_type"] == "Home" for item in response.data))
+
+    def test_partial_away_prefix_narrows_immediately(self):
+        for query in ["Arsenal 2020 a", "Arsenal 2020 aw"]:
+            with self.subTest(query=query):
+                response = self.client.get(self.url, {"q": query})
+
+                self.assertEqual(response.status_code, 200)
+                self.assertTrue(all(item["kit_type"] == "Away" for item in response.data))
+
+    def test_partial_goalkeeper_prefix_narrows_immediately(self):
+        for query in ["Arsenal 2020 g", "Arsenal 2020 gk", "Arsenal 2020 goal", "Arsenal 2020 goalkeeper"]:
+            with self.subTest(query=query):
+                response = self.client.get(self.url, {"q": query})
+
+                self.assertEqual(response.status_code, 200)
+                self.assertTrue(all(item["kit_type"] == "Goalkeeper" for item in response.data))
+
+    def test_ambiguous_t_prefix_returns_third_then_training(self):
+        response = self.client.get(self.url, {"q": "Arsenal 2020 t", "limit": "4"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["label"] for item in response.data],
+            [
+                "Arsenal F.C. 2020/2021 Third",
+                "Arsenal F.C. 2020/2021 Training",
+                "Arsenal F.C. 2019/2020 Third",
+                "Arsenal F.C. 2019/2020 Training",
+            ],
+        )
+
+    def test_training_prefix_narrows_to_training(self):
+        response = self.client.get(self.url, {"q": "Arsenal 2020 tr"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(all(item["kit_type"] == "Training" for item in response.data))
+
+    def test_single_year_and_type_query_matches_both_sides_of_the_season(self):
+        response = self.client.get(self.url, {"q": "Arsenal 2011 home"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["label"] for item in response.data],
+            [
+                "Arsenal F.C. 2011/2012 Home",
+                "Arsenal F.C. 2010/2011 Home",
+            ],
+        )
+
+    def test_query_without_type_returns_all_supported_types(self):
+        response = self.client.get(self.url, {"q": "Arsenal 2018", "limit": "8"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["kit_type"] for item in response.data],
+            [
+                "Home",
+                "Away",
+                "Third",
+                "Goalkeeper",
+                "Fourth",
+                "Cup",
+                "Training",
+                "Special",
+            ],
+        )
+
+    def test_suggestions_are_generated_even_without_matching_catalog_row(self):
+        response = self.client.get(self.url, {"q": "Arsenal 2020 training"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["label"] for item in response.data],
+            [
+                "Arsenal F.C. 2020/2021 Training",
+                "Arsenal F.C. 2019/2020 Training",
+            ],
+        )
+
+    def test_exact_season_and_type_query_filters_correctly(self):
+        response = self.client.get(self.url, {"q": "Arsenal 2018/2019 away"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data,
+            [
+                {
+                    "team_id": self.arsenal.id,
+                    "team_name": "Arsenal F.C.",
+                    "season": "2018/2019",
+                    "kit_type": "Away",
+                    "label": "Arsenal F.C. 2018/2019 Away",
+                    "url": f"/history/team/{self.arsenal.id}/variants?season=2018%2F2019&type=Away",
+                }
+            ],
+        )
+
+    def test_type_matching_is_case_insensitive(self):
+        response = self.client.get(self.url, {"q": "Arsenal 2018 HOME"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(all(item["kit_type"] == "Home" for item in response.data))
+
+    def test_empty_and_short_queries_return_safe_empty_response(self):
+        empty_response = self.client.get(self.url, {"q": ""})
+        short_response = self.client.get(self.url, {"q": "a"})
+
+        self.assertEqual(empty_response.status_code, 200)
+        self.assertEqual(short_response.status_code, 200)
+        self.assertEqual(empty_response.data, [])
+        self.assertEqual(short_response.data, [])
+
+    def test_default_limit_and_max_limit_cap_work(self):
+        default_response = self.client.get(self.url, {"q": "Arsenal"})
+        capped_response = self.client.get(self.url, {"q": "Arsenal", "limit": "50"})
+
+        self.assertEqual(default_response.status_code, 200)
+        self.assertEqual(capped_response.status_code, 200)
+        self.assertEqual(len(default_response.data), 20)
+        self.assertEqual(len(capped_response.data), 50)
+        self.assertLessEqual(len(capped_response.data), 50)
+
+    def test_unknown_team_returns_empty_list(self):
+        response = self.client.get(self.url, {"q": "Unknown FC 2020"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [])
+
+    def test_response_url_encodes_season_and_type(self):
+        response = self.client.get(self.url, {"q": "Arsenal 2020/2021 goalkeeper"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data[0]["url"],
+            f"/history/team/{self.arsenal.id}/variants?{urlencode({'season': '2020/2021', 'type': 'Goalkeeper'})}",
+        )
