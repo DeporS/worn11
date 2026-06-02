@@ -204,10 +204,27 @@ const CollectionPage = () => {
 									className="list-group-item list-group-item-action d-flex align-items-center gap-3 py-3"
 									onClick={() => navigate(suggestion.url)}
 								>
-									<span className="text-muted">
-										<i className="bi bi-search"></i>
-									</span>
-									<span className="fw-medium">{suggestion.label}</span>
+									<div
+										className="flex-shrink-0 rounded-3 overflow-hidden d-flex align-items-center justify-content-center bg-light border"
+										style={{ width: "52px", height: "52px" }}
+									>
+										{suggestion.preview_image ? (
+											<img
+												src={suggestion.preview_image}
+												alt={suggestion.label}
+												style={{
+													width: "100%",
+													height: "100%",
+													objectFit: "cover",
+												}}
+											/>
+										) : (
+											<i className="bi bi-search text-muted"></i>
+										)}
+									</div>
+									<div className="min-w-0 text-start">
+										<div className="fw-medium text-truncate">{suggestion.label}</div>
+									</div>
 								</button>
 							))}
 						</div>

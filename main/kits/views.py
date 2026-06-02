@@ -16,7 +16,7 @@ from django.utils import timezone
 from urllib.parse import urlencode
 import re
 
-from .models import League, UserKit, Kit, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country, Follow, KitComment, KitCommentLike, KitReport, Conversation, Message, build_team_slug
+from .models import League, UserKit, UserKitImage, Kit, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country, Follow, KitComment, KitCommentLike, KitReport, Conversation, Message, build_team_slug
 from .serializers import LeagueSerializer, UserKitSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer, CountrySerializer, KitCommentSerializer, KitCommentWriteSerializer, KitReportSerializer, ConversationListSerializer, ConversationDetailSerializer, ConversationStartSerializer, MessageSerializer, MessageWriteSerializer, KitSearchSuggestionSerializer
 
 
@@ -382,6 +382,8 @@ def get_generated_suggestion(team, season, kit_type):
         'kit_type': kit_type,
         'label': f"{team.name} {season} {kit_type}",
         'url': f"/history/team/{team_slug}/variants?{query_string}",
+        'preview_image': None,
+        'has_uploads': False,
     }
 
 
@@ -411,6 +413,30 @@ def get_history_type_filter(kit_type):
         return Q(kit__kit_type__iexact='Special') | Q(kit__kit_type__istartswith='Special')
 
     return Q(kit__kit_type__iexact=normalized_type)
+
+
+def get_upload_preview_type_filter(kit_type):
+    normalized_type = normalize_search_query(kit_type)
+
+    if normalized_type == 'Goalkeeper':
+        return Q(user_kit__kit__kit_type__iexact='GK') | Q(user_kit__kit__kit_type__iexact='Goalkeeper')
+
+    if normalized_type == 'Special':
+        return Q(user_kit__kit__kit_type__iexact='Special') | Q(user_kit__kit__kit_type__istartswith='Special')
+
+    return Q(user_kit__kit__kit_type__iexact=normalized_type)
+
+
+def normalize_stored_kit_type(kit_type):
+    normalized_type = normalize_search_query(kit_type)
+
+    if normalized_type in {'GK', 'Goalkeeper'}:
+        return 'Goalkeeper'
+
+    if normalized_type.lower().startswith('special'):
+        return 'Special'
+
+    return normalized_type
 
 
 def get_team_by_identifier(team_identifier):
@@ -798,6 +824,53 @@ class KitSearchSuggestionsAPI(generics.ListAPIView):
             return parsed_query['kit_types']
         return SUPPORTED_KIT_TYPES
 
+    def get_preview_map(self, suggestions):
+        if not suggestions:
+            return {}
+
+        team_ids = {suggestion['team_id'] for suggestion in suggestions}
+        seasons = {suggestion['season'] for suggestion in suggestions}
+        suggested_types = {suggestion['kit_type'] for suggestion in suggestions}
+
+        type_filter = Q()
+        for suggested_type in suggested_types:
+            type_filter |= get_upload_preview_type_filter(suggested_type)
+
+        preview_images = UserKitImage.objects.filter(
+            user_kit__kit__team_id__in=team_ids,
+            user_kit__kit__season__in=seasons,
+        ).filter(
+            type_filter
+        ).select_related(
+            'user_kit__kit',
+            'user_kit__kit__team',
+        ).order_by(
+            'user_kit__kit__team_id',
+            'user_kit__kit__season',
+            'user_kit__kit__kit_type',
+            'order',
+            'created_at',
+            'id',
+        )
+
+        preview_map = {}
+        for preview_image in preview_images:
+            preview_key = (
+                preview_image.user_kit.kit.team_id,
+                preview_image.user_kit.kit.season,
+                normalize_stored_kit_type(preview_image.user_kit.kit.kit_type),
+            )
+            if preview_key in preview_map:
+                continue
+
+            preview_url = preview_image.image.url
+            if self.request is not None:
+                preview_url = self.request.build_absolute_uri(preview_url)
+
+            preview_map[preview_key] = preview_url
+
+        return preview_map
+
     def get_queryset(self):
         parsed_query = parse_kit_search_query(self.request.query_params.get('q', ''))
         normalized_query = parsed_query['normalized_query']
@@ -833,7 +906,20 @@ class KitSearchSuggestionsAPI(generics.ListAPIView):
             ),
         )
 
-        return ranked_suggestions[:self.get_limit_value()]
+        limited_suggestions = ranked_suggestions[:self.get_limit_value()]
+        preview_map = self.get_preview_map(limited_suggestions)
+
+        for suggestion in limited_suggestions:
+            preview_key = (
+                suggestion['team_id'],
+                suggestion['season'],
+                suggestion['kit_type'],
+            )
+            preview_image = preview_map.get(preview_key)
+            suggestion['preview_image'] = preview_image
+            suggestion['has_uploads'] = preview_image is not None
+
+        return limited_suggestions
 
 
 class ConversationListAPI(generics.ListAPIView):

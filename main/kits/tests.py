@@ -4,6 +4,7 @@ from urllib.parse import urlencode
 
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient, APITestCase
@@ -1277,6 +1278,22 @@ class KitSearchSuggestionsAPITests(APITestCase):
             estimated_price=Decimal("100.00"),
         )
 
+    def create_userkit_with_image(self, kit, image_name="preview.jpg", in_the_collection=True):
+        user_kit = UserKit.objects.create(
+            user=self.user,
+            kit=kit,
+            shirt_technology="REPLICA",
+            condition="VERY_GOOD",
+            size="L",
+            in_the_collection=in_the_collection,
+        )
+        UserKitImage.objects.create(
+            user_kit=user_kit,
+            image=SimpleUploadedFile(image_name, b"preview-bytes", content_type="image/jpeg"),
+            order=0,
+        )
+        return user_kit
+
     def test_team_name_search_returns_kit_suggestions(self):
         response = self.client.get(self.url, {"q": "Arsenal"})
 
@@ -1747,6 +1764,78 @@ class KitSearchSuggestionsAPITests(APITestCase):
             ],
         )
 
+    def test_away_suggestion_includes_preview_image_when_matching_upload_exists(self):
+        away_kit = self.create_kit(self.arsenal, "2018/2019", "Away")
+        self.create_userkit_with_image(away_kit)
+
+        response = self.client.get(self.url, {"q": "Arsenal 2018 away"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data[0]["kit_type"], "Away")
+        self.assertTrue(response.data[0]["has_uploads"])
+        self.assertIsNotNone(response.data[0]["preview_image"])
+        self.assertIn("/media/user_kits/", response.data[0]["preview_image"])
+
+    def test_home_suggestion_includes_preview_image_when_matching_upload_exists(self):
+        home_kit = self.create_kit(self.arsenal, "2018/2019", "Home")
+        self.create_userkit_with_image(home_kit, image_name="home.jpg")
+
+        response = self.client.get(self.url, {"q": "Arsenal 2018 home"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data[0]["kit_type"], "Home")
+        self.assertTrue(response.data[0]["has_uploads"])
+        self.assertIn("home", response.data[0]["preview_image"])
+
+    def test_suggestion_has_null_preview_when_no_matching_upload_exists(self):
+        response = self.client.get(self.url, {"q": "Arsenal 2025 cup"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data[0]["has_uploads"])
+        self.assertIsNone(response.data[0]["preview_image"])
+
+    def test_generated_suggestion_still_appears_without_upload(self):
+        response = self.client.get(self.url, {"q": "Arsenal 2025 cup"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data[0]["label"], "Arsenal F.C. 2025/2026 Cup")
+
+    def test_preview_matching_respects_team_season_and_type(self):
+        home_kit = self.create_kit(self.arsenal, "2018/2019", "Home")
+        self.create_userkit_with_image(home_kit)
+
+        response = self.client.get(self.url, {"q": "Arsenal 2018 away"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data[0]["has_uploads"])
+        self.assertIsNone(response.data[0]["preview_image"])
+
+    def test_goalkeeper_preview_matching_supports_gk_compatibility(self):
+        goalkeeper_kit = self.create_kit(self.arsenal, "2020/2021", "GK")
+        self.create_userkit_with_image(goalkeeper_kit, image_name="goalkeeper.jpg")
+
+        response = self.client.get(self.url, {"q": "Arsenal 2020 goalkeeper"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data[0]["kit_type"], "Goalkeeper")
+        self.assertTrue(response.data[0]["has_uploads"])
+        self.assertIn("goalkeeper", response.data[0]["preview_image"])
+
+    def test_preview_lookup_matches_variants_visibility_for_non_collection_uploads(self):
+        away_kit = self.create_kit(self.arsenal, "2018/2019", "Away")
+        self.create_userkit_with_image(
+            away_kit,
+            image_name="away-sold.jpg",
+            in_the_collection=False,
+        )
+
+        response = self.client.get(self.url, {"q": "Arsenal 2018 away"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data[0]["kit_type"], "Away")
+        self.assertTrue(response.data[0]["has_uploads"])
+        self.assertIn("away-sold", response.data[0]["preview_image"])
+
     def test_exact_season_and_type_query_filters_correctly(self):
         response = self.client.get(self.url, {"q": "Arsenal 2018/2019 away"})
 
@@ -1762,6 +1851,8 @@ class KitSearchSuggestionsAPITests(APITestCase):
                     "kit_type": "Away",
                     "label": "Arsenal F.C. 2018/2019 Away",
                     "url": "/history/team/arsenal-fc/variants?season=2018%2F2019&type=Away",
+                    "preview_image": None,
+                    "has_uploads": False,
                 }
             ],
         )

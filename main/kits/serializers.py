@@ -285,6 +285,8 @@ class KitSearchSuggestionSerializer(serializers.Serializer):
     kit_type = serializers.CharField(read_only=True)
     label = serializers.CharField(read_only=True)
     url = serializers.CharField(read_only=True)
+    preview_image = serializers.CharField(read_only=True, allow_null=True)
+    has_uploads = serializers.BooleanField(read_only=True)
 
 # UserKit Image Serializer
 class UserKitImageSerializer(serializers.ModelSerializer):
