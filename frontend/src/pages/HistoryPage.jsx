@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigationType } from "react-router-dom";
 import api from "../services/api";
 
@@ -11,6 +12,7 @@ import KitsGrid from "../components/history/KitsGrid";
 import "../styles/history.css";
 
 const HistoryPage = ({ user }) => {
+	const { t } = useTranslation();
 	const navType = useNavigationType();
 	const [loading, setLoading] = useState(false);
 
@@ -128,7 +130,7 @@ const HistoryPage = ({ user }) => {
 								}
 								onClick={() => handleReset(1)}
 							>
-								Leagues
+								{t("history.leagues")}
 							</span>
 						</li>
 						{step > 1 && selectedLeague && (

@@ -1,12 +1,15 @@
 import React from 'react';
+import { useTranslation } from "react-i18next";
+import { localizeCountryName } from "../../utils/localizedCountries";
 
 const LeaguesGrid = ({ leagues, loading, onSelectLeague }) => {
+    const { t } = useTranslation();
     if (loading) return <div className="text-center w-100 py-5"><div className="spinner-border text-primary"></div></div>;
-    if (leagues.length === 0) return <div className="text-center text-muted">No leagues found.</div>;
+    if (leagues.length === 0) return <div className="text-center text-muted">{t("history.noLeaguesFound")}</div>;
 
     // Grouping logic (moved here to keep the main file clean)
     const groupedLeagues = leagues.reduce((acc, league) => {
-        const countryName = league.country?.name || "International / Other";
+        const countryName = league.country?.name || t("history.internationalOther");
         if (!acc[countryName]) {
             acc[countryName] = { leagues: [], flag: league.country?.flag };
         }
@@ -20,16 +23,17 @@ const LeaguesGrid = ({ leagues, loading, onSelectLeague }) => {
         <div>
             {sortedCountries.map((countryName) => {
                 const group = groupedLeagues[countryName];
+                const displayCountryName = localizeCountryName(countryName, t);
                 return (
                     <div key={countryName} className="mb-5">
                         {/* Country Header */}
                         <div className="d-flex align-items-center gap-3 mb-3 border-bottom pb-2">
                             {group.flag ? (
-                                <img src={group.flag} alt={countryName} className="rounded-circle shadow-sm border country-flag-icon" />
+                                <img src={group.flag} alt={displayCountryName} className="rounded-circle shadow-sm border country-flag-icon" />
                             ) : (
                                 <div className="bg-light rounded-circle d-flex align-items-center justify-content-center border country-flag-placeholder">🌍</div>
                             )}
-                            <h2 className="fw-bold m-0 text-dark">{countryName}</h2>
+                            <h2 className="fw-bold m-0 text-dark">{displayCountryName}</h2>
                         </div>
 
                         {/* Leagues Grid */}

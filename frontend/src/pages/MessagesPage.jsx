@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import Swal from "sweetalert2";
 
@@ -12,6 +13,7 @@ import {
 import "../styles/messages.css";
 
 const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
+	const { t } = useTranslation();
 	const MESSAGES_PAGE_SIZE = 30;
 	const { conversationId } = useParams();
 	const navigate = useNavigate();
@@ -136,14 +138,14 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 				setConversations(Array.isArray(data) ? data : []);
 			} catch (error) {
 				console.error("Failed to load conversations", error);
-				setPageError("Could not load conversations.");
+				setPageError(t("messages.loadError"));
 			} finally {
 				setLoadingConversations(false);
 			}
 		};
 
 		loadConversations();
-	}, []);
+	}, [t]);
 
 	useEffect(() => {
 		if (!conversationId) {
@@ -191,14 +193,14 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 				}
 			} catch (error) {
 				console.error("Failed to load conversation", error);
-				setPageError("Could not load this conversation.");
+				setPageError(t("messages.conversationError"));
 			} finally {
 				setLoadingMessages(false);
 			}
 		};
 
 		loadConversation();
-	}, [conversationId]);
+	}, [conversationId, t]);
 
 	const refreshConversations = async () => {
 		try {
@@ -230,8 +232,8 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 		} catch (error) {
 			console.error("Failed to send message", error);
 			const message =
-				error?.response?.data?.body?.[0] || "Could not send your message.";
-			Swal.fire("Error", message, "error");
+				error?.response?.data?.body?.[0] || t("messages.sendError");
+			Swal.fire(t("common.error"), message, "error");
 		} finally {
 			setSending(false);
 		}
@@ -270,7 +272,7 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 		} catch (error) {
 			prependScrollStateRef.current = null;
 			console.error("Failed to load older messages", error);
-			Swal.fire("Error", "Could not load older messages.", "error");
+			Swal.fire(t("common.error"), t("messages.olderError"), "error");
 		} finally {
 			setLoadingOlderMessages(false);
 		}
@@ -322,12 +324,18 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 		const diffMinutes = Math.floor(diffMs / 60000);
 		const diffHours = Math.floor(diffMinutes / 60);
 
-		if (diffMinutes < 1) return "just now";
+		if (diffMinutes < 1) return t("messages.justNow");
 		if (diffMinutes < 60) {
-			return `${diffMinutes} ${diffMinutes === 1 ? "min" : "mins"} ago`;
+			return t(
+				diffMinutes === 1 ? "messages.minAgo_one" : "messages.minAgo_other",
+				{ count: diffMinutes },
+			);
 		}
 		if (diffHours < 24) {
-			return `${diffHours} ${diffHours === 1 ? "hour" : "hours"} ago`;
+			return t(
+				diffHours === 1 ? "messages.hourAgo_one" : "messages.hourAgo_other",
+				{ count: diffHours },
+			);
 		}
 
 		return date.toLocaleString("en-GB", {
@@ -349,7 +357,7 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 				<div className="col-12 col-lg-4 messages-sidebar">
 					<div className="card shadow-sm border-0 messages-panel messages-sidebar-panel">
 						<div className="p-3 border-bottom">
-							<h1 className="h4 fw-bold mb-0">Messages</h1>
+							<h1 className="h4 fw-bold mb-0">{t("messages.title")}</h1>
 						</div>
 
 						<div className="messages-sidebar-scroll">
@@ -359,7 +367,7 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 								</div>
 							) : conversations.length === 0 ? (
 								<div className="text-center text-muted py-5 px-4">
-									No conversations yet.
+									{t("messages.noConversations")}
 								</div>
 							) : (
 								<div className="list-group list-group-flush">
@@ -386,7 +394,7 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 														</div>
 														<div className={`small text-truncate ${isUnread ? "fw-semibold text-dark" : "text-muted"}`}>
 															{conversation.last_message_preview ||
-																"Start the conversation"}
+																t("messages.startConversation")}
 														</div>
 													</div>
 													{isUnread && (
@@ -413,7 +421,7 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 								</div>
 							) : !conversationId ? (
 								<div className="text-center text-muted py-5 px-4 my-auto">
-									Select a conversation to view messages.
+									{t("messages.selectConversation")}
 								</div>
 							) : loadingMessages ? (
 								<div className="text-center py-5 my-auto">
@@ -434,7 +442,7 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 												to={`/profile/${selectedConversation.other_user?.username}`}
 												className="small text-muted text-decoration-none"
 											>
-												View profile
+												{t("messages.viewProfile")}
 											</Link>
 										</div>
 									</div>
@@ -446,13 +454,13 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 									>
 										{loadingOlderMessages && (
 											<div className="d-flex justify-content-center mb-3 small text-muted">
-												Loading older messages...
+												{t("messages.loadingOlder")}
 											</div>
 										)}
 
 										{messages.length === 0 ? (
 											<div className="text-center text-muted py-5">
-												No messages yet. Say hello.
+												{t("messages.noMessages")}
 											</div>
 										) : (
 											<div className="d-flex flex-column gap-3">
@@ -484,7 +492,7 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 												className="form-control"
 												rows="2"
 												style={{ resize: "none" }}
-												placeholder="Write a message..."
+												placeholder={t("messages.writeMessage")}
 												value={draft}
 												onChange={(e) => setDraft(e.target.value)}
 												onKeyDown={handleComposerKeyDown}
@@ -496,7 +504,7 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 												onClick={handleSendMessage}
 												disabled={sending || !draft.trim()}
 											>
-												{sending ? "Sending..." : "Send"}
+												{sending ? t("messages.sending") : t("messages.send")}
 											</button>
 										</div>
 									</div>

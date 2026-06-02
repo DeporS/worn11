@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import {
 	getUserCollection,
 	getUserStats,
@@ -25,8 +26,10 @@ import ShirtIcon from "../assets/icons/shirt.svg?react";
 import MoneyBagIcon from "../assets/icons/money-bag.svg?react";
 import FollowersIcon from "../assets/icons/followers.svg?react";
 import FollowingIcon from "../assets/icons/following.svg?react";
+import { localizeCountryName } from "../utils/localizedCountries";
 
 const ProfilePage = ({ user }) => {
+	const { t } = useTranslation();
 	const { username } = useParams(); // Get username from URL params
 	const navigate = useNavigate();
 	const profileUsername = username || user?.username;
@@ -77,13 +80,13 @@ const ProfilePage = ({ user }) => {
 			})
 			.catch((err) => {
 				console.error("Failed to load profile", err);
-				setError("User not found or error loading data.");
+				setError(t("profile.loadError"));
 			})
 			.finally(() => setLoading(false));
-	}, [profileUsername, user?.username]);
+	}, [profileUsername, user?.username, t]);
 
 	if (!profileUsername)
-		return <div className="text-center mt-5">Please log in.</div>;
+		return <div className="text-center mt-5">{t("profile.loginRequired")}</div>;
 	if (loading)
 		return (
 			<div className="text-center mt-5">
@@ -100,7 +103,7 @@ const ProfilePage = ({ user }) => {
 
 	const handleFollowToggle = async () => {
 		if (!user) {
-			alert("You need to be logged in!");
+			alert(t("profile.authTitle"));
 			return;
 		}
 
@@ -153,14 +156,21 @@ const ProfilePage = ({ user }) => {
 		setModalType(null);
 	};
 
+	const modalTitle =
+		modalType === "followers"
+			? t("profile.followers")
+			: modalType === "following"
+				? t("profile.following")
+				: "";
+
 	const handleMessageClick = async () => {
 		if (!user) {
 			Swal.fire({
-				title: "You need to log in!",
-				text: "Only logged-in users can send messages.",
+				title: t("profile.authTitle"),
+				text: t("profile.authText"),
 				icon: "info",
 				confirmButtonColor: "#3085d6",
-				confirmButtonText: "Ok",
+				confirmButtonText: t("common.ok"),
 			});
 			return;
 		}
@@ -175,8 +185,8 @@ const ProfilePage = ({ user }) => {
 			const message =
 				error?.response?.data?.non_field_errors?.[0] ||
 				error?.response?.data?.username?.[0] ||
-				"Could not start a conversation.";
-			Swal.fire("Error", message, "error");
+				t("profile.messageError");
+			Swal.fire(t("common.error"), message, "error");
 		}
 	};
 
@@ -242,7 +252,7 @@ const ProfilePage = ({ user }) => {
 									<Link
 										to="/profile/edit"
 										className="edit-button"
-										title="Edit Profile"
+										title={t("profile.editProfile")}
 									>
 										✏️
 									</Link>
@@ -260,12 +270,12 @@ const ProfilePage = ({ user }) => {
 											{isFollowing ? (
 												<>
 													<i className="bi bi-person-dash-fill me-1"></i>{" "}
-													Unfollow
+													{t("profile.unfollow")}
 												</>
 											) : (
 												<>
 													<i className="bi bi-person-plus-fill me-1"></i>{" "}
-													Follow
+													{t("profile.follow")}
 												</>
 											)}
 										</button>
@@ -275,7 +285,7 @@ const ProfilePage = ({ user }) => {
 											className="btn btn-sm btn-outline-dark rounded-pill px-3 fw-semibold"
 										>
 											<i className="bi bi-chat-dots me-1"></i>
-											Message
+											{t("profile.message")}
 										</button>
 									</div>
 								)}
@@ -291,8 +301,10 @@ const ProfilePage = ({ user }) => {
 											<div
 												className="d-flex align-items-center gap-1 ms-1"
 												title={
-													profileData.country_info
-														.name
+													localizeCountryName(
+														profileData.country_info.name,
+														t,
+													)
 												}
 											>
 												<img
@@ -325,7 +337,7 @@ const ProfilePage = ({ user }) => {
 							{/* Followers */}
 							<div
 								className="text-center cursor-pointer"
-								title="See Followers"
+								title={t("profile.seeFollowers")}
 								onClick={() => openFollowModal("followers")}
 								style={{
 									cursor: "pointer",
@@ -345,14 +357,14 @@ const ProfilePage = ({ user }) => {
 									</h4>
 								</div>
 								<span className="small text-muted d-block">
-									Followers
+									{t("profile.followers")}
 								</span>
 							</div>
 
 							{/* Following */}
 							<div
 								className="text-center cursor-pointer"
-								title="See Following"
+								title={t("profile.seeFollowing")}
 								onClick={() => openFollowModal("following")}
 								style={{
 									cursor: "pointer",
@@ -372,14 +384,14 @@ const ProfilePage = ({ user }) => {
 									</h4>
 								</div>
 								<span className="small text-muted d-block">
-									Following
+									{t("profile.following")}
 								</span>
 							</div>
 
 							{/* Kits */}
 							<div
 								className="text-center"
-								title="Kits in collection"
+								title={t("profile.kitsTitle")}
 							>
 								<div className="d-flex justify-content-center align-items-center gap-2">
 									<ShirtIcon className="shirt-icon" />
@@ -388,11 +400,11 @@ const ProfilePage = ({ user }) => {
 									</h4>
 								</div>
 								<span className="small text-muted d-block">
-									Kits in collection
+									{t("profile.kitsInCollection")}
 								</span>
 							</div>
 							{/* Total Value */}
-							<div className="text-center" title="Total Value">
+							<div className="text-center" title={t("profile.totalValueTitle")}>
 								<div className="d-flex justify-content-center align-items-center gap-2">
 									<MoneyBagIcon className="money-bag-icon" />
 									<h4 className="text-success fw-bold mb-0">
@@ -405,7 +417,7 @@ const ProfilePage = ({ user }) => {
 									</h4>
 								</div>
 								<span className="small text-muted d-block">
-									Total Value
+									{t("profile.totalValue")}
 								</span>
 							</div>
 						</div>
@@ -430,7 +442,7 @@ const ProfilePage = ({ user }) => {
 										className="fw-bold text-uppercase small text-muted mb-3"
 										style={{ letterSpacing: "0.5px" }}
 									>
-										About
+										{t("profile.about")}
 									</h6>
 									{profileData?.bio ? (
 										<p
@@ -441,7 +453,7 @@ const ProfilePage = ({ user }) => {
 										</p>
 									) : (
 										<p className="text-muted fst-italic small">
-											No bio provided.
+											{t("profile.noBioProvided")}
 										</p>
 									)}
 								</div>
@@ -458,7 +470,7 @@ const ProfilePage = ({ user }) => {
 													letterSpacing: "0.5px",
 												}}
 											>
-												Contact
+												{t("profile.contact")}
 											</h6>
 											<div className="d-flex flex-column gap-3">
 												{profileData.website_link && (
@@ -479,7 +491,7 @@ const ProfilePage = ({ user }) => {
 															target="_blank"
 															rel="noopener noreferrer"
 															className="breadcrumb-link text-muted"
-															title="Website"
+															title={t("profile.website")}
 														>
 															{profileData.website_link.replace(
 																/^https?:\/\//,
@@ -521,7 +533,7 @@ const ProfilePage = ({ user }) => {
 																}
 															>
 																<span className="text-muted">
-																	Email hidden
+																	{t("profile.emailHidden")}
 																</span>
 
 																<span
@@ -531,7 +543,7 @@ const ProfilePage = ({ user }) => {
 																			true,
 																		)
 																	}
-																	title="Show Email"
+																	title={t("profile.showEmail")}
 																>
 																	{hover ? (
 																		<EyeOpenIcon className="eye-icon" />
@@ -563,7 +575,7 @@ const ProfilePage = ({ user }) => {
 													letterSpacing: "0.5px",
 												}}
 											>
-												My Shops
+												{t("profile.myShops")}
 											</h6>
 											<div className="d-flex flex-wrap">
 												<MarketBadge
@@ -605,7 +617,7 @@ const ProfilePage = ({ user }) => {
 													letterSpacing: "0.5px",
 												}}
 											>
-												Find me
+												{t("profile.findMe")}
 											</h6>
 											<div className="d-flex gap-3 flex-wrap">
 												<SocialLink
@@ -666,12 +678,12 @@ const ProfilePage = ({ user }) => {
 					>
 						{isExpanded ? (
 							<>
-								<span>Show Less</span>
+								<span>{t("profile.showLess")}</span>
 								<i className="bi bi-chevron-up"></i>
 							</>
 						) : (
 							<>
-								<span>Show Details</span>
+								<span>{t("profile.showDetails")}</span>
 								<i className="bi bi-chevron-down"></i>
 							</>
 						)}
@@ -683,7 +695,7 @@ const ProfilePage = ({ user }) => {
 			{isOwner && (
 				<div className="d-flex justify-content-center my-5">
 					<Link to="/add-kit" className="add-ghost">
-						+ Add kit
+						{t("profile.addKit")}
 					</Link>
 				</div>
 			)}
@@ -711,8 +723,7 @@ const ProfilePage = ({ user }) => {
 					{myKits.length === 0 && (
 						<div className="text-center text-muted py-5 w-100">
 							<p>
-								{isOwner ? "You don't" : "This user doesn't"}{" "}
-								have any kits yet.
+								{isOwner ? t("profile.noKitsOwner") : t("profile.noKitsOther")}
 							</p>
 						</div>
 					)}
@@ -723,7 +734,8 @@ const ProfilePage = ({ user }) => {
 			<UserListModal
 				isOpen={modalType !== null}
 				onClose={closeFollowModal}
-				title={modalType || ""}
+				title={modalTitle}
+				kind={modalType || ""}
 				users={modalUsers}
 				loading={modalLoading}
 			/>

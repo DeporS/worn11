@@ -1,4 +1,5 @@
 import React from 'react';
+import { Trans } from "react-i18next";
 import { Link } from 'react-router-dom';
 
 import '../styles/user_cards.css';
@@ -43,7 +44,11 @@ const UserCard = ({ user }) => {
                     <h5 className="card-title fw-bold">@{user.username}</h5>
                     
                     <p className="text-muted small">
-                        Collection size: <span className="fw-bold text-dark">{user.kits_count} kits</span>
+                        <Trans
+                            i18nKey="userCard.collectionSize"
+                            count={user.kits_count}
+                            components={[<span className="fw-bold text-dark" />]}
+                        />
                     </p>
                 </div>
             </Link>

@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 
 import { toggleLike } from "../../services/api";
 
 const ExploreKitCard = ({ item }) => {
+	const { t } = useTranslation();
 	const navigate = useNavigate();
 	const [isLiked, setIsLiked] = useState(Boolean(item.is_liked));
 	const [likesCount, setLikesCount] = useState(item.likes_count ?? 0);
@@ -22,11 +24,11 @@ const ExploreKitCard = ({ item }) => {
 
 		if (!localStorage.getItem("access_token")) {
 			Swal.fire({
-				title: "You need to log in!",
-				text: "Only logged-in users can like kits.",
+				title: t("exploreCard.authLikeTitle"),
+				text: t("exploreCard.authLikeText"),
 				icon: "info",
 				confirmButtonColor: "#3085d6",
-				confirmButtonText: "Ok",
+				confirmButtonText: t("common.ok"),
 			});
 			return;
 		}
@@ -50,7 +52,7 @@ const ExploreKitCard = ({ item }) => {
 			console.error("Failed to toggle like", error);
 			setIsLiked(previousLiked);
 			setLikesCount(previousCount);
-			Swal.fire("Error", "Could not update like.", "error");
+			Swal.fire(t("common.error"), t("exploreCard.likeError"), "error");
 		} finally {
 			setLikeLoading(false);
 		}
@@ -76,7 +78,7 @@ const ExploreKitCard = ({ item }) => {
 			style={{ cursor: item?.owner_username ? "pointer" : "default" }}
 		>
 			{item.for_sale && item.in_the_collection && (
-				<div className="ribbon">For Sale</div>
+				<div className="ribbon">{t("exploreCard.forSale")}</div>
 			)}
 
 			<div className="p-2">
@@ -108,7 +110,7 @@ const ExploreKitCard = ({ item }) => {
 						className="bg-light d-flex align-items-center justify-content-center rounded text-muted"
 						style={{ width: "100%", aspectRatio: "3 / 4" }}
 					>
-						<small>No photo</small>
+						<small>{t("exploreCard.noPhoto")}</small>
 					</div>
 				)}
 			</div>
@@ -117,7 +119,7 @@ const ExploreKitCard = ({ item }) => {
 				<div className="d-flex justify-content-between align-items-start gap-2 mb-2">
 					<div className="min-w-0">
 						<div className="fw-bold text-dark text-truncate">
-							{item.kit?.team?.name || "Unknown team"}
+							{item.kit?.team?.name || t("exploreCard.unknownTeam")}
 						</div>
 						<div className="small text-muted text-truncate mt-1">
 							{seasonText}
@@ -128,7 +130,7 @@ const ExploreKitCard = ({ item }) => {
 				<div className="d-flex justify-content-between align-items-center small text-muted mt-auto">
 					<span className="text-truncate me-2">
 						<i className="bi bi-person me-1"></i>
-						<span className="username">{item.owner_username || "unknown"}</span>
+						<span className="username">{item.owner_username || t("exploreCard.unknownOwner")}</span>
 					</span>
 					<button
 						type="button"

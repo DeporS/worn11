@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import KitCardHistory from "./KitCardHistory";
 
@@ -22,6 +23,7 @@ const SeasonRow = ({
 	selectedTeamName,
 	user,
 }) => {
+	const { t } = useTranslation();
 	const [isExpanded, setIsExpanded] = useState(false);
 
 	// Default items per row
@@ -101,7 +103,10 @@ const SeasonRow = ({
 										<Link
 											to={`/history/team/${bestKit.kit.team.id}/variants?season=${encodeURIComponent(season)}&type=${encodeURIComponent(typeObj.value)}`}
 											className="text-decoration-none"
-											title={`See all uploads for ${season} ${typeObj.label}`}
+											title={t("history.seeAllUploadsTitle", {
+												season,
+												type: typeObj.label,
+											})}
 										>
 											<span
 												className="badge rounded-pill bg-primary"
@@ -140,7 +145,10 @@ const SeasonRow = ({
 										<Link
 											to="/add-kit"
 											className="add-missing-card"
-											title={`Add ${season} ${typeObj.label}`}
+											title={t("history.addMissingKitTitle", {
+												season,
+												type: typeObj.label,
+											})}
 											state={{
 												prefill: {
 													season,
@@ -151,7 +159,7 @@ const SeasonRow = ({
 											style={{ minHeight: "100%" }}
 										>
 											<span className="add-missing-text">
-												+ Add missing kit
+												{t("history.addMissingKit")}
 											</span>
 										</Link>
 									</div>
@@ -171,12 +179,13 @@ const SeasonRow = ({
 					>
 						{isExpanded ? (
 							<>
-								Hide <i className="bi bi-chevron-up ms-1"></i>
+								{t("history.hide")} <i className="bi bi-chevron-up ms-1"></i>
 							</>
 						) : (
 							<>
-								Show More ({SHIRT_TYPES.length - itemsPerRow}{" "}
-								types){" "}
+								{t("history.showMore", {
+									count: SHIRT_TYPES.length - itemsPerRow,
+								})}{" "}
 								<i className="bi bi-chevron-down ms-1"></i>
 							</>
 						)}

@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate, Link } from "react-router-dom";
 import {
 	deleteKitFromCollection,
@@ -13,10 +14,12 @@ import UserListModal from "./UserListModal";
 import { formatLikedByText } from "../utils/likeText";
 import CommentsModal from "../comments/CommentsModal";
 import { copyKitShareUrl } from "../utils/kitShare";
+import { formatLocalizedDate } from "../../utils/dateFormat";
 
 import "../../styles/profile.css";
 
 const KitCard = ({ item, onDeleteSuccess, user }) => {
+	const { t, i18n } = useTranslation();
 	const navigate = useNavigate();
 	const [isDeleting, setIsDeleting] = useState(false);
 	const [viewerState, setViewerState] = useState({
@@ -40,7 +43,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 	const likedByText = formatLikedByText({
 		count: likesCount,
 		isLiked,
-	});
+	}, t);
 
 	const openViewer = (initialImageIndex = 0) => {
 		setViewerState({
@@ -81,11 +84,11 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 
 		if (!user) {
 			Swal.fire({
-				title: "You need to log in!",
-				text: "Only logged-in users can like kits.",
+				title: t("profile.authTitle"),
+				text: t("kitCard.authLikeText"),
 				icon: "info",
 				confirmButtonColor: "#3085d6",
-				confirmButtonText: "Ok",
+				confirmButtonText: t("common.ok"),
 			}).then((result) => {
 				if (result.isConfirmed) {
 				}
@@ -128,13 +131,13 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 
 	const handleDeleteClick = async () => {
 		Swal.fire({
-			title: "Are you sure?",
-			text: "You won't be able to revert this!",
+			title: t("kitCard.deleteTitle"),
+			text: t("kitCard.deleteText"),
 			icon: "warning",
 			showCancelButton: true,
 			confirmButtonColor: "#dc3545",
 			cancelButtonColor: "#6c757d",
-			confirmButtonText: "Yes, delete it",
+			confirmButtonText: t("kitCard.deleteConfirm"),
 		}).then(async (result) => {
 			if (result.isConfirmed) {
 				try {
@@ -142,15 +145,15 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 					await deleteKitFromCollection(item.id);
 
 					Swal.fire(
-						"Deleted!",
-						"Your kit has been removed.",
+						t("kitCard.deletedTitle"),
+						t("kitCard.deletedText"),
 						"success",
 					);
 
 					if (onDeleteSuccess) onDeleteSuccess(item.id);
 				} catch (error) {
 					setIsDeleting(false);
-					Swal.fire("Error!", "Something went wrong.", "error");
+					Swal.fire(t("common.error"), t("kitCard.genericError"), "error");
 				}
 			}
 		});
@@ -170,11 +173,11 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 
 		if (!user) {
 			Swal.fire({
-				title: "You need to log in!",
-				text: "Only logged-in users can send messages.",
+				title: t("profile.authTitle"),
+				text: t("kitCard.authMessageText"),
 				icon: "info",
 				confirmButtonColor: "#3085d6",
-				confirmButtonText: "Ok",
+				confirmButtonText: t("common.ok"),
 			});
 			return;
 		}
@@ -187,8 +190,8 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 			const message =
 				error?.response?.data?.non_field_errors?.[0] ||
 				error?.response?.data?.kit_id?.[0] ||
-				"Could not start a conversation.";
-			Swal.fire("Error", message, "error");
+				t("kitCard.messageError");
+			Swal.fire(t("common.error"), message, "error");
 		}
 	};
 
@@ -208,7 +211,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 		<>
 			<div className="card h-100 shadow-sm border-0 kit-card-relative">
 				{item.for_sale && item.in_the_collection && (
-					<div className="ribbon">For Sale</div>
+					<div className="ribbon">{t("kitCard.forSale")}</div>
 				)}
 
 				{/* ========================================== */}
@@ -251,7 +254,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 							className="bg-light d-flex align-items-center justify-content-center rounded text-muted"
 							style={{ width: "100%", aspectRatio: "3 / 4" }}
 						>
-							<small>No photo</small>
+							<small>{t("kitCard.noPhoto")}</small>
 						</div>
 					)}
 				</div>
@@ -312,7 +315,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 								flex: "0 0 100%",
 							}}
 						>
-							<small>No photo</small>
+							<small>{t("kitCard.noPhoto")}</small>
 						</div>
 					)}
 				</div>
@@ -339,8 +342,8 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 							className={`badge-outline ${!item.in_the_collection ? "text-muted border-secondary" : ""}`}
 							title={
 								item.in_the_collection
-									? "Estimated Value"
-									: "No longer in collection"
+									? t("kitCard.estimatedValue")
+									: t("kitCard.noLongerInCollection")
 							}
 						>
 							{item.in_the_collection
@@ -354,14 +357,14 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 						{/* Season & Kit Type */}
 						<div className="justify-content-between text-muted small">
 							<span
-								title="Season"
+								title={t("kitCard.season")}
 								className="d-flex align-items-center"
 							>
 								<i className="bi bi-calendar3 me-2"></i>
 								{item.kit.season}
 							</span>
 							<span
-								title="Kit Type"
+								title={t("kitCard.kitType")}
 								className="d-flex align-items-center"
 							>
 								<i className="bi bi-palette2 me-2"></i>
@@ -372,14 +375,14 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 						{/* Technology & Size */}
 						<div className="justify-content-between text-muted small">
 							<span
-								title="Technology"
+								title={t("kitCard.technology")}
 								className="d-flex align-items-center"
 							>
 								<i className="bi-layers me-2"></i>
 								{item.technology_display}
 							</span>
 							<span
-								title="Size"
+								title={t("kitCard.size")}
 								className="d-flex align-items-center"
 							>
 								<i className="bi bi-arrows-angle-expand me-2"></i>
@@ -390,14 +393,14 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 						{/* Condition & Player */}
 						<div className="justify-content-between text-muted small">
 							<span
-								title="Condition"
+								title={t("kitCard.condition")}
 								className="d-flex align-items-center"
 							>
 								<i className="bi bi-gem me-2"></i>
 								{item.condition_display}
 							</span>
 							<span
-								title="Player"
+								title={t("kitCard.player")}
 								className="d-flex align-items-center"
 							>
 								{item.player_name || item.player_number ? (
@@ -424,7 +427,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 						<div className="d-flex flex-column">
 							{item.is_owner ? (
 								<a className="minimal-not-for-sale-link">
-									<span>You are the owner</span>
+									<span>{t("kitCard.youAreTheOwner")}</span>
 									<span className="arrow-icon">ツ</span>
 								</a>
 							) : (
@@ -433,7 +436,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 									className="minimal-offer-link"
 									onClick={handleContactOwnerClick}
 								>
-									<span>Contact Owner</span>
+									<span>{t("kitCard.contactOwner")}</span>
 									<span className="arrow-icon">✉︎</span>
 								</button>
 							)}
@@ -448,18 +451,18 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 										rel="noopener noreferrer"
 										className="minimal-offer-link"
 									>
-										<span>View offer</span>
+										<span>{t("kitCard.viewOffer")}</span>
 										<span className="arrow-icon">➚</span>
 									</a>
 								) : (
 									<a className="minimal-not-for-sale-link">
-										<span>No link provided</span>
+										<span>{t("kitCard.noLinkProvided")}</span>
 										<span className="arrow-icon">⨂</span>
 									</a>
 								)
 							) : (
 								<a className="minimal-not-for-sale-link">
-									<span>Not for sale</span>
+									<span>{t("kitCard.notForSale")}</span>
 									<span className="arrow-icon">⨂</span>
 								</a>
 							)}
@@ -473,7 +476,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 									<button
 										className="btn btn-sm edit-button"
 										onClick={handleEditClick}
-										title="Edit"
+										title={t("kitCard.edit")}
 									>
 										✏
 									</button>
@@ -483,7 +486,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 										className="btn btn-sm edit-button"
 										onClick={handleDeleteClick}
 										disabled={isDeleting} // Block button while deleting
-										title="Delete"
+										title={t("kitCard.delete")}
 									>
 										{isDeleting ? (
 											<span
@@ -502,7 +505,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 							<button
 								className="btn btn-sm edit-button"
 								onClick={handleShareClick}
-								title="Share"
+								title={t("kitCard.share")}
 							>
 								🔗
 							</button>
@@ -535,7 +538,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 							<button
 								type="button"
 								className="p-0 bg-transparent border-0 small text-muted text-start"
-								title="See who liked this"
+								title={t("kitCard.seeWhoLikedThis")}
 								onClick={(e) => {
 									e.stopPropagation();
 									openLikersModal();
@@ -574,14 +577,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 							>
 								<i className="bi bi-clock me-1"></i>
 								<span className="username">
-									{new Date(item.added_at).toLocaleDateString(
-										"en-GB",
-										{
-											day: "numeric",
-											month: "short",
-											year: "numeric",
-										},
-									)}
+									{formatLocalizedDate(item.added_at, i18n.language)}
 								</span>
 							</small>
 						</div>
@@ -593,7 +589,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 			<UserListModal
 				isOpen={modalType !== null}
 				onClose={closeLikersModal}
-				title={"Liked this kit"}
+				title={t("kitCard.likedThisKit")}
 				users={modalUsers}
 				loading={modalLoading}
 			/>

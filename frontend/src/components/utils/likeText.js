@@ -1,31 +1,38 @@
-export function formatLikedByText({ count, isLiked, username }) {
+export function formatLikedByText({ count, isLiked, username }, t) {
 	const safeCount = Number.isFinite(Number(count))
 		? Math.max(0, Number(count))
 		: 0;
 
 	if (safeCount === 0) {
-		return "Be the first to like this kit";
+		return t("likes.beFirst");
 	}
 
 	if (isLiked) {
 		if (safeCount === 1) {
-			return "You liked this kit";
+			return t("likes.youLiked");
 		}
 
 		const others = safeCount - 1;
-		return `You and ${others} ${others === 1 ? "other" : "others"} liked this kit`;
+		return t(
+			others === 1 ? "likes.youAndOthers_one" : "likes.youAndOthers_other",
+			{ count: others },
+		);
 	}
 
 	if (username) {
 		if (safeCount === 1) {
-			return `${username} liked this kit`;
+			return t("likes.userLiked", { username });
 		}
 
 		const others = safeCount - 1;
-		return `${username} and ${others} ${others === 1 ? "other" : "others"} liked this kit`;
+		return t(
+			others === 1 ? "likes.userAndOthers_one" : "likes.userAndOthers_other",
+			{ username, count: others },
+		);
 	}
 
-	return safeCount === 1
-		? "1 person liked this kit"
-		: `${safeCount} people liked this kit`;
+	return t(
+		safeCount === 1 ? "likes.peopleLiked_one" : "likes.peopleLiked_other",
+		{ count: safeCount },
+	);
 }

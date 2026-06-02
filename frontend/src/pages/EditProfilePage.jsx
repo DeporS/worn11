@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { updateUserProfile } from "../services/api";
 import api from "../services/api";
-
 import SocialInput from "../components/profile/SocialInput";
-
+import { localizeCountryName } from "../utils/localizedCountries";
 const EditProfilePage = ({ user, setUser }) => {
+	const { t } = useTranslation();
 	const navigate = useNavigate();
 
 	// Form states
@@ -36,6 +37,7 @@ const EditProfilePage = ({ user, setUser }) => {
 	// Validation states
 	const [usernameAvailable, setUsernameAvailable] = useState(true);
 	const [usernameError, setUsernameError] = useState(null);
+	const [checkingUsername, setCheckingUsername] = useState(false);
 
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState(null);
@@ -79,10 +81,18 @@ const EditProfilePage = ({ user, setUser }) => {
 			// Set country on mount if exists
 			if (user.profile.country_info) {
 				setSelectedCountry(user.profile.country_info);
-				setCountrySearch(user.profile.country_info.name);
+				setCountrySearch(
+					localizeCountryName(user.profile.country_info.name, t),
+				);
 			}
 		}
-	}, [user]);
+	}, [user, t]);
+
+	useEffect(() => {
+		if (!selectedCountry || showCountryDropdown) return;
+
+		setCountrySearch(localizeCountryName(selectedCountry.name, t));
+	}, [selectedCountry, showCountryDropdown, t]);
 
 	// Check username availability when it changes
 	useEffect(() => {
@@ -95,12 +105,12 @@ const EditProfilePage = ({ user, setUser }) => {
 
 		// Simple validations
 		if (username.length < 3) {
-			setUsernameError("Username too short (min 3 chars).");
+			setUsernameError(t("editProfile.usernameTooShort"));
 			setUsernameAvailable(false);
 			return;
 		}
 		if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-			setUsernameError("Only letters, numbers and underscores allowed.");
+			setUsernameError(t("editProfile.usernamePattern"));
 			setUsernameAvailable(false);
 			return;
 		}
@@ -119,7 +129,7 @@ const EditProfilePage = ({ user, setUser }) => {
 					setUsernameAvailable(true);
 				} else {
 					setUsernameAvailable(false);
-					setUsernameError("Username is already taken.");
+					setUsernameError(t("editProfile.usernameTaken"));
 				}
 			} catch (err) {
 				console.error("Error checking username", err);
@@ -131,7 +141,7 @@ const EditProfilePage = ({ user, setUser }) => {
 		}, 500);
 
 		return () => clearTimeout(timer);
-	}, [username, user]);
+	}, [username, user, t]);
 
 	// Handle file selection (and create preview)
 	const handleFileChange = (e) => {
@@ -150,13 +160,20 @@ const EditProfilePage = ({ user, setUser }) => {
 		setShowCountryDropdown(true); // Open dropdown when user types
 
 		// If the typed text doesn't match the selected country, it means the user wants to change it
-		if (selectedCountry && value !== selectedCountry.name) {
+		if (
+			selectedCountry &&
+			value !== selectedCountry.name &&
+			value !== localizeCountryName(selectedCountry.name, t)
+		) {
 			setSelectedCountry(null);
 		}
 
 		if (value) {
 			const filtered = countriesList.filter((c) =>
-				c.name.toLowerCase().includes(value.toLowerCase()),
+				c.name.toLowerCase().includes(value.toLowerCase()) ||
+				localizeCountryName(c.name, t)
+					.toLowerCase()
+					.includes(value.toLowerCase()),
 			);
 			setFilteredCountries(filtered);
 		} else {
@@ -167,7 +184,7 @@ const EditProfilePage = ({ user, setUser }) => {
 	// When user selects a country from the list
 	const handleSelectCountry = (country) => {
 		setSelectedCountry(country);
-		setCountrySearch(country.name); // Insert the selected country's name into the input
+		setCountrySearch(localizeCountryName(country.name, t));
 		setShowCountryDropdown(false); // Close the list
 	};
 
@@ -233,12 +250,12 @@ const EditProfilePage = ({ user, setUser }) => {
 			navigate(`/my-collection`); // Return to profile
 		} catch (err) {
 			console.error(err);
-			setError("Failed to update profile. Please try again.");
+			setError(t("editProfile.updateFailed"));
 			setLoading(false);
 		}
 	};
 
-	if (!user) return <div className="text-center mt-5">Loading...</div>;
+	if (!user) return <div className="text-center mt-5">{t("editProfile.loading")}</div>;
 
 	return (
 		<div className="container py-5">
@@ -247,7 +264,7 @@ const EditProfilePage = ({ user, setUser }) => {
 					<div className="card shadow-sm border-0">
 						<div className="card-body p-4">
 							<h3 className="mb-4 fw-bold text-center">
-								Edit Profile ✏️
+								{t("editProfile.title")}
 							</h3>
 
 							{error && (
@@ -271,7 +288,7 @@ const EditProfilePage = ({ user, setUser }) => {
 										{previewUrl ? (
 											<img
 												src={previewUrl}
-												alt="Avatar Preview"
+												alt={t("editProfile.avatarPreview")}
 												className="w-100 h-100"
 												style={{ objectFit: "cover" }}
 											/>
@@ -286,7 +303,7 @@ const EditProfilePage = ({ user, setUser }) => {
 									</div>
 
 									<label className="btn btn-outline-primary btn-sm">
-										Change Photo
+										{t("editProfile.changePhoto")}
 										<input
 											type="file"
 											hidden
@@ -299,13 +316,13 @@ const EditProfilePage = ({ user, setUser }) => {
 								{/* USERNAME SECTION */}
 								<div className="mb-3">
 									<label className="form-label fw-bold">
-										Username
+										{t("editProfile.username")}
 										{isUsernameLocked && (
 											<span
 												className="badge bg-secondary ms-2"
 												style={{ fontSize: "0.7rem" }}
 											>
-												Change limit reached
+												{t("editProfile.changeLimitReached")}
 											</span>
 										)}
 									</label>
@@ -338,13 +355,13 @@ const EditProfilePage = ({ user, setUser }) => {
 											{usernameError}
 										</div>
 										<div className="valid-feedback">
-											Username available!
+											{t("editProfile.usernameAvailable")}
 										</div>
 									</div>
 									<div className="form-text text-danger small">
 										{isUsernameLocked
-											? "You have already changed your username once. It cannot be changed again."
-											: "Warning: You can only change your username ONCE."}
+											? t("editProfile.usernameLocked")
+											: t("editProfile.usernameWarning")}
 									</div>
 								</div>
 
@@ -352,7 +369,7 @@ const EditProfilePage = ({ user, setUser }) => {
 								<div className="row mb-3">
 									<div className="col-6">
 										<label className="form-label fw-bold">
-											Name
+											{t("editProfile.name")}
 										</label>
 										<div className="input-group">
 											<span className="input-group-text bg-light border-end-0">
@@ -361,7 +378,7 @@ const EditProfilePage = ({ user, setUser }) => {
 											<input
 												type="text"
 												className="form-control border-start-0"
-												placeholder="Name"
+												placeholder={t("editProfile.name")}
 												value={name}
 												onChange={(e) =>
 													setName(e.target.value)
@@ -371,7 +388,7 @@ const EditProfilePage = ({ user, setUser }) => {
 									</div>
 									<div className="col-6">
 										<label className="form-label fw-bold">
-											Surname
+											{t("editProfile.surname")}
 										</label>
 										<div className="input-group">
 											<span className="input-group-text bg-light border-end-0">
@@ -380,7 +397,7 @@ const EditProfilePage = ({ user, setUser }) => {
 											<input
 												type="text"
 												className="form-control border-start-0"
-												placeholder="Surname"
+												placeholder={t("editProfile.surname")}
 												value={surname}
 												onChange={(e) =>
 													setSurname(e.target.value)
@@ -393,7 +410,7 @@ const EditProfilePage = ({ user, setUser }) => {
 								{/* COUNTRY SECTION (AUTOCOMPLETE) */}
 								<div className="mb-3 position-relative">
 									<label className="form-label fw-bold">
-										Country
+										{t("editProfile.country")}
 									</label>
 									<div className="input-group">
 										{/* Display flag in input if country is selected */}
@@ -417,7 +434,7 @@ const EditProfilePage = ({ user, setUser }) => {
 										<input
 											type="text"
 											className="form-control border-start-0 ps-2"
-											placeholder="Start typing your country..."
+											placeholder={t("editProfile.countryPlaceholder")}
 											value={countrySearch}
 											onChange={handleCountrySearch}
 											// Show list on input click:
@@ -428,6 +445,11 @@ const EditProfilePage = ({ user, setUser }) => {
 														? countriesList.filter(
 																(c) =>
 																	c.name
+																		.toLowerCase()
+																		.includes(
+																			countrySearch.toLowerCase(),
+																		) ||
+																	localizeCountryName(c.name, t)
 																		.toLowerCase()
 																		.includes(
 																			countrySearch.toLowerCase(),
@@ -485,7 +507,7 @@ const EditProfilePage = ({ user, setUser }) => {
 																	}}
 																/>
 															)}
-															{c.name}
+															{localizeCountryName(c.name, t)}
 														</button>
 													</li>
 												))}
@@ -496,12 +518,12 @@ const EditProfilePage = ({ user, setUser }) => {
 								{/* BIO SECTION */}
 								<div className="mb-3">
 									<label className="form-label fw-bold">
-										Bio
+										{t("editProfile.bio")}
 									</label>
 									<textarea
 										className="form-control"
 										rows="4"
-										placeholder="Tell us something about yourself and your collection..."
+										placeholder={t("editProfile.bioPlaceholder")}
 										value={bio}
 										onChange={(e) => setBio(e.target.value)}
 										maxLength={500}
@@ -512,10 +534,10 @@ const EditProfilePage = ({ user, setUser }) => {
 								</div>
 
 								{/* --- CONTACT INFO --- */}
-								<h5 className="fw-bold mb-3">Contact Info</h5>
+								<h5 className="fw-bold mb-3">{t("editProfile.contactInfo")}</h5>
 								<div className="mb-3">
 									<label className="form-label small fw-bold text-muted">
-										Public Contact Email
+										{t("editProfile.publicContactEmail")}
 									</label>
 									<div className="input-group">
 										<span className="input-group-text bg-light border-end-0">
@@ -532,14 +554,13 @@ const EditProfilePage = ({ user, setUser }) => {
 										/>
 									</div>
 									<div className="form-text">
-										This email will be visible to other
-										users.
+										{t("editProfile.publicContactEmailHelp")}
 									</div>
 								</div>
 
 								<div className="mb-3">
 									<label className="form-label small fw-bold text-muted">
-										Website / Portfolio
+										{t("editProfile.websitePortfolio")}
 									</label>
 									<div className="input-group">
 										<span className="input-group-text bg-light border-end-0">
@@ -559,7 +580,7 @@ const EditProfilePage = ({ user, setUser }) => {
 
 								{/* --- SOCIAL MEDIA --- */}
 								<h5 className="fw-bold mb-3 mt-4">
-									Social Media
+									{t("editProfile.socialMedia")}
 								</h5>
 								<div className="row">
 									<div className="col-6">
@@ -611,7 +632,7 @@ const EditProfilePage = ({ user, setUser }) => {
 
 								{/* --- MARKETPLACES --- */}
 								<h5 className="fw-bold mb-3 mt-4">
-									Marketplaces
+									{t("editProfile.marketplaces")}
 								</h5>
 
 								<SocialInput
@@ -646,10 +667,10 @@ const EditProfilePage = ({ user, setUser }) => {
 										{loading ? (
 											<>
 												<span className="spinner-border spinner-border-sm me-2"></span>
-												Saving...
+												{t("forms.saving")}
 											</>
 										) : (
-											"Save Changes"
+											t("forms.saveChanges")
 										)}
 									</button>
 
@@ -658,7 +679,7 @@ const EditProfilePage = ({ user, setUser }) => {
 										className="btn btn-light text-muted"
 										onClick={() => navigate(-1)}
 									>
-										Cancel
+										{t("common.cancel")}
 									</button>
 								</div>
 							</form>

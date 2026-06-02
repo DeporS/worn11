@@ -1,24 +1,25 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import Swal from "sweetalert2";
 
 import { reportKit } from "../../services/api";
 
-const REPORT_REASONS = [
-	{ value: "wrong_team", label: "Wrong team" },
-	{ value: "wrong_season", label: "Wrong season" },
-	{ value: "wrong_kit_type", label: "Wrong kit type" },
-	{ value: "wrong_details", label: "Wrong details" },
-	{ value: "fake_or_misleading", label: "Fake or misleading" },
-	{ value: "prohibited_content", label: "Prohibited content" },
-	{ value: "spam", label: "Spam" },
-	{ value: "harassment_or_abuse", label: "Harassment or abuse" },
-	{ value: "other", label: "Other" },
-];
-
 const ReportKitModal = ({ isOpen, onClose, kitId }) => {
+	const { t } = useTranslation();
 	const [reason, setReason] = useState("");
 	const [description, setDescription] = useState("");
 	const [submitting, setSubmitting] = useState(false);
+	const reportReasons = [
+		"wrong_team",
+		"wrong_season",
+		"wrong_kit_type",
+		"wrong_details",
+		"fake_or_misleading",
+		"prohibited_content",
+		"spam",
+		"harassment_or_abuse",
+		"other",
+	];
 
 	useEffect(() => {
 		if (!isOpen) {
@@ -47,12 +48,12 @@ const ReportKitModal = ({ isOpen, onClose, kitId }) => {
 		const trimmedDescription = description.trim();
 
 		if (!reason) {
-			Swal.fire("Error", "Please select a reason.", "error");
+			Swal.fire(t("common.error"), t("report.selectReasonError"), "error");
 			return;
 		}
 
 		if (reason === "other" && !trimmedDescription) {
-			Swal.fire("Error", "Please add a description for Other.", "error");
+			Swal.fire(t("common.error"), t("report.otherDescriptionError"), "error");
 			return;
 		}
 
@@ -65,14 +66,14 @@ const ReportKitModal = ({ isOpen, onClose, kitId }) => {
 
 			await reportKit(kitId, payload);
 			onClose();
-			Swal.fire("Success", "Report submitted successfully.", "success");
+			Swal.fire(t("common.success"), t("report.success"), "success");
 		} catch (error) {
 			const message =
 				error?.response?.data?.detail ||
 				error?.response?.data?.description?.[0] ||
 				error?.response?.data?.reason?.[0] ||
-				"Could not submit report.";
-			Swal.fire("Error", message, "error");
+				t("report.submitError");
+			Swal.fire(t("common.error"), message, "error");
 		} finally {
 			setSubmitting(false);
 		}
@@ -102,22 +103,22 @@ const ReportKitModal = ({ isOpen, onClose, kitId }) => {
 				onClick={(e) => e.stopPropagation()}
 			>
 				<div className="card-header bg-white d-flex justify-content-between align-items-center border-bottom-0 pt-3 pb-2">
-					<h5 className="fw-bold mb-0">Report kit</h5>
+					<h5 className="fw-bold mb-0">{t("report.title")}</h5>
 					<button className="btn-close" onClick={onClose}></button>
 				</div>
 				<div className="card-body">
 					<div className="mb-3">
-						<label className="form-label small text-muted">Reason</label>
+						<label className="form-label small text-muted">{t("report.reason")}</label>
 						<select
 							className="form-select"
 							value={reason}
 							onChange={(e) => setReason(e.target.value)}
 							disabled={submitting}
 						>
-							<option value="">Select a reason</option>
-							{REPORT_REASONS.map((option) => (
-								<option key={option.value} value={option.value}>
-									{option.label}
+							<option value="">{t("report.selectReason")}</option>
+							{reportReasons.map((value) => (
+								<option key={value} value={value}>
+									{t(`report.reasons.${value}`)}
 								</option>
 							))}
 						</select>
@@ -125,7 +126,7 @@ const ReportKitModal = ({ isOpen, onClose, kitId }) => {
 
 					<div className="mb-3">
 						<label className="form-label small text-muted">
-							Description {reason === "other" ? "(Required)" : "(Optional)"}
+							{t(reason === "other" ? "report.descriptionRequired" : "report.descriptionOptional")}
 						</label>
 						<textarea
 							className="form-control"
@@ -133,7 +134,7 @@ const ReportKitModal = ({ isOpen, onClose, kitId }) => {
 							value={description}
 							onChange={(e) => setDescription(e.target.value)}
 							disabled={submitting}
-							placeholder="Add a few details to help moderators review this report."
+							placeholder={t("report.placeholder")}
 						/>
 					</div>
 
@@ -144,7 +145,7 @@ const ReportKitModal = ({ isOpen, onClose, kitId }) => {
 							onClick={onClose}
 							disabled={submitting}
 						>
-							Cancel
+							{t("report.cancel")}
 						</button>
 						<button
 							type="button"
@@ -152,7 +153,7 @@ const ReportKitModal = ({ isOpen, onClose, kitId }) => {
 							onClick={handleSubmit}
 							disabled={submitting}
 						>
-							{submitting ? "Submitting..." : "Submit report"}
+							{submitting ? t("report.submitting") : t("report.submit")}
 						</button>
 					</div>
 				</div>

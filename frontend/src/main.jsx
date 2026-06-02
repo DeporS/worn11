@@ -3,6 +3,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App.jsx'
 import { GoogleOAuthProvider } from '@react-oauth/google';
+import "./i18n";
 
 const GOOGLE_CLIENT_ID = "264793383688-o8jep3l939c5a6pfnhe30c2qmnnoivd3.apps.googleusercontent.com";
 

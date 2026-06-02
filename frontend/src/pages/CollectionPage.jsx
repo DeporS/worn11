@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { getExploreKits, searchUsers } from "../services/api";
 import SearchBar from "../components/SearchBar";
@@ -6,10 +7,10 @@ import UserCard from "../components/UserCard";
 import ExploreKitCard from "../components/explore/ExploreKitCard";
 
 const EXPLORE_SECTIONS = [
-	{ key: "trending", label: "Trending", sort: "trending" },
-	{ key: "most_liked", label: "Most liked", sort: "most_liked" },
-	{ key: "latest", label: "Latest", sort: "latest" },
-	{ key: "for_sale", label: "For sale", sort: "for_sale" },
+	{ key: "trending", labelKey: "explore.trending", sort: "trending" },
+	{ key: "most_liked", labelKey: "explore.mostLiked", sort: "most_liked" },
+	{ key: "latest", labelKey: "explore.latest", sort: "latest" },
+	{ key: "for_sale", labelKey: "explore.forSale", sort: "for_sale" },
 ];
 
 const SECTION_LIMIT = 8;
@@ -25,6 +26,7 @@ const createSectionState = () =>
 	}, {});
 
 const CollectionPage = () => {
+	const { t } = useTranslation();
 	const [users, setUsers] = useState([]);
 	const [loadingUsers, setLoadingUsers] = useState(false);
 	const [searchError, setSearchError] = useState(null);
@@ -62,13 +64,13 @@ const CollectionPage = () => {
 				})
 				.catch((error) => {
 					console.error(error);
-					setSearchError("Failed to fetch users.");
+					setSearchError(t("explore.searchError"));
 					setLoadingUsers(false);
 				});
 		}, 500);
 
 		return () => window.clearTimeout(delayDebounceFn);
-	}, [trimmedQuery, canRunUserSearch, hasActiveSearch]);
+	}, [trimmedQuery, canRunUserSearch, hasActiveSearch, t]);
 
 	useEffect(() => {
 		if (hasActiveSearch) return;
@@ -100,7 +102,7 @@ const CollectionPage = () => {
 						acc[section.key] = {
 							items: [],
 							loading: false,
-							error: "Could not load this section.",
+							error: t("explore.sectionError"),
 						};
 					}
 					return acc;
@@ -113,7 +115,7 @@ const CollectionPage = () => {
 		return () => {
 			cancelled = true;
 		};
-	}, [hasActiveSearch]);
+	}, [hasActiveSearch, t]);
 
 	const renderSearchResults = () => (
 		<section>
@@ -132,7 +134,7 @@ const CollectionPage = () => {
 
 			{!canRunUserSearch && (
 				<div className="text-center text-muted py-5">
-					Type at least 3 characters to search collectors.
+					{t("explore.searchHint")}
 				</div>
 			)}
 
@@ -158,7 +160,7 @@ const CollectionPage = () => {
 					!searchError && (
 						<div className="col-12 text-center text-muted py-5">
 							<h4 className="mb-0">
-								No users found matching "{trimmedQuery}"
+								{t("explore.noUsersFound", { query: trimmedQuery })}
 							</h4>
 						</div>
 					)}
@@ -176,7 +178,7 @@ const CollectionPage = () => {
 		return (
 			<section className="mb-5" key={section.key} style={{ marginBottom: "4.5rem" }}>
 				<div className="text-center mb-4 mt-5">
-					<h3 className="h2 fw-bold mb-0">{section.label}</h3>
+					<h3 className="h2 fw-bold mb-0">{t(section.labelKey)}</h3>
 				</div>
 
 				{sectionState.loading ? (
@@ -189,7 +191,7 @@ const CollectionPage = () => {
 					</div>
 				) : sectionState.items.length === 0 ? (
 					<div className="text-center text-muted py-4">
-						No kits available in this section yet.
+						{t("explore.noKits")}
 					</div>
 				) : (
 					<div className="row g-3 g-md-4">
@@ -210,9 +212,9 @@ const CollectionPage = () => {
 	return (
 		<div className="container py-4 py-lg-5">
 			<header className="mb-4 text-center">
-				<h1 className="display-6 fw-bold mb-2">Explore Page</h1>
+				<h1 className="display-6 fw-bold mb-2">{t("explore.title")}</h1>
 				<p className="text-muted mb-0">
-					Discover trending kits from collectors around Worn11.
+					{t("explore.description")}
 				</p>
 			</header>
 

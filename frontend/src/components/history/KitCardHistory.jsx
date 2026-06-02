@@ -1,9 +1,11 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { toggleLike } from "../../services/api";
 import { useState } from "react";
 import Swal from "sweetalert2";
 import CommentsModal from "../comments/CommentsModal";
+import { formatLocalizedDate } from "../../utils/dateFormat";
 
 import "../../styles/profile.css";
 
@@ -14,6 +16,7 @@ const KitCardHistory = ({
 	compact = false,
 	onCardClick,
 }) => {
+	const { t, i18n } = useTranslation();
 	const [viewerState, setViewerState] = useState({
 		isOpen: false,
 		initialImageIndex: 0,
@@ -56,11 +59,11 @@ const KitCardHistory = ({
 
 		if (!user) {
 			Swal.fire({
-				title: "You need to log in!",
-				text: "Only logged-in users can like kits.",
+				title: t("exploreCard.authLikeTitle"),
+				text: t("exploreCard.authLikeText"),
 				icon: "info",
 				confirmButtonColor: "#3085d6",
-				confirmButtonText: "Ok",
+				confirmButtonText: t("common.ok"),
 			}).then((result) => {
 				if (result.isConfirmed) {
 				}
@@ -182,7 +185,7 @@ const KitCardHistory = ({
 							className="bg-light d-flex align-items-center justify-content-center rounded text-muted"
 							style={{ width: "100%", aspectRatio: "3 / 4" }}
 						>
-							<small>No photo</small>
+							<small>{t("history.noPhoto")}</small>
 						</div>
 					)}
 				</div>
@@ -192,7 +195,7 @@ const KitCardHistory = ({
 						<div className="d-flex justify-content-between align-items-start mb-2 gap-2">
 							<div className="min-w-0">
 								<div className="fw-bold text-dark text-truncate">
-									{item.kit?.team?.name || "Unknown team"}
+									{item.kit?.team?.name || t("history.unknownTeam")}
 								</div>
 								<div className="small text-muted text-truncate mt-1">
 									{[item.kit?.season, item.kit?.kit_type]
@@ -202,7 +205,7 @@ const KitCardHistory = ({
 							</div>
 							{item.for_sale ? (
 								<span className="badge text-bg-warning text-dark flex-shrink-0">
-									For sale
+									{t("history.forSale")}
 								</span>
 							) : null}
 						</div>
@@ -281,14 +284,7 @@ const KitCardHistory = ({
 							>
 								<i className="bi bi-clock me-1"></i>
 								<span className="username">
-									{new Date(item.added_at).toLocaleDateString(
-										"en-GB",
-										{
-											day: "numeric",
-											month: "short",
-											year: "numeric",
-										},
-									)}
+									{formatLocalizedDate(item.added_at, i18n.language)}
 								</span>
 							</small>
 						</div>
@@ -304,9 +300,9 @@ const KitCardHistory = ({
 							<button
 								onClick={getEbayLink}
 								className="btn w-100 rounded-pill d-flex align-items-center justify-content-center gap-2 ebay-btn"
-								title="Find this kit on eBay"
+								title={t("history.findOnEbayTitle")}
 							>
-								<span className="fw-bold">Find on eBay</span>
+								<span className="fw-bold">{t("history.findOnEbay")}</span>
 								<i className="bi bi-search"></i>
 							</button>
 						</div>

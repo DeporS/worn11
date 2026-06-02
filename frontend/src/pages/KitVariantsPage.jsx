@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { getKitVariants } from "../services/api";
 import KitCardHistory from "../components/history/KitCardHistory";
 
 const KitVariantsPage = ({ user }) => {
+	const { t } = useTranslation();
 	const { teamId } = useParams();
 	const [searchParams] = useSearchParams();
 	const navigate = useNavigate();
@@ -27,11 +29,11 @@ const KitVariantsPage = ({ user }) => {
 	return (
 		<div className="container py-5" style={{ maxWidth: "1400px" }}>
 			<button className="btn btn-light mb-4" onClick={() => navigate(-1)}>
-				&larr; Back to Museum
+				&larr; {t("history.backToMuseum")}
 			</button>
 
 			<h2 className="mb-4 fw-bold">
-				{type} Kits from {season} Season
+				{t("history.variantsTitle", { type, season })}
 			</h2>
 
 			{loading ? (
@@ -51,7 +53,7 @@ const KitVariantsPage = ({ user }) => {
 						))
 					) : (
 						<p className="text-muted">
-							No kits found for this season and type.
+							{t("history.variantsEmpty")}
 						</p>
 					)}
 				</div>

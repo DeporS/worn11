@@ -1,8 +1,10 @@
 import React from 'react';
+import { useTranslation } from "react-i18next";
 
 const TeamsGrid = ({ teams, loading, selectedLeagueName, onSelectTeam }) => {
+    const { t } = useTranslation();
     if (loading) return <div className="text-center py-5"><div className="spinner-border text-primary"></div></div>;
-    if (teams.length === 0) return <div className="text-center text-muted py-5"><h4>No teams found in {selectedLeagueName} yet.</h4></div>;
+    if (teams.length === 0) return <div className="text-center text-muted py-5"><h4>{t("history.noTeamsFound", { league: selectedLeagueName })}</h4></div>;
 
     return (
         <div className="row g-4">

@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+
 const formatCommentDate = (value) => {
 	if (!value) return "";
 
@@ -36,6 +38,7 @@ const CommentItem = ({
 	onToggleLike,
 	onDelete,
 }) => {
+	const { t } = useTranslation();
 	const avatar = comment.user?.avatar;
 	const username = comment.user?.username || "Unknown";
 	const isReplyBoxOpen = activeReplyId === comment.id;
@@ -109,7 +112,7 @@ const CommentItem = ({
 								className="btn btn-link p-0 text-decoration-none small text-muted"
 								onClick={() => onReplyStart(comment.id)}
 							>
-								Reply
+								{t("comments.reply")}
 							</button>
 						)}
 
@@ -119,7 +122,7 @@ const CommentItem = ({
 								className="btn btn-link p-0 text-decoration-none small text-danger"
 								onClick={() => onDelete(comment.id)}
 							>
-								Delete
+								{t("comments.delete")}
 							</button>
 						)}
 					</div>
@@ -127,12 +130,12 @@ const CommentItem = ({
 					{isReplyBoxOpen && (
 						<div className="mt-3">
 							<div className="small text-muted mb-2">
-								Replying to {replyTargetLabel}
+								{t("comments.replyingTo", { username: replyTargetLabel })}
 							</div>
 							<textarea
 								className="form-control form-control-sm"
 								rows="2"
-								placeholder={`Add a comment...`}
+								placeholder={t("comments.writeReply")}
 								value={replyDraft}
 								onChange={(e) => onReplyChange(e.target.value)}
 								style={{ resize: "none" }}
@@ -143,7 +146,7 @@ const CommentItem = ({
 									className="btn btn-sm btn-outline-secondary rounded-pill"
 									onClick={() => onReplyStart(null)}
 								>
-									Cancel
+									{t("comments.cancel")}
 								</button>
 								<button
 									type="button"
@@ -151,7 +154,7 @@ const CommentItem = ({
 									onClick={onReplySubmit}
 									disabled={replySubmitting}
 								>
-									{replySubmitting ? "Replying..." : "Reply"}
+									{replySubmitting ? t("comments.replying") : t("comments.reply")}
 								</button>
 							</div>
 						</div>

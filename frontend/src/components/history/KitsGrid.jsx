@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
+import { useTranslation } from "react-i18next";
 import { Link } from 'react-router-dom';
 import KitCard from '../history/KitCardHistory';
 import SeasonRow from './SeasonRow';
@@ -6,6 +7,7 @@ import SeasonRow from './SeasonRow';
 import '../../styles/history.css';
 
 const KitsGrid = ({ kits, loading, selectedTeamName, user }) => {
+    const { t } = useTranslation();
     const [showEmpty, setShowEmpty] = useState(true);
 
     // Generate seasons from current year down to 1940/1941
@@ -47,7 +49,7 @@ const KitsGrid = ({ kits, loading, selectedTeamName, user }) => {
             <div className="d-flex justify-content-between align-items-center mb-4">
                 <div>
                     {kits.length === 0 && (
-                        <span className="text-muted">No kits yet. Start the collection!</span>
+                        <span className="text-muted">{t("history.noKitsYet")}</span>
                     )}
                 </div>
                 
@@ -60,7 +62,7 @@ const KitsGrid = ({ kits, loading, selectedTeamName, user }) => {
                         onChange={(e) => setShowEmpty(e.target.checked)}
                     />
                     <label className="form-check-label small text-muted" htmlFor="showEmptySwitch">
-                        Show missing kits
+                        {t("history.showMissingKits")}
                     </label>
                 </div>
             </div>

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 import LoginButton from "./LoginButton";
 import UserAvatar from "./UserAvatar";
 import { Link, NavLink } from "react-router-dom";
@@ -10,6 +11,7 @@ import "../styles/navbar.css";
 const API_URL = "http://127.0.0.1:8000";
 
 const NavBar = ({ user, onLoginSuccess, onLogout, unreadMessagesCount = 0 }) => {
+	const { t, i18n } = useTranslation();
 	// State for hamburger menu (mobile)
 	const [isOpen, setIsOpen] = useState(false);
 
@@ -18,6 +20,11 @@ const NavBar = ({ user, onLoginSuccess, onLogout, unreadMessagesCount = 0 }) => 
 
 	// Close menu (used when a link is clicked)
 	const closeMenu = () => setIsOpen(false);
+	const currentLanguage = i18n.language?.startsWith("pl") ? "pl" : "en";
+	const handleLanguageChange = (nextLanguage) => {
+		if (nextLanguage === currentLanguage) return;
+		i18n.changeLanguage(nextLanguage);
+	};
 
 	return (
 		<nav className="navbar navbar-expand-lg navbar-light bg-white shadow-sm py-3 sticky-top">
@@ -80,7 +87,7 @@ const NavBar = ({ user, onLoginSuccess, onLogout, unreadMessagesCount = 0 }) => 
 								onClick={closeMenu}
 								style={{ fontSize: "1.1rem" }}
 							>
-								Kit Museum
+								{t("nav.kitMuseum")}
 							</NavLink>
 						</li>
 						<hr className="d-lg-none text-muted w-100 my-3" />
@@ -102,15 +109,16 @@ const NavBar = ({ user, onLoginSuccess, onLogout, unreadMessagesCount = 0 }) => 
 					<hr className="d-lg-none text-muted w-100 my-3" />
 
 					{/* Right side (User) */}
-					<div className="d-flex flex-column flex-lg-row align-items-center gap-3 w-100 w-lg-auto justify-content-center justify-content-lg-end">
+					<div className="navbar-user-area w-100 w-lg-auto">
 						{user ? (
 							<>
-								<div className="d-flex align-items-center gap-3 w-100 justify-content-center justify-content-lg-end">
+								{/* Desktop user controls */}
+								<div className="d-none d-lg-flex align-items-center gap-3 justify-content-end">
 									<Link
 										to="/messages"
 										className="text-decoration-none text-dark position-relative p-2 rounded hover-bg-light"
 										onClick={closeMenu}
-										title="Messages"
+										title={t("nav.messages")}
 									>
 										<i className="bi bi-chat-dots fs-4"></i>
 										{unreadMessagesCount > 0 && (
@@ -123,7 +131,6 @@ const NavBar = ({ user, onLoginSuccess, onLogout, unreadMessagesCount = 0 }) => 
 										)}
 									</Link>
 
-									{/* Profil Link */}
 									<Link
 										to="/my-collection"
 										className="text-decoration-none text-dark d-flex align-items-center gap-2 p-2 rounded hover-bg-light"
@@ -138,38 +145,171 @@ const NavBar = ({ user, onLoginSuccess, onLogout, unreadMessagesCount = 0 }) => 
 												className="text-muted small"
 												style={{ fontSize: "0.8rem" }}
 											>
-												View profile
+												{t("nav.viewProfile")}
 											</span>
 										</div>
 									</Link>
 
-									{/* Vertical separator */}
+									<div
+										className="language-switcher"
+										role="group"
+										aria-label="Language switcher"
+									>
+										<button
+											type="button"
+											className={`language-switcher__option ${currentLanguage === "en" ? "active" : ""}`}
+											onClick={() => handleLanguageChange("en")}
+											disabled={currentLanguage === "en"}
+											aria-pressed={currentLanguage === "en"}
+										>
+											{t("nav.languageEnglish")}
+										</button>
+										<button
+											type="button"
+											className={`language-switcher__option ${currentLanguage === "pl" ? "active" : ""}`}
+											onClick={() => handleLanguageChange("pl")}
+											disabled={currentLanguage === "pl"}
+											aria-pressed={currentLanguage === "pl"}
+										>
+											{t("nav.languagePolish")}
+										</button>
+									</div>
+
 									<div className="vr text-muted mx-2"></div>
 
-									{/* Logout button */}
 									<button
 										className="btn btn-link text-muted text-decoration-none p-2"
 										onClick={() => {
 											onLogout();
 											closeMenu();
 										}}
-										title="Logout"
+										title={t("nav.logout")}
 										style={{
 											display: "flex",
 											alignItems: "center",
 										}}
 									>
-										{/* Logout icon */}
-										{/* Mobile */}
-										<i className="bi bi-box-arrow-right fs-1 d-lg-none"></i>
-										{/* Desktop */}
-										<i className="bi bi-box-arrow-right fs-3 d-none d-lg-inline logout-button"></i>
+										<i className="bi bi-box-arrow-right fs-3 logout-button"></i>
 									</button>
+								</div>
+
+								{/* Mobile user controls */}
+								<div className="d-lg-none navbar-mobile-user-controls d-flex flex-column align-items-center gap-2 mt-2">
+									<Link
+										to="/messages"
+										className="text-decoration-none text-dark position-relative p-2 rounded hover-bg-light d-flex align-items-center"
+										onClick={closeMenu}
+										title={t("nav.messages")}
+									>
+										<i className="bi bi-chat-dots fs-4"></i>
+										{unreadMessagesCount > 0 && (
+											<span
+												className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+												style={{ fontSize: "0.65rem" }}
+											>
+												{unreadMessagesCount > 99 ? "99+" : unreadMessagesCount}
+											</span>
+										)}
+									</Link>
+
+									<Link
+										to="/my-collection"
+										className="navbar-mobile-profile-row text-decoration-none text-dark d-flex align-items-center justify-content-center gap-2 p-2 rounded hover-bg-light w-100"
+										onClick={closeMenu}
+									>
+										<UserAvatar user={user} size={40} />
+										<div className="d-flex flex-column align-items-start">
+											<span className="fw-bold">{user.username}</span>
+											<span
+												className="text-muted small"
+												style={{ fontSize: "0.8rem" }}
+											>
+												{t("nav.viewProfile")}
+											</span>
+										</div>
+									</Link>
+
+									<div className="mobile-navbar-bottom-row">
+										<div className="mobile-navbar-bottom-left">
+										<div
+											className="language-switcher"
+											role="group"
+											aria-label="Language switcher"
+										>
+											<button
+												type="button"
+												className={`language-switcher__option ${currentLanguage === "en" ? "active" : ""}`}
+												onClick={() => handleLanguageChange("en")}
+												disabled={currentLanguage === "en"}
+												aria-pressed={currentLanguage === "en"}
+											>
+												{t("nav.languageEnglish")}
+											</button>
+											<button
+												type="button"
+												className={`language-switcher__option ${currentLanguage === "pl" ? "active" : ""}`}
+												onClick={() => handleLanguageChange("pl")}
+												disabled={currentLanguage === "pl"}
+												aria-pressed={currentLanguage === "pl"}
+											>
+												{t("nav.languagePolish")}
+											</button>
+										</div>
+										</div>
+
+										<div
+											className="mobile-navbar-bottom-divider"
+											aria-hidden="true"
+										/>
+
+										<div className="mobile-navbar-bottom-right">
+											<button
+												className="btn btn-link text-muted text-decoration-none p-2"
+												onClick={() => {
+													onLogout();
+													closeMenu();
+												}}
+												title={t("nav.logout")}
+												style={{
+													display: "flex",
+													alignItems: "center",
+												}}
+											>
+												<i className="bi bi-box-arrow-right fs-1"></i>
+											</button>
+										</div>
+									</div>
 								</div>
 							</>
 						) : (
-							<div onClick={closeMenu}>
-								<LoginButton onLoginSuccess={onLoginSuccess} />
+							<div className="navbar-user-controls d-flex align-items-center justify-content-center justify-content-lg-end gap-2 gap-lg-3 w-100">
+								<div
+									className="language-switcher"
+									role="group"
+									aria-label="Language switcher"
+								>
+									<button
+										type="button"
+										className={`language-switcher__option ${currentLanguage === "en" ? "active" : ""}`}
+										onClick={() => handleLanguageChange("en")}
+										disabled={currentLanguage === "en"}
+										aria-pressed={currentLanguage === "en"}
+									>
+										{t("nav.languageEnglish")}
+									</button>
+									<button
+										type="button"
+										className={`language-switcher__option ${currentLanguage === "pl" ? "active" : ""}`}
+										onClick={() => handleLanguageChange("pl")}
+										disabled={currentLanguage === "pl"}
+										aria-pressed={currentLanguage === "pl"}
+									>
+										{t("nav.languagePolish")}
+									</button>
+								</div>
+								<div onClick={closeMenu}>
+									<LoginButton onLoginSuccess={onLoginSuccess} />
+								</div>
 							</div>
 						)}
 					</div>

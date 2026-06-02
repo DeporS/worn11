@@ -80,3 +80,124 @@
 	color: #c91f1f;
 	transform: scale(1.05);
 }
+
+.language-switcher {
+	display: inline-flex;
+	align-items: center;
+	border: 1px solid #d9dee7;
+	border-radius: 999px;
+	overflow: hidden;
+	background: #f8f9fb;
+	box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+	flex-shrink: 0;
+}
+
+.language-switcher__option {
+	border: 0;
+	background: transparent;
+	color: #667085;
+	padding: 0.38rem 0.78rem;
+	font-size: 0.85rem;
+	font-weight: 600;
+	line-height: 1;
+	transition:
+		background-color 0.2s ease,
+		color 0.2s ease,
+		box-shadow 0.2s ease;
+}
+
+.language-switcher__option:hover,
+.language-switcher__option:focus-visible {
+	background: rgba(17, 24, 39, 0.06);
+	color: #101828;
+	outline: none;
+}
+
+.language-switcher__option.active {
+	background: #111827;
+	color: #ffffff;
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.language-switcher__option:not(.active) {
+	min-width: 2.8rem;
+}
+
+.language-switcher__option:disabled {
+	opacity: 1;
+	cursor: default;
+	pointer-events: none;
+}
+
+@media (max-width: 991.98px) {
+	.navbar-collapse.show {
+		max-height: 70vh;
+	}
+
+	.navbar-nav {
+		margin-top: 0.5rem !important;
+		margin-bottom: 0.2rem !important;
+	}
+
+	.navbar-nav .nav-item {
+		margin-bottom: 0.05rem;
+	}
+
+	.navbar-nav .nav-link {
+		padding-top: 0.28rem !important;
+		padding-bottom: 0.28rem !important;
+	}
+
+	.navbar-collapse hr.d-lg-none {
+		margin-top: 0.4rem !important;
+		margin-bottom: 0.4rem !important;
+	}
+
+	.navbar-user-area {
+		gap: 0.25rem !important;
+	}
+
+	.navbar-mobile-user-controls {
+		width: 100% !important;
+		padding: 0.15rem 0 0.1rem;
+	}
+
+	.navbar-mobile-profile-row {
+		max-width: 100%;
+	}
+
+	.mobile-navbar-bottom-row {
+		position: relative;
+		width: 100%;
+		margin: 0 auto;
+		display: flex;
+		align-items: center;
+	}
+
+	.mobile-navbar-bottom-left,
+	.mobile-navbar-bottom-right {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 50%;
+		min-width: 0;
+	}
+
+	.mobile-navbar-bottom-divider {
+		position: absolute;
+		left: 50%;
+		top: 50%;
+		width: 1px;
+		height: 36px;
+		transform: translate(-50%, -50%);
+		background: #d9dee7;
+	}
+
+	.language-switcher {
+		margin: 0;
+	}
+
+	.language-switcher__option {
+		padding: 0.3rem 0.58rem;
+	}
+}

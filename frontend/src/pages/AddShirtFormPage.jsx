@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, use } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { addKitToCollection } from "../services/api";
@@ -9,6 +10,7 @@ import Swal from "sweetalert2";
 import "../styles/photos.css";
 
 const AddShirtFormPage = () => {
+	const { t } = useTranslation();
 	const navigate = useNavigate();
 	const location = useLocation();
 
@@ -109,12 +111,12 @@ const AddShirtFormPage = () => {
 			if (totalFiles > MAX_PHOTOS) {
 				if (!isPro) {
 					alert(
-						"Free users are limited to 5 photos. Upgrade to PRO to upload up to 20! 🚀",
+						t("forms.freeUserPhotoLimitAlert"),
 					);
 					// LINK TO UPGRADE TO PRO PAGE CAN BE ADDED HERE
 				} else {
 					alert(
-						`You are PRO and can upload up to ${MAX_PHOTOS} photos.`,
+						t("forms.proPhotoLimitAlert", { count: MAX_PHOTOS }),
 					);
 				}
 				return;
@@ -279,27 +281,27 @@ const AddShirtFormPage = () => {
 		// Basic validation
 
 		if (!teamName.trim()) {
-			setTeamError("Team Name is required.");
+			setTeamError(t("forms.teamNameRequired"));
 			setLoading(false);
 			return;
 		} else if (!season) {
-			setSeasonError("Season is required.");
+			setSeasonError(t("forms.seasonRequired"));
 			setLoading(false);
 			return;
 		} else if (!technology) {
-			setTechnologyError("Technology is required.");
+			setTechnologyError(t("forms.technologyRequired"));
 			setLoading(false);
 			return;
 		} else if (!kitType) {
-			setTypeError("Kit Type is required.");
+			setTypeError(t("forms.kitTypeRequired"));
 			setLoading(false);
 			return;
 		} else if (!size) {
-			setSizeError("Size is required.");
+			setSizeError(t("forms.sizeRequired"));
 			setLoading(false);
 			return;
 		} else if (!condition) {
-			setConditionError("Condition is required.");
+			setConditionError(t("forms.conditionRequired"));
 			setLoading(false);
 			return;
 		}
@@ -310,7 +312,7 @@ const AddShirtFormPage = () => {
 			(playerName.trim() === "" && playerNumber.trim() !== "")
 		) {
 			setPrintError(
-				"Both Player Name and Number must be filled, or both empty.",
+				t("forms.printFieldsRequired"),
 			);
 			setLoading(false);
 			return;
@@ -319,7 +321,7 @@ const AddShirtFormPage = () => {
 		// Validate offer link - prevent malicious strings
 		const urlPattern = /^(http|https):\/\/[^ "]+$/;
 		if (offerLink && !urlPattern.test(offerLink)) {
-			setLinkError("Link must start with http:// or https://");
+			setLinkError(t("forms.linkProtocolError"));
 			setLoading(false);
 			return;
 		}
@@ -346,16 +348,16 @@ const AddShirtFormPage = () => {
 			if (response?.valuation_warning) {
 				await Swal.fire({
 					icon: "info",
-					title: "Automated valuation unavailable",
+					title: t("forms.automatedValuationUnavailable"),
 					text: response.valuation_warning,
-					confirmButtonText: "OK",
+					confirmButtonText: t("common.ok"),
 				});
 			}
 			// Success - Redirect to profile
 			navigate("/my-collection");
 		} catch (err) {
 			console.error(err);
-			setError("Something went wrong. Check console for details.");
+			setError(t("forms.somethingWentWrong"));
 			setLoading(false);
 		}
 	};
@@ -382,10 +384,9 @@ const AddShirtFormPage = () => {
 									<i className="bi bi-plus-lg fs-2 text-primary"></i>
 								</div>
 
-								<h3 className="fw-bold mb-1">Add New Kit</h3>
+								<h3 className="fw-bold mb-1">{t("forms.addNewKit")}</h3>
 								<p className="text-muted small">
-									Fill in the details to expand your
-									collection
+									{t("forms.fillDetails")}
 								</p>
 							</div>
 
@@ -414,7 +415,7 @@ const AddShirtFormPage = () => {
 												letterSpacing: "1px",
 											}}
 										>
-											Basic Info
+											{t("forms.basicInfo")}
 										</span>
 									</div>
 
@@ -435,7 +436,7 @@ const AddShirtFormPage = () => {
 												autoComplete="off"
 											/>
 											<label htmlFor="floatingTeamName">
-												Team Name
+												{t("forms.teamName")}
 											</label>
 										</div>
 
@@ -542,7 +543,7 @@ const AddShirtFormPage = () => {
 													)}
 												</select>
 												<label htmlFor="floatingSeason">
-													Season
+													{t("forms.season")}
 												</label>
 											</div>
 											{/* Error */}
@@ -587,7 +588,7 @@ const AddShirtFormPage = () => {
 													))}
 												</select>
 												<label htmlFor="floatingType">
-													Type
+													{t("forms.type")}
 												</label>
 											</div>
 											{/* Error */}
@@ -618,7 +619,7 @@ const AddShirtFormPage = () => {
 														letterSpacing: "1px",
 													}}
 												>
-													Photos (
+													{t("forms.photos")} (
 													{selectedFiles.length}/
 													{MAX_PHOTOS})
 												</span>
@@ -632,7 +633,7 @@ const AddShirtFormPage = () => {
 														rel="noopener noreferrer"
 														className="pro-link"
 													>
-														Need more? Go PRO 💎
+														{t("forms.needMoreGoPro")}
 													</a>
 												</small>
 											)}
@@ -830,7 +831,7 @@ const AddShirtFormPage = () => {
 																	"10px",
 															}}
 														>
-															Add Photo
+															{t("forms.addPhoto")}
 														</small>
 													</motion.div>
 												)}
@@ -871,7 +872,7 @@ const AddShirtFormPage = () => {
 																			"10px",
 																	}}
 																>
-																	Unlock PRO
+																	{t("forms.unlockPro")}
 																</small>
 															</motion.div>
 														</motion.a>
@@ -882,8 +883,8 @@ const AddShirtFormPage = () => {
 
 									<div className="form-text mt-2">
 										{!isPro
-											? `You can add up to ${MAX_PHOTOS} photos.`
-											: `As a PRO member, enjoy adding up to ${MAX_PHOTOS} photos!`}
+											? t("forms.photosLimitFree", { count: MAX_PHOTOS })
+											: t("forms.photosLimitPro", { count: MAX_PHOTOS })}
 									</div>
 								</div>
 
@@ -901,7 +902,7 @@ const AddShirtFormPage = () => {
 												letterSpacing: "1px",
 											}}
 										>
-											Kit Details
+											{t("forms.kitDetails")}
 										</span>
 									</div>
 
@@ -937,7 +938,7 @@ const AddShirtFormPage = () => {
 													))}
 												</select>
 												<label htmlFor="floatingSize">
-													Size
+													{t("forms.size")}
 												</label>
 											</div>
 											{/* Error */}
@@ -987,7 +988,7 @@ const AddShirtFormPage = () => {
 													)}
 												</select>
 												<label htmlFor="floatingTech">
-													Technology
+													{t("forms.technology")}
 												</label>
 											</div>
 											{/* Error */}
@@ -1037,7 +1038,7 @@ const AddShirtFormPage = () => {
 													)}
 												</select>
 												<label htmlFor="floatingCondition">
-													Condition
+													{t("forms.condition")}
 												</label>
 											</div>
 											{/* Error */}
@@ -1065,7 +1066,7 @@ const AddShirtFormPage = () => {
 												letterSpacing: "1px",
 											}}
 										>
-											Shirt Printing (Optional)
+											{t("forms.shirtPrintingOptional")}
 										</span>
 									</div>
 
@@ -1088,7 +1089,7 @@ const AddShirtFormPage = () => {
 													}}
 												/>
 												<label htmlFor="floatingPlayerName">
-													Player Name
+													{t("forms.playerName")}
 												</label>
 											</div>
 										</div>
@@ -1111,7 +1112,7 @@ const AddShirtFormPage = () => {
 													}}
 												/>
 												<label htmlFor="floatingPlayerNum">
-													Number
+													{t("forms.number")}
 												</label>
 											</div>
 										</div>
@@ -1140,7 +1141,7 @@ const AddShirtFormPage = () => {
 												letterSpacing: "1px",
 											}}
 										>
-											Estimated Value
+											{t("forms.estimatedValue")}
 										</span>
 									</div>
 
@@ -1161,7 +1162,7 @@ const AddShirtFormPage = () => {
 													}
 												/>
 												<label htmlFor="floatingPrice">
-													Value ($)
+													{t("forms.value")}
 												</label>
 											</div>
 										</div>
@@ -1194,10 +1195,10 @@ const AddShirtFormPage = () => {
 													>
 														{forSale ? (
 															<span className="text-success">
-																FOR SALE
+																{t("forms.forSale")}
 															</span>
 														) : (
-															"NOT FOR SALE"
+															t("forms.notForSale")
 														)}
 													</label>
 												</div>
@@ -1206,7 +1207,7 @@ const AddShirtFormPage = () => {
 									</div>
 
 									<div className="form-text mt-2 small">
-										Leave value blank to auto-calculate.
+										{t("forms.leaveValueBlank")}
 									</div>
 								</div>
 
@@ -1224,7 +1225,7 @@ const AddShirtFormPage = () => {
 												letterSpacing: "1px",
 											}}
 										>
-											Offer link (Optional)
+											{t("forms.offerLinkOptional")}
 										</span>
 									</div>
 
@@ -1244,8 +1245,7 @@ const AddShirtFormPage = () => {
 													}
 												/>
 												<label htmlFor="floatingOfferLink">
-													Full URL to where your kit
-													is listed
+													{t("forms.offerLinkLabel")}
 												</label>
 											</div>
 										</div>
@@ -1268,8 +1268,8 @@ const AddShirtFormPage = () => {
 										disabled={loading}
 									>
 										{loading
-											? "Uploading..."
-											: "Add to Collection"}
+											? t("forms.uploading")
+											: t("forms.addToCollection")}
 									</button>
 									<button
 										type="button"
@@ -1278,7 +1278,7 @@ const AddShirtFormPage = () => {
 											navigate("/my-collection")
 										}
 									>
-										Cancel
+										{t("common.cancel")}
 									</button>
 								</div>
 							</form>

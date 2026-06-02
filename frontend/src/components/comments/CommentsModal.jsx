@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import Swal from "sweetalert2";
 
 import {
@@ -93,6 +94,7 @@ const CommentsModal = ({
 	item,
 	initialImageIndex = 0,
 }) => {
+	const { t } = useTranslation();
 	const [comments, setComments] = useState([]);
 	const [loading, setLoading] = useState(false);
 	const [draft, setDraft] = useState("");
@@ -140,14 +142,14 @@ const CommentsModal = ({
 				setComments(Array.isArray(data) ? data : []);
 			} catch (error) {
 				console.error("Failed to load comments", error);
-				Swal.fire("Error", "Could not load comments.", "error");
+				Swal.fire(t("common.error"), t("comments.loadError"), "error");
 			} finally {
 				setLoading(false);
 			}
 		};
 
 		loadComments();
-	}, [isOpen, kitId]);
+	}, [isOpen, kitId, t]);
 
 	useEffect(() => {
 		if (!isOpen) return;
@@ -177,11 +179,11 @@ const CommentsModal = ({
 		if (currentUser) return true;
 
 		Swal.fire({
-			title: "You need to log in!",
-			text: "Only logged-in users can comment and like comments.",
+			title: t("comments.authTitle"),
+			text: t("comments.authText"),
 			icon: "info",
 			confirmButtonColor: "#3085d6",
-			confirmButtonText: "Ok",
+			confirmButtonText: t("common.ok"),
 		});
 		return false;
 	};
@@ -198,7 +200,7 @@ const CommentsModal = ({
 			setDraft("");
 		} catch (error) {
 			console.error("Failed to add comment", error);
-			Swal.fire("Error", "Could not add your comment.", "error");
+			Swal.fire(t("common.error"), t("comments.addError"), "error");
 		} finally {
 			setSubmitting(false);
 		}
@@ -221,8 +223,8 @@ const CommentsModal = ({
 			const message =
 				error?.response?.data?.parent?.[0] ||
 				error?.response?.data?.reply_to?.[0] ||
-				"Could not add your reply.";
-			Swal.fire("Error", message, "error");
+				t("comments.replyError");
+			Swal.fire(t("common.error"), message, "error");
 		} finally {
 			setReplySubmitting(false);
 		}
@@ -259,19 +261,19 @@ const CommentsModal = ({
 		} catch (error) {
 			console.error("Failed to like comment", error);
 			setComments(previousComments);
-			Swal.fire("Error", "Could not update comment like.", "error");
+			Swal.fire(t("common.error"), t("comments.likeError"), "error");
 		}
 	};
 
 	const handleDelete = async (commentId) => {
 		const result = await Swal.fire({
-			title: "Delete comment?",
-			text: "This comment will be removed permanently.",
+			title: t("comments.deleteTitle"),
+			text: t("comments.deleteText"),
 			icon: "warning",
 			showCancelButton: true,
 			confirmButtonColor: "#dc3545",
 			cancelButtonColor: "#6c757d",
-			confirmButtonText: "Delete",
+			confirmButtonText: t("comments.deleteConfirm"),
 		});
 
 		if (!result.isConfirmed) return;
@@ -281,7 +283,7 @@ const CommentsModal = ({
 			setComments((prev) => removeCommentFromTree(prev, commentId));
 		} catch (error) {
 			console.error("Failed to delete comment", error);
-			Swal.fire("Error", "Could not delete comment.", "error");
+			Swal.fire(t("common.error"), t("comments.deleteError"), "error");
 		}
 	};
 
@@ -328,7 +330,7 @@ const CommentsModal = ({
 									className="btn btn-link btn-sm p-0 text-decoration-none text-muted text-nowrap"
 								>
 									<i className="bi bi-box-arrow-up-right me-1" aria-hidden="true"></i>
-									View offer
+									{t("comments.viewOffer")}
 								</a>
 							)}
 							<button
@@ -337,7 +339,7 @@ const CommentsModal = ({
 								onClick={() => copyKitShareUrl(item)}
 							>
 								<i className="bi bi-link-45deg me-1" aria-hidden="true"></i>
-								Share
+								{t("comments.share")}
 							</button>
 							<button
 								type="button"
@@ -351,7 +353,7 @@ const CommentsModal = ({
 								}}
 							>
 								<i className="bi bi-flag me-1" aria-hidden="true"></i>
-								Report kit
+								{t("comments.reportKit")}
 							</button>
 							<button className="btn-close" onClick={onClose}></button>
 						</div>
@@ -428,7 +430,7 @@ const CommentsModal = ({
 								</>
 							) : (
 								<div className="unified-kit-stage text-center text-white-50">
-									<div>No photo available</div>
+									<div>{t("comments.noPhoto")}</div>
 								</div>
 							)}
 						</div>
@@ -441,8 +443,8 @@ const CommentsModal = ({
 										rows="3"
 										placeholder={
 											currentUser
-												? "Add a comment..."
-												: "Log in to join the conversation..."
+												? t("comments.addComment")
+												: t("comments.loginToJoin")
 										}
 										value={draft}
 										onChange={(e) => setDraft(e.target.value)}
@@ -450,7 +452,7 @@ const CommentsModal = ({
 									/>
 									<div className="d-flex justify-content-between align-items-center gap-3 mt-2">
 										<small className="text-muted fw-semibold text-nowrap">
-											{totalComments} {totalComments === 1 ? "comment" : "comments"}
+											{totalComments} {t(totalComments === 1 ? "comments.comment_one" : "comments.comment_other")}
 										</small>
 										<button
 											type="button"
@@ -458,7 +460,7 @@ const CommentsModal = ({
 											onClick={handleAddComment}
 											disabled={!currentUser || submitting || !draft.trim()}
 										>
-											{submitting ? "Posting..." : "Post comment"}
+											{submitting ? t("comments.posting") : t("comments.postComment")}
 										</button>
 									</div>
 								</div>
@@ -466,10 +468,13 @@ const CommentsModal = ({
 								{loading ? (
 									<div className="text-center py-4">
 										<div className="spinner-border spinner-border-sm text-primary"></div>
+										<div className="small text-muted mt-2">
+											{t("comments.loading")}
+										</div>
 									</div>
 								) : comments.length === 0 ? (
 									<div className="text-center py-4 text-muted">
-										No comments yet. Start the conversation.
+										{t("comments.noComments")}
 									</div>
 								) : (
 									<div className="d-flex flex-column gap-4">

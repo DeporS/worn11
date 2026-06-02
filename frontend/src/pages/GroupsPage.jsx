@@ -1,10 +1,12 @@
 
+import { useTranslation } from "react-i18next";
 
 const GroupsPage = () => {
+  const { t } = useTranslation();
   return (
     <div>
-      <h1>Groups Page</h1>
-      <p>This is the Groups page.</p>
+      <h1>{t("groups.title")}</h1>
+      <p>{t("groups.description")}</p>
     </div>
   );
 };

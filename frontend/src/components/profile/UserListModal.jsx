@@ -1,7 +1,9 @@
 import React, { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
 const UserListModal = ({ isOpen, onClose, title, users, loading }) => {
+	const { t } = useTranslation();
 	// Block scroll when modal is open
 	useEffect(() => {
 		if (isOpen) {
@@ -56,7 +58,7 @@ const UserListModal = ({ isOpen, onClose, title, users, loading }) => {
 						</div>
 					) : users.length === 0 ? (
 						<div className="text-center p-4 text-muted">
-							No {title.toLowerCase()} yet.
+							{t("profile.noUsersYet", { title: title.toLowerCase() })}
 						</div>
 					) : (
 						<ul className="list-group list-group-flush">
@@ -99,8 +101,18 @@ const UserListModal = ({ isOpen, onClose, title, users, loading }) => {
 										<small className="text-muted">
 											{/* Dynamic subtitle - depending on API response */}
 											{u.followers_count !== undefined
-												? `${u.followers_count} ${u.followers_count === 1 ? "follower" : "followers"}`
-												: `${u.kits_count || 0} kits`}
+												? t(
+													u.followers_count === 1
+														? "profile.followerCount_one"
+														: "profile.followerCount_other",
+													{ count: u.followers_count },
+												)
+												: t(
+													(u.kits_count || 0) === 1
+														? "profile.kitsCount_one"
+														: "profile.kitsCount_other",
+													{ count: u.kits_count || 0 },
+												)}
 										</small>
 									</div>
 								</Link>
