@@ -194,7 +194,7 @@ function App() {
 
 					{/* Kit Variants Page */}
 					<Route
-						path="/history/team/:teamId/variants"
+						path="/history/team/:teamIdentifier/variants"
 						element={<KitVariantsPage user={user} />}
 					/>
 				</Routes>

@@ -5,6 +5,7 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.utils import timezone
+from django.utils.text import slugify
 
 SHIRT_TECHNOLOGIES = [
     ('PLAYER_ISSUE', 'Player Issue'),
@@ -97,6 +98,10 @@ KIT_REPORT_STATUS_CHOICES = [
 AUTOMATED_VALUATION_UNAVAILABLE_MESSAGE = (
     "Automated valuation is not available for this kit yet, so its value will be set to 0."
 )
+
+
+def build_team_slug(team_name):
+    return slugify(team_name or "")
 
 # User profile
 class Profile(models.Model):

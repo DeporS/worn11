@@ -163,10 +163,15 @@ export const toggleLike = async (id) => {
 };
 
 // Get kit variants for a team and season
-export const getKitVariants = async (teamId, season, type) => {
+export const getKitVariants = async (teamIdentifier, season, type) => {
 	const response = await api.get(
-		`/kits/team/${teamId}/variants/?season=${encodeURIComponent(season)}&type=${encodeURIComponent(type)}`,
+		`/kits/team/${teamIdentifier}/variants/?season=${encodeURIComponent(season)}&type=${encodeURIComponent(type)}`,
 	);
+	return response.data;
+};
+
+export const resolveTeam = async (teamIdentifier) => {
+	const response = await api.get(`/teams/${teamIdentifier}/resolve/`);
 	return response.data;
 };
 

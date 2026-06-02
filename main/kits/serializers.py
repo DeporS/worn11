@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Country, League, Team, Kit, UserKit, UserKitImage, User, Profile, KitComment, KitReport, Conversation, Message
+from .models import Country, League, Team, Kit, UserKit, UserKitImage, User, Profile, KitComment, KitReport, Conversation, Message, build_team_slug
 from django.contrib.auth.models import User
 from dj_rest_auth.serializers import UserDetailsSerializer
 import json
@@ -245,9 +245,14 @@ class MessageSerializer(serializers.ModelSerializer):
 
 # Team Serializer
 class TeamSerializer(serializers.ModelSerializer):
+    slug = serializers.SerializerMethodField()
+
     class Meta:
         model = Team
-        fields = ['id', 'name', 'logo', 'league']
+        fields = ['id', 'name', 'slug', 'logo', 'league']
+
+    def get_slug(self, obj):
+        return build_team_slug(obj.name)
 
 # Country Serializer
 class CountrySerializer(serializers.ModelSerializer):
@@ -275,6 +280,7 @@ class KitSerializer(serializers.ModelSerializer):
 class KitSearchSuggestionSerializer(serializers.Serializer):
     team_id = serializers.IntegerField(read_only=True)
     team_name = serializers.CharField(read_only=True)
+    team_slug = serializers.CharField(read_only=True)
     season = serializers.CharField(read_only=True)
     kit_type = serializers.CharField(read_only=True)
     label = serializers.CharField(read_only=True)

@@ -101,7 +101,7 @@ const SeasonRow = ({
 								<div className="text-center mb-2">
 									{bestKit ? (
 										<Link
-											to={`/history/team/${bestKit.kit.team.id}/variants?season=${encodeURIComponent(season)}&type=${encodeURIComponent(typeObj.value)}`}
+											to={`/history/team/${bestKit.kit.team.slug || bestKit.kit.team.id}/variants?season=${encodeURIComponent(season)}&type=${encodeURIComponent(typeObj.value)}`}
 											className="text-decoration-none"
 											title={t("history.seeAllUploadsTitle", {
 												season,

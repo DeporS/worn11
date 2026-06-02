@@ -1257,6 +1257,7 @@ class KitSearchSuggestionsAPITests(APITestCase):
     def setUp(self):
         self.client = APIClient()
         self.url = reverse("kit-search-suggestions")
+        self.user = User.objects.create_user(username="variantowner", password="password123")
         self.arsenal = Team.objects.create(name="Arsenal F.C.", is_verified=True)
         self.barcelona = Team.objects.create(name="Barcelona", is_verified=True)
         self.unverified_team = Team.objects.create(name="Arsenal Legends", is_verified=False)
@@ -1265,7 +1266,7 @@ class KitSearchSuggestionsAPITests(APITestCase):
         self.create_kit(self.arsenal, "2017/2018", "Away")
         self.create_kit(self.arsenal, "2011/2012", "Home")
         self.create_kit(self.arsenal, "2010/2011", "Away")
-        self.create_kit(self.barcelona, "2011/2012", "Home")
+        self.barcelona_home = self.create_kit(self.barcelona, "2011/2012", "Home")
         self.create_kit(self.unverified_team, "2018/2019", "Home")
 
     def create_kit(self, team, season, kit_type):
@@ -1756,10 +1757,11 @@ class KitSearchSuggestionsAPITests(APITestCase):
                 {
                     "team_id": self.arsenal.id,
                     "team_name": "Arsenal F.C.",
+                    "team_slug": "arsenal-fc",
                     "season": "2018/2019",
                     "kit_type": "Away",
                     "label": "Arsenal F.C. 2018/2019 Away",
-                    "url": f"/history/team/{self.arsenal.id}/variants?season=2018%2F2019&type=Away",
+                    "url": "/history/team/arsenal-fc/variants?season=2018%2F2019&type=Away",
                 }
             ],
         )
@@ -1801,5 +1803,65 @@ class KitSearchSuggestionsAPITests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.data[0]["url"],
-            f"/history/team/{self.arsenal.id}/variants?{urlencode({'season': '2020/2021', 'type': 'Goalkeeper'})}",
+            f"/history/team/arsenal-fc/variants?{urlencode({'season': '2020/2021', 'type': 'Goalkeeper'})}",
         )
+
+    def test_search_suggestion_includes_team_slug(self):
+        response = self.client.get(self.url, {"q": "Arsenal 2020/2021 home"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data[0]["team_slug"], "arsenal-fc")
+
+    def test_team_slug_generation_uses_slugified_name(self):
+        response = self.client.get(self.url, {"q": "Arsenal 2020/2021 home"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data[0]["url"], "/history/team/arsenal-fc/variants?season=2020%2F2021&type=Home")
+
+    def test_team_resolve_accepts_slug(self):
+        response = self.client.get(reverse("team-resolve", args=["arsenal-fc"]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["id"], self.arsenal.id)
+        self.assertEqual(response.data["name"], "Arsenal F.C.")
+        self.assertEqual(response.data["slug"], "arsenal-fc")
+
+    def test_team_resolve_accepts_numeric_id(self):
+        response = self.client.get(reverse("team-resolve", args=[str(self.arsenal.id)]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["id"], self.arsenal.id)
+
+    def test_kit_variants_api_accepts_team_slug(self):
+        UserKit.objects.create(
+            user=self.user,
+            kit=self.barcelona_home,
+            shirt_technology="REPLICA",
+            condition="VERY_GOOD",
+            size="L",
+        )
+
+        response = self.client.get(
+            reverse("kit-variants", args=["barcelona"]),
+            {"season": "2011/2012", "type": "Home"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["results"][0]["kit"]["team"]["name"], "Barcelona")
+
+    def test_kit_variants_api_accepts_numeric_team_id(self):
+        UserKit.objects.create(
+            user=self.user,
+            kit=self.barcelona_home,
+            shirt_technology="REPLICA",
+            condition="VERY_GOOD",
+            size="L",
+        )
+
+        response = self.client.get(
+            reverse("kit-variants", args=[str(self.barcelona.id)]),
+            {"season": "2011/2012", "type": "Home"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["results"][0]["kit"]["team"]["name"], "Barcelona")

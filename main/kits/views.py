@@ -16,7 +16,7 @@ from django.utils import timezone
 from urllib.parse import urlencode
 import re
 
-from .models import League, UserKit, Kit, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country, Follow, KitComment, KitCommentLike, KitReport, Conversation, Message
+from .models import League, UserKit, Kit, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country, Follow, KitComment, KitCommentLike, KitReport, Conversation, Message, build_team_slug
 from .serializers import LeagueSerializer, UserKitSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer, CountrySerializer, KitCommentSerializer, KitCommentWriteSerializer, KitReportSerializer, ConversationListSerializer, ConversationDetailSerializer, ConversationStartSerializer, MessageSerializer, MessageWriteSerializer, KitSearchSuggestionSerializer
 
 
@@ -369,6 +369,7 @@ def get_generated_seasons():
 
 
 def get_generated_suggestion(team, season, kit_type):
+    team_slug = build_team_slug(team.name)
     query_string = urlencode({
         'season': season,
         'type': kit_type,
@@ -376,10 +377,11 @@ def get_generated_suggestion(team, season, kit_type):
     return {
         'team_id': team.id,
         'team_name': team.name,
+        'team_slug': team_slug,
         'season': season,
         'kit_type': kit_type,
         'label': f"{team.name} {season} {kit_type}",
-        'url': f"/history/team/{team.id}/variants?{query_string}",
+        'url': f"/history/team/{team_slug}/variants?{query_string}",
     }
 
 
@@ -409,6 +411,21 @@ def get_history_type_filter(kit_type):
         return Q(kit__kit_type__iexact='Special') | Q(kit__kit_type__istartswith='Special')
 
     return Q(kit__kit_type__iexact=normalized_type)
+
+
+def get_team_by_identifier(team_identifier):
+    normalized_identifier = (team_identifier or '').strip()
+    if not normalized_identifier:
+        return None
+
+    if normalized_identifier.isdigit():
+        return Team.objects.filter(pk=int(normalized_identifier)).first()
+
+    for team in Team.objects.all().order_by('id'):
+        if build_team_slug(team.name) == normalized_identifier:
+            return team
+
+    return None
 
 
 def get_comment_like_annotation(user):
@@ -655,6 +672,18 @@ class TeamSearchAPI(generics.ListAPIView):
             name__icontains=query,
             is_verified=True
         )[:5] # Limit to 5 results
+
+
+class TeamResolveAPI(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, team_identifier):
+        team = get_team_by_identifier(team_identifier)
+        if team is None:
+            return Response({'detail': 'Team not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = TeamSerializer(team)
+        return Response(serializer.data)
 
 # Endpoint: User collection statistics
 class UserCollectionStatsAPI(APIView):
@@ -1177,11 +1206,14 @@ class KitVariantsAPI(generics.ListAPIView):
     pagination_class = StandardResultsSetPagination # paginate results
 
     def get_queryset(self):
-        team_id = self.kwargs['team_id']
+        team_identifier = self.kwargs.get('team_identifier')
         season = self.request.query_params.get('season')
         kit_type = self.request.query_params.get('type')
+        team = get_team_by_identifier(team_identifier)
+        if team is None:
+            return UserKit.objects.none()
 
-        queryset = UserKit.objects.filter(kit__team_id=team_id)
+        queryset = UserKit.objects.filter(kit__team=team)
 
         if season:
             queryset = queryset.filter(kit__season=season)
