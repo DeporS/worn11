@@ -9,7 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient, APITestCase
 
-from .models import Kit, Team, UserKit, UserKitImage, KitComment, KitReport, Conversation, Message, AUTOMATED_VALUATION_UNAVAILABLE_MESSAGE
+from .models import Kit, Team, UserKit, UserKitImage, KitComment, KitReport, Conversation, Message, Follow, AUTOMATED_VALUATION_UNAVAILABLE_MESSAGE
 
 
 class UserKitPricingTests(APITestCase):
@@ -1956,3 +1956,161 @@ class KitSearchSuggestionsAPITests(APITestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["results"][0]["kit"]["team"]["name"], "Barcelona")
+
+
+class FollowingFeedAPITests(APITestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.url = reverse("following-feed")
+
+        self.viewer = User.objects.create_user(username="viewer", password="password123")
+        self.followed_one = User.objects.create_user(username="followed1", password="password123")
+        self.followed_two = User.objects.create_user(username="followed2", password="password123")
+        self.other_user = User.objects.create_user(username="otheruser", password="password123")
+
+        self.team = Team.objects.create(name="Feed FC", is_verified=True)
+
+        Follow.objects.create(follower=self.viewer, following=self.followed_one)
+        Follow.objects.create(follower=self.viewer, following=self.followed_two)
+
+        self.viewer_kit = self.create_user_kit(
+            self.viewer,
+            "2024/2025",
+            "Home",
+            timezone.now() - timedelta(hours=4),
+            image_name="viewer.jpg",
+        )
+        self.non_followed_kit = self.create_user_kit(
+            self.other_user,
+            "2024/2025",
+            "Away",
+            timezone.now() - timedelta(hours=3),
+            image_name="other.jpg",
+        )
+        self.oldest_followed_kit = self.create_user_kit(
+            self.followed_one,
+            "2022/2023",
+            "Third",
+            timezone.now() - timedelta(hours=2),
+            image_name="oldest.jpg",
+        )
+        self.middle_followed_kit = self.create_user_kit(
+            self.followed_two,
+            "2023/2024",
+            "Away",
+            timezone.now() - timedelta(hours=1),
+            image_name="middle.jpg",
+        )
+        self.newest_followed_kit = self.create_user_kit(
+            self.followed_one,
+            "2025/2026",
+            "Home",
+            timezone.now(),
+            image_name="newest.jpg",
+        )
+
+    def create_user_kit(self, user, season, kit_type, added_at, image_name=None):
+        kit = Kit.objects.create(
+            team=self.team,
+            season=season,
+            kit_type=kit_type,
+            estimated_price=Decimal("100.00"),
+        )
+        user_kit = UserKit.objects.create(
+            user=user,
+            kit=kit,
+            shirt_technology="REPLICA",
+            condition="VERY_GOOD",
+            size="L",
+            in_the_collection=True,
+        )
+        UserKit.objects.filter(pk=user_kit.pk).update(added_at=added_at)
+        user_kit.refresh_from_db()
+
+        if image_name:
+            UserKitImage.objects.create(
+                user_kit=user_kit,
+                image=SimpleUploadedFile(image_name, b"feed-bytes", content_type="image/jpeg"),
+                order=0,
+            )
+
+        return user_kit
+
+    def test_unauthenticated_request_is_rejected(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_authenticated_user_sees_only_followed_users_kits(self):
+        self.client.force_authenticate(user=self.viewer)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["id"] for item in response.data["results"]],
+            [
+                self.newest_followed_kit.id,
+                self.middle_followed_kit.id,
+                self.oldest_followed_kit.id,
+            ],
+        )
+
+    def test_non_followed_users_and_own_kits_are_excluded(self):
+        self.client.force_authenticate(user=self.viewer)
+
+        response = self.client.get(self.url)
+        returned_ids = [item["id"] for item in response.data["results"]]
+
+        self.assertNotIn(self.non_followed_kit.id, returned_ids)
+        self.assertNotIn(self.viewer_kit.id, returned_ids)
+
+    def test_response_includes_owner_and_kit_fields_needed_by_frontend(self):
+        self.client.force_authenticate(user=self.viewer)
+
+        response = self.client.get(self.url, {"limit": 1})
+
+        self.assertEqual(response.status_code, 200)
+        item = response.data["results"][0]
+        self.assertEqual(item["owner_id"], self.followed_one.id)
+        self.assertEqual(item["owner_username"], self.followed_one.username)
+        self.assertIn("owner_avatar", item)
+        self.assertEqual(item["kit"]["team"]["name"], "Feed FC")
+        self.assertEqual(item["kit"]["season"], "2025/2026")
+        self.assertEqual(item["kit"]["kit_type"], "Home")
+        self.assertEqual(len(item["images"]), 1)
+
+    def test_limit_works_and_has_more_is_true_when_older_items_exist(self):
+        self.client.force_authenticate(user=self.viewer)
+
+        response = self.client.get(self.url, {"limit": 2})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["results"]), 2)
+        self.assertTrue(response.data["has_more"])
+
+    def test_before_returns_older_items(self):
+        self.client.force_authenticate(user=self.viewer)
+
+        first_page = self.client.get(self.url, {"limit": 2})
+        before_id = first_page.data["results"][-1]["id"]
+
+        second_page = self.client.get(self.url, {"limit": 2, "before": before_id})
+
+        self.assertEqual(second_page.status_code, 200)
+        self.assertEqual(
+            [item["id"] for item in second_page.data["results"]],
+            [self.oldest_followed_kit.id],
+        )
+        self.assertFalse(second_page.data["has_more"])
+
+    def test_invalid_before_is_handled_safely(self):
+        self.client.force_authenticate(user=self.viewer)
+
+        invalid_response = self.client.get(self.url, {"before": "bad-id"})
+        missing_response = self.client.get(self.url, {"before": 999999})
+
+        self.assertEqual(invalid_response.status_code, 400)
+        self.assertEqual(invalid_response.data["before"], ["before must be a valid kit id."])
+        self.assertEqual(missing_response.status_code, 400)
+        self.assertEqual(missing_response.data["before"], ["Kit not found in feed."])

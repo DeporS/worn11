@@ -1,6 +1,7 @@
 {
 	"nav": {
 		"kitMuseum": "Kit Museum",
+		"feed": "Feed",
 		"messages": "Messages",
 		"viewProfile": "View profile",
 		"logout": "Logout",
@@ -26,6 +27,20 @@
 		"kits": "Kits",
 		"collectors": "Collectors",
 		"noKitSuggestions": "No kit suggestions found."
+	},
+	"feed": {
+		"title": "Feed",
+		"subtitle": "Latest kits from collectors you follow.",
+		"empty": "Your feed is empty. Follow collectors to see their latest kits here.",
+		"loginRequired": "Log in to see your feed.",
+		"loading": "Loading feed...",
+		"loadError": "Could not load your feed.",
+		"loadMore": "Load more",
+		"added": "Added {{time}}",
+		"viewKit": "View kit",
+		"viewOffer": "View offer",
+		"forSale": "For sale",
+		"likeError": "Could not update like. Please try again."
 	},
 	"messages": {
 		"title": "Messages",

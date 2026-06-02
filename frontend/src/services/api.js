@@ -98,6 +98,16 @@ export const getExploreKits = async (sort = "trending", limit = 24) => {
 	return response.data;
 };
 
+export const getFollowingFeed = async ({ limit = 20, before } = {}) => {
+	const response = await api.get("/feed/following/", {
+		params: {
+			limit,
+			...(before ? { before } : {}),
+		},
+	});
+	return response.data;
+};
+
 export const getConversations = async () => {
 	const response = await api.get("/conversations/");
 	return response.data;

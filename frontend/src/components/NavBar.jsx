@@ -10,7 +10,12 @@ import "../styles/navbar.css";
 
 const API_URL = "http://127.0.0.1:8000";
 
-const NavBar = ({ user, onLoginSuccess, onLogout, unreadMessagesCount = 0 }) => {
+const NavBar = ({
+	user,
+	onLoginSuccess,
+	onLogout,
+	unreadMessagesCount = 0,
+}) => {
 	const { t, i18n } = useTranslation();
 	// State for hamburger menu (mobile)
 	const [isOpen, setIsOpen] = useState(false);
@@ -77,6 +82,23 @@ const NavBar = ({ user, onLoginSuccess, onLogout, unreadMessagesCount = 0 }) => 
 				>
 					{/* Left side (Links) */}
 					<ul className="navbar-nav me-auto mb-2 mb-lg-0 mt-4 mt-lg-0 text-center text-lg-start ms-lg-5">
+						{user ? (
+							<>
+								<hr className="d-lg-none text-muted w-100 my-3" />
+								<li className="nav-item">
+									<NavLink
+										to="/feed"
+										className={({ isActive }) =>
+											`nav-link px-3 fw-bold text-nowrap ${isActive ? "text-primary" : "text-dark"}`
+										}
+										onClick={closeMenu}
+										style={{ fontSize: "1.1rem" }}
+									>
+										{t("nav.feed")}
+									</NavLink>
+								</li>
+							</>
+						) : null}
 						<hr className="d-lg-none text-muted w-100 my-3" />
 						<li className="nav-item">
 							<NavLink
@@ -126,7 +148,9 @@ const NavBar = ({ user, onLoginSuccess, onLogout, unreadMessagesCount = 0 }) => 
 												className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
 												style={{ fontSize: "0.65rem" }}
 											>
-												{unreadMessagesCount > 99 ? "99+" : unreadMessagesCount}
+												{unreadMessagesCount > 99
+													? "99+"
+													: unreadMessagesCount}
 											</span>
 										)}
 									</Link>
@@ -158,18 +182,26 @@ const NavBar = ({ user, onLoginSuccess, onLogout, unreadMessagesCount = 0 }) => 
 										<button
 											type="button"
 											className={`language-switcher__option ${currentLanguage === "en" ? "active" : ""}`}
-											onClick={() => handleLanguageChange("en")}
+											onClick={() =>
+												handleLanguageChange("en")
+											}
 											disabled={currentLanguage === "en"}
-											aria-pressed={currentLanguage === "en"}
+											aria-pressed={
+												currentLanguage === "en"
+											}
 										>
 											{t("nav.languageEnglish")}
 										</button>
 										<button
 											type="button"
 											className={`language-switcher__option ${currentLanguage === "pl" ? "active" : ""}`}
-											onClick={() => handleLanguageChange("pl")}
+											onClick={() =>
+												handleLanguageChange("pl")
+											}
 											disabled={currentLanguage === "pl"}
-											aria-pressed={currentLanguage === "pl"}
+											aria-pressed={
+												currentLanguage === "pl"
+											}
 										>
 											{t("nav.languagePolish")}
 										</button>
@@ -207,7 +239,9 @@ const NavBar = ({ user, onLoginSuccess, onLogout, unreadMessagesCount = 0 }) => 
 												className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
 												style={{ fontSize: "0.65rem" }}
 											>
-												{unreadMessagesCount > 99 ? "99+" : unreadMessagesCount}
+												{unreadMessagesCount > 99
+													? "99+"
+													: unreadMessagesCount}
 											</span>
 										)}
 									</Link>
@@ -219,7 +253,9 @@ const NavBar = ({ user, onLoginSuccess, onLogout, unreadMessagesCount = 0 }) => 
 									>
 										<UserAvatar user={user} size={40} />
 										<div className="d-flex flex-column align-items-start">
-											<span className="fw-bold">{user.username}</span>
+											<span className="fw-bold">
+												{user.username}
+											</span>
 											<span
 												className="text-muted small"
 												style={{ fontSize: "0.8rem" }}
@@ -231,30 +267,46 @@ const NavBar = ({ user, onLoginSuccess, onLogout, unreadMessagesCount = 0 }) => 
 
 									<div className="mobile-navbar-bottom-row">
 										<div className="mobile-navbar-bottom-left">
-										<div
-											className="language-switcher"
-											role="group"
-											aria-label="Language switcher"
-										>
-											<button
-												type="button"
-												className={`language-switcher__option ${currentLanguage === "en" ? "active" : ""}`}
-												onClick={() => handleLanguageChange("en")}
-												disabled={currentLanguage === "en"}
-												aria-pressed={currentLanguage === "en"}
+											<div
+												className="language-switcher"
+												role="group"
+												aria-label="Language switcher"
 											>
-												{t("nav.languageEnglish")}
-											</button>
-											<button
-												type="button"
-												className={`language-switcher__option ${currentLanguage === "pl" ? "active" : ""}`}
-												onClick={() => handleLanguageChange("pl")}
-												disabled={currentLanguage === "pl"}
-												aria-pressed={currentLanguage === "pl"}
-											>
-												{t("nav.languagePolish")}
-											</button>
-										</div>
+												<button
+													type="button"
+													className={`language-switcher__option ${currentLanguage === "en" ? "active" : ""}`}
+													onClick={() =>
+														handleLanguageChange(
+															"en",
+														)
+													}
+													disabled={
+														currentLanguage === "en"
+													}
+													aria-pressed={
+														currentLanguage === "en"
+													}
+												>
+													{t("nav.languageEnglish")}
+												</button>
+												<button
+													type="button"
+													className={`language-switcher__option ${currentLanguage === "pl" ? "active" : ""}`}
+													onClick={() =>
+														handleLanguageChange(
+															"pl",
+														)
+													}
+													disabled={
+														currentLanguage === "pl"
+													}
+													aria-pressed={
+														currentLanguage === "pl"
+													}
+												>
+													{t("nav.languagePolish")}
+												</button>
+											</div>
 										</div>
 
 										<div
@@ -291,7 +343,9 @@ const NavBar = ({ user, onLoginSuccess, onLogout, unreadMessagesCount = 0 }) => 
 									<button
 										type="button"
 										className={`language-switcher__option ${currentLanguage === "en" ? "active" : ""}`}
-										onClick={() => handleLanguageChange("en")}
+										onClick={() =>
+											handleLanguageChange("en")
+										}
 										disabled={currentLanguage === "en"}
 										aria-pressed={currentLanguage === "en"}
 									>
@@ -300,7 +354,9 @@ const NavBar = ({ user, onLoginSuccess, onLogout, unreadMessagesCount = 0 }) => 
 									<button
 										type="button"
 										className={`language-switcher__option ${currentLanguage === "pl" ? "active" : ""}`}
-										onClick={() => handleLanguageChange("pl")}
+										onClick={() =>
+											handleLanguageChange("pl")
+										}
 										disabled={currentLanguage === "pl"}
 										aria-pressed={currentLanguage === "pl"}
 									>
@@ -308,7 +364,9 @@ const NavBar = ({ user, onLoginSuccess, onLogout, unreadMessagesCount = 0 }) => 
 									</button>
 								</div>
 								<div onClick={closeMenu}>
-									<LoginButton onLoginSuccess={onLoginSuccess} />
+									<LoginButton
+										onLoginSuccess={onLoginSuccess}
+									/>
 								</div>
 							</div>
 						)}

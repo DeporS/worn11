@@ -324,20 +324,22 @@ class UserKitSerializer(serializers.ModelSerializer):
     # Not in the model
     is_owner = serializers.SerializerMethodField()
 
+    owner_id = serializers.IntegerField(source='user.id', read_only=True)
     owner_username = serializers.ReadOnlyField(source='user.username')
+    owner_avatar = serializers.ImageField(source='user.profile.avatar', read_only=True, allow_null=True)
 
     class Meta:
         model = UserKit
         fields = [
             'id', 'user', 
             # Read-only fields
-            'kit', 'images', 'condition_display', 'technology_display', 'final_value', 'size_display', 'added_at', 'is_owner', 'owner_username',
+            'kit', 'images', 'condition_display', 'technology_display', 'final_value', 'size_display', 'added_at', 'is_owner', 'owner_id', 'owner_username', 'owner_avatar',
             # Write-only fields
             'team_name', 'season', 'kit_type', 'new_images', 'deleted_images', 'images_order',
             # Modifiable fields
             'condition', 'shirt_technology', 'size', 'for_sale', 'manual_value', 'likes_count', 'comments_count', 'is_liked', 'valuation_warning', 'player_name', 'player_number', 'offer_link', 'in_the_collection'
         ]
-        read_only_fields = ['user', 'final_value', 'kit', 'images', 'condition_display', 'technology_display', 'size_display', 'added_at', 'is_owner', 'owner_username', 'likes_count', 'comments_count', 'is_liked', 'valuation_warning']
+        read_only_fields = ['user', 'final_value', 'kit', 'images', 'condition_display', 'technology_display', 'size_display', 'added_at', 'is_owner', 'owner_id', 'owner_username', 'owner_avatar', 'likes_count', 'comments_count', 'is_liked', 'valuation_warning']
     
     # Getting is_owner field
     def get_is_owner(self, obj):

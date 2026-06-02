@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
 
+import CommentsModal from "../components/comments/CommentsModal";
 import { getExploreKits, searchKitSuggestions, searchUsers } from "../services/api";
 import SearchBar from "../components/SearchBar";
 import UserCard from "../components/UserCard";
@@ -27,9 +27,8 @@ const createSectionState = () =>
 		return acc;
 	}, {});
 
-const CollectionPage = () => {
+const CollectionPage = ({ user }) => {
 	const { t } = useTranslation();
-	const navigate = useNavigate();
 	const [kitSuggestions, setKitSuggestions] = useState([]);
 	const [users, setUsers] = useState([]);
 	const [loadingKits, setLoadingKits] = useState(false);
@@ -37,6 +36,8 @@ const CollectionPage = () => {
 	const [searchError, setSearchError] = useState(null);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [exploreSections, setExploreSections] = useState(createSectionState);
+	const [selectedKit, setSelectedKit] = useState(null);
+	const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
 	const trimmedQuery = searchQuery.trim();
 	const hasActiveSearch = trimmedQuery.length > 0;
@@ -304,13 +305,23 @@ const CollectionPage = () => {
 								key={item.id}
 								className="col-6 col-md-4 col-lg-3"
 							>
-								<ExploreKitCard item={item} />
+								<ExploreKitCard item={item} onOpenKit={handleOpenKit} />
 							</div>
 						))}
 					</div>
 				)}
 			</section>
 		);
+	};
+
+	const handleOpenKit = (kitItem, imageIndex = 0) => {
+		setSelectedKit(kitItem);
+		setSelectedImageIndex(imageIndex);
+	};
+
+	const handleCloseKit = () => {
+		setSelectedKit(null);
+		setSelectedImageIndex(0);
 	};
 
 	return (
@@ -333,6 +344,17 @@ const CollectionPage = () => {
 					{EXPLORE_SECTIONS.map((section) => renderExploreSection(section))}
 				</div>
 			)}
+
+			{selectedKit ? (
+				<CommentsModal
+					isOpen={Boolean(selectedKit)}
+					onClose={handleCloseKit}
+					kitId={selectedKit.id}
+					currentUser={user}
+					item={selectedKit}
+					initialImageIndex={selectedImageIndex}
+				/>
+			) : null}
 		</div>
 	);
 };

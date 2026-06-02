@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import CommentsModal from "../components/comments/CommentsModal";
 import { getKitDetail } from "../services/api";
 
 const KitDetailPage = ({ user }) => {
 	const { username, kitId } = useParams();
+	const location = useLocation();
 	const navigate = useNavigate();
 	const [kit, setKit] = useState(null);
 	const [loading, setLoading] = useState(true);
@@ -24,7 +25,10 @@ const KitDetailPage = ({ user }) => {
 
 				const ownerUsername = data.owner_username;
 				if (ownerUsername && ownerUsername !== username) {
-					navigate(`/profile/${ownerUsername}/kits/${data.id}`, { replace: true });
+					navigate(`/profile/${ownerUsername}/kits/${data.id}`, {
+						replace: true,
+						state: location.state,
+					});
 					return;
 				}
 
@@ -45,9 +49,15 @@ const KitDetailPage = ({ user }) => {
 		return () => {
 			cancelled = true;
 		};
-	}, [kitId, navigate, username]);
+	}, [kitId, location.state, navigate, username]);
 
 	const handleClose = () => {
+		const returnTo = location.state?.returnTo;
+		if (returnTo) {
+			navigate(returnTo);
+			return;
+		}
+
 		const ownerUsername = kit?.owner_username || username;
 		navigate(`/profile/${ownerUsername}`);
 	};

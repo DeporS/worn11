@@ -527,6 +527,35 @@ def get_public_user_kits_queryset():
         comments_count=Count('comments', distinct=True),
     )
 
+
+def get_following_feed_queryset(user):
+    followed_user_ids = Follow.objects.filter(
+        follower=user
+    ).values_list(
+        'following_id',
+        flat=True,
+    )
+
+    return UserKit.objects.filter(
+        user_id__in=followed_user_ids,
+    ).exclude(
+        user=user,
+    ).select_related(
+        'kit',
+        'kit__team',
+        'user',
+        'user__profile',
+    ).prefetch_related(
+        'images',
+        'likes',
+    ).annotate(
+        likes_count=Count('likes', distinct=True),
+        comments_count=Count('comments', distinct=True),
+    ).order_by(
+        '-added_at',
+        '-id',
+    )
+
 # Current user
 class CurrentUserAPI(generics.RetrieveAPIView):
     serializer_class = UserSerializer
@@ -664,6 +693,70 @@ class ExploreKitsAPI(generics.ListAPIView):
             queryset = queryset.order_by('-likes_count', '-comments_count', '-added_at')
 
         return queryset[:limit_value]
+
+
+class FollowingFeedAPI(APIView):
+    permission_classes = [IsAuthenticated]
+    DEFAULT_LIMIT = 20
+    MAX_LIMIT = 50
+
+    def _get_limit(self, request):
+        raw_limit = request.query_params.get('limit')
+        if raw_limit is None:
+            return self.DEFAULT_LIMIT
+
+        try:
+            limit = int(raw_limit)
+        except (TypeError, ValueError):
+            return self.DEFAULT_LIMIT
+
+        if limit <= 0:
+            return self.DEFAULT_LIMIT
+
+        return min(limit, self.MAX_LIMIT)
+
+    def get(self, request):
+        queryset = get_following_feed_queryset(request.user)
+        limit = self._get_limit(request)
+        before = request.query_params.get('before')
+
+        if before is not None:
+            try:
+                before_id = int(before)
+            except (TypeError, ValueError):
+                return Response(
+                    {'before': ['before must be a valid kit id.']},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            anchor_kit = queryset.filter(pk=before_id).first()
+            if anchor_kit is None:
+                return Response(
+                    {'before': ['Kit not found in feed.']},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            queryset = queryset.filter(
+                Q(added_at__lt=anchor_kit.added_at) |
+                Q(added_at=anchor_kit.added_at, id__lt=anchor_kit.id)
+            )
+
+        items = list(queryset[:limit])
+
+        if items:
+            oldest_item = items[-1]
+            has_more = queryset.filter(
+                Q(added_at__lt=oldest_item.added_at) |
+                Q(added_at=oldest_item.added_at, id__lt=oldest_item.id)
+            ).exists()
+        else:
+            has_more = False
+
+        serializer = UserKitSerializer(items, many=True, context={'request': request})
+        return Response({
+            'results': serializer.data,
+            'has_more': has_more,
+        })
 
 # Endpoint: Catalog of all available kits (e.g., for selection when adding)
 class KitCatalogAPI(generics.ListAPIView):

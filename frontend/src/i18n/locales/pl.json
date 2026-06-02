@@ -1,6 +1,7 @@
 {
 	"nav": {
 		"kitMuseum": "Muzeum koszulek",
+		"feed": "Feed",
 		"messages": "Wiadomości",
 		"viewProfile": "Zobacz profil",
 		"logout": "Wyloguj",
@@ -26,6 +27,20 @@
 		"kits": "Koszulki",
 		"collectors": "Kolekcjonerzy",
 		"noKitSuggestions": "Nie znaleziono sugestii koszulek."
+	},
+	"feed": {
+		"title": "Feed",
+		"subtitle": "Najnowsze koszulki od kolekcjonerów, których obserwujesz.",
+		"empty": "Twój feed jest pusty. Obserwuj kolekcjonerów, aby widzieć tutaj ich najnowsze koszulki.",
+		"loginRequired": "Zaloguj się, aby zobaczyć swój feed.",
+		"loading": "Ładowanie feedu...",
+		"loadError": "Nie udało się załadować feedu.",
+		"loadMore": "Załaduj więcej",
+		"added": "Dodano {{time}}",
+		"viewKit": "Zobacz koszulkę",
+		"viewOffer": "Zobacz ofertę",
+		"forSale": "Na sprzedaż",
+		"likeError": "Nie udało się zaktualizować polubienia. Spróbuj ponownie."
 	},
 	"messages": {
 		"title": "Wiadomości",

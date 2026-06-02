@@ -15,6 +15,7 @@ import GroupsPage from "./pages/GroupsPage";
 import KitVariantsPage from "./pages/KitVariantsPage";
 import KitDetailPage from "./pages/KitDetailPage";
 import MessagesPage from "./pages/MessagesPage";
+import FeedPage from "./pages/FeedPage";
 import NavBar from "./components/NavBar";
 import api, { getUnreadMessagesCount } from "./services/api";
 
@@ -148,6 +149,7 @@ function App() {
 							)
 						}
 					/>
+					<Route path="/feed" element={<FeedPage user={user} />} />
 
 					{/* Edit Profile Page */}
 					<Route

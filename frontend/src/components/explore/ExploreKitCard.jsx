@@ -1,20 +1,18 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 
 import { toggleLike } from "../../services/api";
 
-const ExploreKitCard = ({ item }) => {
+const ExploreKitCard = ({ item, onOpenKit }) => {
 	const { t } = useTranslation();
-	const navigate = useNavigate();
 	const [isLiked, setIsLiked] = useState(Boolean(item.is_liked));
 	const [likesCount, setLikesCount] = useState(item.likes_count ?? 0);
 	const [likeLoading, setLikeLoading] = useState(false);
 
 	const handleClick = () => {
-		if (!item?.owner_username || !item?.id) return;
-		navigate(`/profile/${item.owner_username}/kits/${item.id}`);
+		if (!item?.id || !onOpenKit) return;
+		onOpenKit(item, 0);
 	};
 
 	const handleLikeClick = async (event) => {
