@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import CommentsModal from "../components/comments/CommentsModal";
@@ -29,6 +30,7 @@ const createSectionState = () =>
 
 const CollectionPage = ({ user }) => {
 	const { t } = useTranslation();
+	const navigate = useNavigate();
 	const [kitSuggestions, setKitSuggestions] = useState([]);
 	const [users, setUsers] = useState([]);
 	const [loadingKits, setLoadingKits] = useState(false);

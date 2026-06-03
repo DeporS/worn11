@@ -141,6 +141,26 @@ export const getUnreadMessagesCount = async () => {
 	return response.data;
 };
 
+export const getNotifications = async ({ limit = 20, before } = {}) => {
+	const response = await api.get("/notifications/", {
+		params: {
+			limit,
+			...(before ? { before } : {}),
+		},
+	});
+	return response.data;
+};
+
+export const getNotificationsUnreadCount = async () => {
+	const response = await api.get("/notifications/unread-count/");
+	return response.data;
+};
+
+export const markNotificationsRead = async () => {
+	const response = await api.post("/notifications/mark-read/");
+	return response.data;
+};
+
 export const sendConversationMessage = async (conversationId, body) => {
 	const response = await api.post(`/conversations/${conversationId}/messages/`, {
 		body,

@@ -63,6 +63,21 @@
 		"hourAgo_one": "{{count}} hour ago",
 		"hourAgo_other": "{{count}} hours ago"
 	},
+	"notifications": {
+		"title": "Notifications",
+		"empty": "No notifications yet.",
+		"loading": "Loading notifications...",
+		"markAllRead": "Mark all as read",
+		"likedYourKit": "{{username}} liked your kit",
+		"startedFollowingYou": "{{username}} started following you",
+		"commentedOnYourKit": "{{username}} commented on your kit",
+		"likedYourComment": "{{username}} liked your comment",
+		"repliedToYourComment": "{{username}} replied to your comment",
+		"unreadLabel": "Unread notifications",
+		"open": "Open notifications",
+		"loadError": "Could not load notifications.",
+		"markReadError": "Could not mark notifications as read."
+	},
 	"comments": {
 		"loadError": "Could not load comments.",
 		"authTitle": "You need to log in!",

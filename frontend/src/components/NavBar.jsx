@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import LoginButton from "./LoginButton";
 import UserAvatar from "./UserAvatar";
+import NotificationsDropdown from "./notifications/NotificationsDropdown";
 import { Link, NavLink } from "react-router-dom";
 
 import logo from "../assets/logo-worn11.svg";
@@ -15,6 +16,8 @@ const NavBar = ({
 	onLoginSuccess,
 	onLogout,
 	unreadMessagesCount = 0,
+	unreadNotificationsCount = 0,
+	refreshUnreadNotificationsCount,
 }) => {
 	const { t, i18n } = useTranslation();
 	// State for hamburger menu (mobile)
@@ -155,6 +158,11 @@ const NavBar = ({
 										)}
 									</Link>
 
+									<NotificationsDropdown
+										unreadCount={unreadNotificationsCount}
+										refreshUnreadNotificationsCount={refreshUnreadNotificationsCount}
+									/>
+
 									<Link
 										to="/my-collection"
 										className="text-decoration-none text-dark d-flex align-items-center gap-2 p-2 rounded hover-bg-light"
@@ -245,6 +253,12 @@ const NavBar = ({
 											</span>
 										)}
 									</Link>
+
+									<NotificationsDropdown
+										unreadCount={unreadNotificationsCount}
+										refreshUnreadNotificationsCount={refreshUnreadNotificationsCount}
+										onCloseMobileMenu={closeMenu}
+									/>
 
 									<Link
 										to="/my-collection"

@@ -63,6 +63,21 @@
 		"hourAgo_one": "{{count}} godzinę temu",
 		"hourAgo_other": "{{count}} godzin temu"
 	},
+	"notifications": {
+		"title": "Powiadomienia",
+		"empty": "Nie masz jeszcze powiadomień.",
+		"loading": "Ładowanie powiadomień...",
+		"markAllRead": "Oznacz wszystkie jako przeczytane",
+		"likedYourKit": "{{username}} polubił Twoją koszulkę",
+		"startedFollowingYou": "{{username}} zaczął Cię obserwować",
+		"commentedOnYourKit": "{{username}} skomentował Twoją koszulkę",
+		"likedYourComment": "{{username}} polubił Twój komentarz",
+		"repliedToYourComment": "{{username}} odpowiedział na Twój komentarz",
+		"unreadLabel": "Nieprzeczytane powiadomienia",
+		"open": "Otwórz powiadomienia",
+		"loadError": "Nie udało się załadować powiadomień.",
+		"markReadError": "Nie udało się oznaczyć powiadomień jako przeczytane."
+	},
 	"comments": {
 		"loadError": "Nie udało się załadować komentarzy.",
 		"authTitle": "Musisz się zalogować!",

@@ -17,7 +17,10 @@ import KitDetailPage from "./pages/KitDetailPage";
 import MessagesPage from "./pages/MessagesPage";
 import FeedPage from "./pages/FeedPage";
 import NavBar from "./components/NavBar";
-import api, { getUnreadMessagesCount } from "./services/api";
+import api, {
+	getUnreadMessagesCount,
+	getNotificationsUnreadCount,
+} from "./services/api";
 
 import ScrollToTop from "./components/utils/ScrollTop";
 import "./index.css";
@@ -25,6 +28,7 @@ import "./index.css";
 function App() {
 	const [user, setUser] = useState(null); // User state
 	const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
+	const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
 
 	const fetchUserData = async () => {
 		try {
@@ -46,13 +50,16 @@ function App() {
 	useEffect(() => {
 		if (!user) {
 			setUnreadMessagesCount(0);
+			setUnreadNotificationsCount(0);
 			return;
 		}
 
 		refreshUnreadMessagesCount();
+		refreshUnreadNotificationsCount();
 
 		const intervalId = window.setInterval(() => {
 			refreshUnreadMessagesCount();
+			refreshUnreadNotificationsCount();
 		}, 30000);
 
 		return () => window.clearInterval(intervalId);
@@ -66,6 +73,7 @@ function App() {
 		localStorage.removeItem("refresh_token");
 		setUser(null);
 		setUnreadMessagesCount(0);
+		setUnreadNotificationsCount(0);
 	};
 
 	const refreshUnreadMessagesCount = async () => {
@@ -83,6 +91,21 @@ function App() {
 		}
 	};
 
+	const refreshUnreadNotificationsCount = async () => {
+		const token = localStorage.getItem("access_token");
+		if (!token) {
+			setUnreadNotificationsCount(0);
+			return;
+		}
+
+		try {
+			const data = await getNotificationsUnreadCount();
+			setUnreadNotificationsCount(data.unread_count || 0);
+		} catch (error) {
+			console.error("Failed to load unread notifications count:", error);
+		}
+	};
+
 	return (
 		<Router>
 			<div>
@@ -93,6 +116,8 @@ function App() {
 						onLogout={handleLogout}
 						refreshUser={fetchUserData}
 						unreadMessagesCount={unreadMessagesCount}
+						unreadNotificationsCount={unreadNotificationsCount}
+						refreshUnreadNotificationsCount={refreshUnreadNotificationsCount}
 					/>
 				</div>
 

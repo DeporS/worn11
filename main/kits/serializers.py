@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Country, League, Team, Kit, UserKit, UserKitImage, User, Profile, KitComment, KitReport, Conversation, Message, build_team_slug
+from .models import Country, League, Team, Kit, UserKit, UserKitImage, User, Profile, KitComment, KitReport, Conversation, Message, Notification, build_team_slug
 from django.contrib.auth.models import User
 from dj_rest_auth.serializers import UserDetailsSerializer
 import json
@@ -242,6 +242,73 @@ class MessageSerializer(serializers.ModelSerializer):
     def get_is_mine(self, obj):
         request = self.context.get('request')
         return bool(request and request.user.is_authenticated and obj.sender_id == request.user.id)
+
+
+class NotificationActorSerializer(serializers.ModelSerializer):
+    avatar = serializers.ImageField(source='profile.avatar', read_only=True)
+
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'avatar']
+
+
+class NotificationKitSerializer(serializers.ModelSerializer):
+    owner_username = serializers.CharField(source='user.username', read_only=True)
+    team_name = serializers.CharField(source='kit.team.name', read_only=True)
+    season = serializers.CharField(source='kit.season', read_only=True)
+    kit_type = serializers.CharField(source='kit.kit_type', read_only=True)
+    preview_image = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UserKit
+        fields = ['id', 'owner_username', 'team_name', 'season', 'kit_type', 'preview_image']
+
+    def get_preview_image(self, obj):
+        preview_image = None
+        prefetched_images = getattr(obj, 'prefetched_notification_images', None)
+        if prefetched_images is not None:
+            if prefetched_images:
+                preview_image = prefetched_images[0]
+        else:
+            preview_image = obj.images.order_by('order', 'created_at', 'id').first()
+
+        if not preview_image:
+            return None
+
+        image_url = preview_image.image.url
+        request = self.context.get('request')
+        if request is not None:
+            return request.build_absolute_uri(image_url)
+        return image_url
+
+
+class NotificationCommentSerializer(serializers.ModelSerializer):
+    body_preview = serializers.SerializerMethodField()
+    author_username = serializers.CharField(source='user.username', read_only=True)
+
+    class Meta:
+        model = KitComment
+        fields = ['id', 'body_preview', 'author_username']
+
+    def get_body_preview(self, obj):
+        body = (obj.body or '').strip()
+        if len(body) <= 80:
+            return body
+        return f"{body[:77].rstrip()}..."
+
+
+class NotificationSerializer(serializers.ModelSerializer):
+    actor = NotificationActorSerializer(read_only=True)
+    kit = NotificationKitSerializer(read_only=True)
+    comment = NotificationCommentSerializer(read_only=True)
+    is_read = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Notification
+        fields = ['id', 'type', 'actor', 'kit', 'comment', 'created_at', 'read_at', 'is_read']
+
+    def get_is_read(self, obj):
+        return obj.read_at is not None
 
 # Team Serializer
 class TeamSerializer(serializers.ModelSerializer):

@@ -16,8 +16,8 @@ from django.utils import timezone
 from urllib.parse import urlencode
 import re
 
-from .models import League, UserKit, UserKitImage, Kit, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country, Follow, KitComment, KitCommentLike, KitReport, Conversation, Message, build_team_slug
-from .serializers import LeagueSerializer, UserKitSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer, CountrySerializer, KitCommentSerializer, KitCommentWriteSerializer, KitReportSerializer, ConversationListSerializer, ConversationDetailSerializer, ConversationStartSerializer, MessageSerializer, MessageWriteSerializer, KitSearchSuggestionSerializer
+from .models import League, UserKit, UserKitImage, Kit, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country, Follow, KitComment, KitCommentLike, KitReport, Conversation, Message, Notification, build_team_slug
+from .serializers import LeagueSerializer, UserKitSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer, CountrySerializer, KitCommentSerializer, KitCommentWriteSerializer, KitReportSerializer, ConversationListSerializer, ConversationDetailSerializer, ConversationStartSerializer, MessageSerializer, MessageWriteSerializer, KitSearchSuggestionSerializer, NotificationSerializer
 
 
 SUPPORTED_KIT_TYPES = [
@@ -509,6 +509,25 @@ def get_user_conversations_queryset(user):
         last_message_preview=Subquery(latest_message_queryset.values('body')[:1]),
         last_message_created_at=Subquery(latest_message_queryset.values('created_at')[:1]),
         unread_count=Count('messages', filter=Q(messages__read_at__isnull=True) & ~Q(messages__sender=user), distinct=True),
+    )
+
+
+def get_user_notifications_queryset(user):
+    notification_preview_images = UserKitImage.objects.order_by('order', 'created_at', 'id')
+
+    return Notification.objects.filter(
+        recipient=user,
+    ).select_related(
+        'actor',
+        'actor__profile',
+        'kit',
+        'kit__user',
+        'kit__kit',
+        'kit__kit__team',
+        'comment',
+        'comment__user',
+    ).prefetch_related(
+        Prefetch('kit__images', queryset=notification_preview_images, to_attr='prefetched_notification_images')
     )
 
 
@@ -1159,6 +1178,96 @@ class UnreadMessagesCountAPI(APIView):
 
         return Response({'unread_count': unread_count})
 
+
+class NotificationListAPI(APIView):
+    permission_classes = [IsAuthenticated]
+    DEFAULT_LIMIT = 20
+    MAX_LIMIT = 50
+
+    def _get_limit(self, request):
+        raw_limit = request.query_params.get('limit')
+        if raw_limit is None:
+            return self.DEFAULT_LIMIT
+
+        try:
+            limit = int(raw_limit)
+        except (TypeError, ValueError):
+            return self.DEFAULT_LIMIT
+
+        if limit <= 0:
+            return self.DEFAULT_LIMIT
+
+        return min(limit, self.MAX_LIMIT)
+
+    def get(self, request):
+        queryset = get_user_notifications_queryset(request.user)
+        limit = self._get_limit(request)
+        before = request.query_params.get('before')
+
+        if before is not None:
+            try:
+                before_id = int(before)
+            except (TypeError, ValueError):
+                return Response(
+                    {'before': ['before must be a valid notification id.']},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            anchor_notification = queryset.filter(pk=before_id).first()
+            if anchor_notification is None:
+                return Response(
+                    {'before': ['Notification not found.']},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            queryset = queryset.filter(
+                Q(created_at__lt=anchor_notification.created_at) |
+                Q(created_at=anchor_notification.created_at, id__lt=anchor_notification.id)
+            )
+
+        notifications = list(queryset[:limit])
+
+        if notifications:
+            oldest_notification = notifications[-1]
+            has_more = queryset.filter(
+                Q(created_at__lt=oldest_notification.created_at) |
+                Q(created_at=oldest_notification.created_at, id__lt=oldest_notification.id)
+            ).exists()
+        else:
+            has_more = False
+
+        serializer = NotificationSerializer(notifications, many=True, context={'request': request})
+        return Response({
+            'results': serializer.data,
+            'has_more': has_more,
+        })
+
+
+class NotificationUnreadCountAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        unread_count = Notification.objects.filter(
+            recipient=request.user,
+            read_at__isnull=True,
+        ).count()
+        return Response({'unread_count': unread_count})
+
+
+class MarkNotificationsReadAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        updated = Notification.objects.filter(
+            recipient=request.user,
+            read_at__isnull=True,
+        ).update(read_at=timezone.now())
+
+        return Response({
+            'marked_read_count': updated,
+            'unread_count': 0,
+        })
+
 # Endpoint: Update user profile
 class UpdateProfileView(generics.RetrieveUpdateAPIView):
     serializer_class = ProfileSerializer
@@ -1181,9 +1290,22 @@ class ToggleLikeAPI(APIView):
         if kit.likes.filter(id=user.id).exists():
             kit.likes.remove(user)
             liked = False
+            Notification.objects.filter(
+                recipient=kit.user,
+                actor=user,
+                type='kit_like',
+                kit=kit,
+            ).delete()
         else:
             kit.likes.add(user)
             liked = True
+            if kit.user_id != user.id:
+                Notification.objects.get_or_create(
+                    recipient=kit.user,
+                    actor=user,
+                    type='kit_like',
+                    kit=kit,
+                )
         
         return Response({
             "liked": liked,
@@ -1209,6 +1331,14 @@ class KitCommentsAPI(APIView):
         serializer.is_valid(raise_exception=True)
 
         comment = serializer.save(kit=kit, user=request.user)
+        if kit.user_id != request.user.id:
+            Notification.objects.get_or_create(
+                recipient=kit.user,
+                actor=request.user,
+                type='kit_comment',
+                kit=kit,
+                comment=comment,
+            )
         response_serializer = KitCommentSerializer(comment, context={'request': request})
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
@@ -1229,6 +1359,14 @@ class ReplyToCommentAPI(APIView):
             parent=thread_parent,
             reply_to=target_comment,
         )
+        if target_comment.user_id != request.user.id:
+            Notification.objects.get_or_create(
+                recipient=target_comment.user,
+                actor=request.user,
+                type='comment_reply',
+                kit=target_comment.kit,
+                comment=reply,
+            )
         response_serializer = KitCommentSerializer(reply, context={'request': request})
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
@@ -1243,9 +1381,24 @@ class ToggleCommentLikeAPI(APIView):
         liked = False
         if like:
             like.delete()
+            Notification.objects.filter(
+                recipient=comment.user,
+                actor=request.user,
+                type='comment_like',
+                kit=comment.kit,
+                comment=comment,
+            ).delete()
         else:
             KitCommentLike.objects.create(comment=comment, user=request.user)
             liked = True
+            if comment.user_id != request.user.id:
+                Notification.objects.get_or_create(
+                    recipient=comment.user,
+                    actor=request.user,
+                    type='comment_like',
+                    kit=comment.kit,
+                    comment=comment,
+                )
 
         return Response(
             {
@@ -1376,6 +1529,12 @@ class ToggleFollowView(APIView):
         else:
             # If it doesn't exist -> Create it (Follow)
             Follow.objects.create(follower=request.user, following=user_to_follow)
+            Notification.objects.get_or_create(
+                recipient=user_to_follow,
+                actor=request.user,
+                type='follow',
+                kit=None,
+            )
             return Response({"is_following": True}, status=status.HTTP_201_CREATED)
 
 # Endpoint: List of kit variants for a specific team with optional filters (season, type)

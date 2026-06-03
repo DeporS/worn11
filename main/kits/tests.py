@@ -9,7 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient, APITestCase
 
-from .models import Kit, Team, UserKit, UserKitImage, KitComment, KitReport, Conversation, Message, Follow, AUTOMATED_VALUATION_UNAVAILABLE_MESSAGE
+from .models import Kit, Team, UserKit, UserKitImage, KitComment, KitReport, Conversation, Message, Follow, Notification, AUTOMATED_VALUATION_UNAVAILABLE_MESSAGE
 
 
 class UserKitPricingTests(APITestCase):
@@ -2114,3 +2114,576 @@ class FollowingFeedAPITests(APITestCase):
         self.assertEqual(invalid_response.data["before"], ["before must be a valid kit id."])
         self.assertEqual(missing_response.status_code, 400)
         self.assertEqual(missing_response.data["before"], ["Kit not found in feed."])
+
+
+class NotificationAPITests(APITestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.owner = User.objects.create_user(username="owner", password="password123")
+        self.actor = User.objects.create_user(username="actor", password="password123")
+        self.other_user = User.objects.create_user(username="other", password="password123")
+
+        self.team = Team.objects.create(name="Notify FC", is_verified=True)
+        self.kit = Kit.objects.create(
+            team=self.team,
+            season="2024/2025",
+            kit_type="Home",
+            estimated_price=Decimal("100.00"),
+        )
+        self.user_kit = UserKit.objects.create(
+            user=self.owner,
+            kit=self.kit,
+            shirt_technology="REPLICA",
+            condition="VERY_GOOD",
+            size="L",
+            in_the_collection=True,
+        )
+        UserKitImage.objects.create(
+            user_kit=self.user_kit,
+            image=SimpleUploadedFile("notification-preview.jpg", b"preview", content_type="image/jpeg"),
+            order=0,
+        )
+
+        self.like_url = reverse("toggle-like", args=[self.user_kit.id])
+        self.follow_url = reverse("toggle-follow", args=[self.owner.username])
+        self.comment_url = reverse("kit-comments", args=[self.user_kit.id])
+        self.list_url = reverse("notification-list")
+        self.unread_count_url = reverse("notification-unread-count")
+        self.mark_read_url = reverse("notification-mark-read")
+
+    def test_liking_someone_elses_kit_creates_notification_for_owner(self):
+        self.client.force_authenticate(user=self.actor)
+
+        response = self.client.post(self.like_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(
+            Notification.objects.filter(
+                recipient=self.owner,
+                actor=self.actor,
+                type="kit_like",
+                kit=self.user_kit,
+            ).exists()
+        )
+
+    def test_liking_own_kit_does_not_create_notification(self):
+        self.client.force_authenticate(user=self.owner)
+
+        response = self.client.post(self.like_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Notification.objects.exists())
+
+    def test_unlike_removes_matching_kit_like_notification(self):
+        self.client.force_authenticate(user=self.actor)
+
+        self.client.post(self.like_url)
+        response = self.client.post(self.like_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(
+            Notification.objects.filter(
+                recipient=self.owner,
+                actor=self.actor,
+                type="kit_like",
+                kit=self.user_kit,
+            ).exists()
+        )
+
+    def test_repeated_like_unlike_relike_does_not_accumulate_duplicates(self):
+        self.client.force_authenticate(user=self.actor)
+
+        self.client.post(self.like_url)
+        self.client.post(self.like_url)
+        self.client.post(self.like_url)
+
+        self.assertEqual(
+            Notification.objects.filter(
+                recipient=self.owner,
+                actor=self.actor,
+                type="kit_like",
+                kit=self.user_kit,
+            ).count(),
+            1,
+        )
+
+    def test_following_a_user_creates_notification_for_followed_user(self):
+        self.client.force_authenticate(user=self.actor)
+
+        response = self.client.post(self.follow_url)
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(
+            Notification.objects.filter(
+                recipient=self.owner,
+                actor=self.actor,
+                type="follow",
+                kit__isnull=True,
+            ).exists()
+        )
+
+    def test_commenting_on_someone_elses_kit_creates_notification_for_kit_owner(self):
+        self.client.force_authenticate(user=self.actor)
+
+        response = self.client.post(
+            self.comment_url,
+            {"body": "Great shirt"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        created_comment = KitComment.objects.get(pk=response.data["id"])
+        self.assertTrue(
+            Notification.objects.filter(
+                recipient=self.owner,
+                actor=self.actor,
+                type="kit_comment",
+                kit=self.user_kit,
+                comment=created_comment,
+            ).exists()
+        )
+
+    def test_commenting_on_own_kit_does_not_notify(self):
+        self.client.force_authenticate(user=self.owner)
+
+        response = self.client.post(
+            self.comment_url,
+            {"body": "My own note"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertFalse(Notification.objects.exists())
+
+    def test_kit_comment_notification_payload_includes_actor_kit_and_comment_preview(self):
+        comment = KitComment.objects.create(
+            kit=self.user_kit,
+            user=self.actor,
+            body="This is a very good kit and the details look excellent.",
+        )
+        Notification.objects.create(
+            recipient=self.owner,
+            actor=self.actor,
+            type="kit_comment",
+            kit=self.user_kit,
+            comment=comment,
+        )
+        self.client.force_authenticate(user=self.owner)
+
+        response = self.client.get(self.list_url)
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.data["results"][0]
+        self.assertEqual(payload["actor"]["username"], self.actor.username)
+        self.assertEqual(payload["kit"]["id"], self.user_kit.id)
+        self.assertEqual(payload["comment"]["id"], comment.id)
+        self.assertEqual(payload["comment"]["author_username"], self.actor.username)
+        self.assertEqual(payload["comment"]["body_preview"], comment.body)
+
+    def test_replying_to_someone_elses_comment_creates_notification_for_target_author(self):
+        parent = KitComment.objects.create(
+            kit=self.user_kit,
+            user=self.owner,
+            body="Original comment",
+        )
+        self.client.force_authenticate(user=self.actor)
+
+        response = self.client.post(
+            reverse("comment-reply", args=[parent.id]),
+            {"body": "Replying here"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        created_reply = KitComment.objects.get(pk=response.data["id"])
+        self.assertTrue(
+            Notification.objects.filter(
+                recipient=self.owner,
+                actor=self.actor,
+                type="comment_reply",
+                kit=self.user_kit,
+                comment=created_reply,
+            ).exists()
+        )
+
+    def test_replying_to_own_comment_does_not_notify(self):
+        parent = KitComment.objects.create(
+            kit=self.user_kit,
+            user=self.actor,
+            body="My own comment",
+        )
+        self.client.force_authenticate(user=self.actor)
+
+        response = self.client.post(
+            reverse("comment-reply", args=[parent.id]),
+            {"body": "Self reply"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertFalse(Notification.objects.exists())
+
+    def test_replying_to_a_reply_notifies_clicked_reply_author(self):
+        parent = KitComment.objects.create(
+            kit=self.user_kit,
+            user=self.owner,
+            body="Top level",
+        )
+        first_reply = KitComment.objects.create(
+            kit=self.user_kit,
+            user=self.other_user,
+            body="First reply",
+            parent=parent,
+            reply_to=parent,
+        )
+        self.client.force_authenticate(user=self.actor)
+
+        response = self.client.post(
+            reverse("comment-reply", args=[first_reply.id]),
+            {"body": "Reply to reply"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        created_reply = KitComment.objects.get(pk=response.data["id"])
+        self.assertTrue(
+            Notification.objects.filter(
+                recipient=self.other_user,
+                actor=self.actor,
+                type="comment_reply",
+                kit=self.user_kit,
+                comment=created_reply,
+            ).exists()
+        )
+        self.assertFalse(
+            Notification.objects.filter(
+                recipient=self.owner,
+                actor=self.actor,
+                type="comment_reply",
+                comment=created_reply,
+            ).exists()
+        )
+
+    def test_comment_reply_notification_payload_includes_kit_and_comment_info(self):
+        reply = KitComment.objects.create(
+            kit=self.user_kit,
+            user=self.actor,
+            body="Reply body preview text",
+        )
+        Notification.objects.create(
+            recipient=self.owner,
+            actor=self.actor,
+            type="comment_reply",
+            kit=self.user_kit,
+            comment=reply,
+        )
+        self.client.force_authenticate(user=self.owner)
+
+        response = self.client.get(self.list_url)
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.data["results"][0]
+        self.assertEqual(payload["type"], "comment_reply")
+        self.assertEqual(payload["kit"]["owner_username"], self.owner.username)
+        self.assertEqual(payload["comment"]["id"], reply.id)
+        self.assertEqual(payload["comment"]["body_preview"], "Reply body preview text")
+
+    def test_liking_someone_elses_comment_creates_notification_for_comment_author(self):
+        comment = KitComment.objects.create(
+            kit=self.user_kit,
+            user=self.owner,
+            body="Like this comment",
+        )
+        self.client.force_authenticate(user=self.actor)
+
+        response = self.client.post(reverse("comment-like", args=[comment.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(
+            Notification.objects.filter(
+                recipient=self.owner,
+                actor=self.actor,
+                type="comment_like",
+                kit=self.user_kit,
+                comment=comment,
+            ).exists()
+        )
+
+    def test_liking_own_comment_does_not_notify(self):
+        comment = KitComment.objects.create(
+            kit=self.user_kit,
+            user=self.actor,
+            body="My own comment",
+        )
+        self.client.force_authenticate(user=self.actor)
+
+        response = self.client.post(reverse("comment-like", args=[comment.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Notification.objects.exists())
+
+    def test_unliking_comment_deletes_matching_comment_like_notification(self):
+        comment = KitComment.objects.create(
+            kit=self.user_kit,
+            user=self.owner,
+            body="Unlike this comment",
+        )
+        self.client.force_authenticate(user=self.actor)
+
+        self.client.post(reverse("comment-like", args=[comment.id]))
+        response = self.client.post(reverse("comment-like", args=[comment.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(
+            Notification.objects.filter(
+                recipient=self.owner,
+                actor=self.actor,
+                type="comment_like",
+                kit=self.user_kit,
+                comment=comment,
+            ).exists()
+        )
+
+    def test_repeated_comment_like_unlike_relike_does_not_accumulate_duplicates(self):
+        comment = KitComment.objects.create(
+            kit=self.user_kit,
+            user=self.owner,
+            body="Duplicate protection",
+        )
+        self.client.force_authenticate(user=self.actor)
+
+        self.client.post(reverse("comment-like", args=[comment.id]))
+        self.client.post(reverse("comment-like", args=[comment.id]))
+        self.client.post(reverse("comment-like", args=[comment.id]))
+
+        self.assertEqual(
+            Notification.objects.filter(
+                recipient=self.owner,
+                actor=self.actor,
+                type="comment_like",
+                kit=self.user_kit,
+                comment=comment,
+            ).count(),
+            1,
+        )
+
+    def test_unfollowing_does_not_create_new_notification(self):
+        self.client.force_authenticate(user=self.actor)
+
+        self.client.post(self.follow_url)
+        self.client.post(self.follow_url)
+
+        self.assertEqual(
+            Notification.objects.filter(
+                recipient=self.owner,
+                actor=self.actor,
+                type="follow",
+                kit__isnull=True,
+            ).count(),
+            1,
+        )
+
+    def test_refollow_does_not_duplicate_follow_notification(self):
+        self.client.force_authenticate(user=self.actor)
+
+        self.client.post(self.follow_url)
+        self.client.post(self.follow_url)
+        self.client.post(self.follow_url)
+
+        self.assertEqual(
+            Notification.objects.filter(
+                recipient=self.owner,
+                actor=self.actor,
+                type="follow",
+                kit__isnull=True,
+            ).count(),
+            1,
+        )
+
+    def test_notifications_list_returns_only_current_users_notifications(self):
+        own_notification = Notification.objects.create(
+            recipient=self.owner,
+            actor=self.actor,
+            type="follow",
+        )
+        Notification.objects.create(
+            recipient=self.other_user,
+            actor=self.actor,
+            type="follow",
+        )
+        self.client.force_authenticate(user=self.owner)
+
+        response = self.client.get(self.list_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([item["id"] for item in response.data["results"]], [own_notification.id])
+
+    def test_unread_count_returns_correct_count(self):
+        Notification.objects.create(recipient=self.owner, actor=self.actor, type="follow")
+        Notification.objects.create(recipient=self.owner, actor=self.other_user, type="follow")
+        self.client.force_authenticate(user=self.owner)
+
+        response = self.client.get(self.unread_count_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["unread_count"], 2)
+
+    def test_unread_count_includes_new_notification_types(self):
+        comment = KitComment.objects.create(
+            kit=self.user_kit,
+            user=self.actor,
+            body="Count me",
+        )
+        Notification.objects.create(recipient=self.owner, actor=self.actor, type="kit_comment", kit=self.user_kit, comment=comment)
+        Notification.objects.create(recipient=self.owner, actor=self.other_user, type="comment_like", kit=self.user_kit, comment=comment)
+        Notification.objects.create(recipient=self.owner, actor=User.objects.create_user(username="replyer", password="password123"), type="comment_reply", kit=self.user_kit, comment=comment)
+        self.client.force_authenticate(user=self.owner)
+
+        response = self.client.get(self.unread_count_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["unread_count"], 3)
+
+    def test_mark_read_sets_read_at(self):
+        first = Notification.objects.create(recipient=self.owner, actor=self.actor, type="follow")
+        second = Notification.objects.create(recipient=self.owner, actor=self.other_user, type="follow")
+        self.client.force_authenticate(user=self.owner)
+
+        response = self.client.post(self.mark_read_url, {}, format="json")
+
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["unread_count"], 0)
+        self.assertIsNotNone(first.read_at)
+        self.assertIsNotNone(second.read_at)
+
+    def test_mark_read_marks_all_notification_types_as_read(self):
+        comment = KitComment.objects.create(
+            kit=self.user_kit,
+            user=self.actor,
+            body="Mark all types",
+        )
+        notifications = [
+            Notification.objects.create(recipient=self.owner, actor=self.actor, type="kit_like", kit=self.user_kit),
+            Notification.objects.create(recipient=self.owner, actor=self.other_user, type="follow"),
+            Notification.objects.create(recipient=self.owner, actor=self.actor, type="kit_comment", kit=self.user_kit, comment=comment),
+            Notification.objects.create(recipient=self.owner, actor=self.other_user, type="comment_like", kit=self.user_kit, comment=comment),
+            Notification.objects.create(recipient=self.owner, actor=User.objects.create_user(username="reply-mark", password="password123"), type="comment_reply", kit=self.user_kit, comment=comment),
+        ]
+        self.client.force_authenticate(user=self.owner)
+
+        response = self.client.post(self.mark_read_url, {}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        for notification in notifications:
+            notification.refresh_from_db()
+            self.assertIsNotNone(notification.read_at)
+
+    def test_unauthenticated_users_cannot_access_notification_endpoints(self):
+        list_response = self.client.get(self.list_url)
+        count_response = self.client.get(self.unread_count_url)
+        mark_response = self.client.post(self.mark_read_url, {}, format="json")
+
+        self.assertEqual(list_response.status_code, 401)
+        self.assertEqual(count_response.status_code, 401)
+        self.assertEqual(mark_response.status_code, 401)
+
+    def test_notification_payload_includes_actor_public_info_only(self):
+        notification = Notification.objects.create(
+            recipient=self.owner,
+            actor=self.actor,
+            type="follow",
+        )
+        self.client.force_authenticate(user=self.owner)
+
+        response = self.client.get(self.list_url)
+
+        self.assertEqual(response.status_code, 200)
+        actor_payload = response.data["results"][0]["actor"]
+        self.assertEqual(response.data["results"][0]["id"], notification.id)
+        self.assertEqual(actor_payload["username"], self.actor.username)
+        self.assertIn("avatar", actor_payload)
+        self.assertNotIn("email", actor_payload)
+        self.assertIsNone(response.data["results"][0]["comment"])
+
+    def test_kit_like_notification_payload_includes_kit_info(self):
+        Notification.objects.create(
+            recipient=self.owner,
+            actor=self.actor,
+            type="kit_like",
+            kit=self.user_kit,
+        )
+        self.client.force_authenticate(user=self.owner)
+
+        response = self.client.get(self.list_url)
+
+        self.assertEqual(response.status_code, 200)
+        kit_payload = response.data["results"][0]["kit"]
+        self.assertEqual(kit_payload["id"], self.user_kit.id)
+        self.assertEqual(kit_payload["owner_username"], self.owner.username)
+        self.assertEqual(kit_payload["team_name"], "Notify FC")
+        self.assertEqual(kit_payload["season"], "2024/2025")
+        self.assertEqual(kit_payload["kit_type"], "Home")
+        self.assertIsNone(response.data["results"][0]["comment"])
+
+    def test_kit_like_notification_payload_includes_preview_image_if_available(self):
+        Notification.objects.create(
+            recipient=self.owner,
+            actor=self.actor,
+            type="kit_like",
+            kit=self.user_kit,
+        )
+        self.client.force_authenticate(user=self.owner)
+
+        response = self.client.get(self.list_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("/media/user_kits/notification-preview", response.data["results"][0]["kit"]["preview_image"])
+
+    def test_list_endpoint_returns_new_types_correctly(self):
+        comment = KitComment.objects.create(
+            kit=self.user_kit,
+            user=self.actor,
+            body="This preview text should appear in the payload for list endpoint coverage.",
+        )
+        Notification.objects.create(recipient=self.owner, actor=self.actor, type="kit_comment", kit=self.user_kit, comment=comment)
+        Notification.objects.create(recipient=self.owner, actor=self.other_user, type="comment_like", kit=self.user_kit, comment=comment)
+        Notification.objects.create(recipient=self.owner, actor=User.objects.create_user(username="reply-list", password="password123"), type="comment_reply", kit=self.user_kit, comment=comment)
+        self.client.force_authenticate(user=self.owner)
+
+        response = self.client.get(self.list_url)
+
+        self.assertEqual(response.status_code, 200)
+        returned_types = {item["type"] for item in response.data["results"]}
+        self.assertTrue({"kit_comment", "comment_like", "comment_reply"}.issubset(returned_types))
+
+    def test_notification_list_pagination_with_limit_and_before_works(self):
+        oldest = Notification.objects.create(recipient=self.owner, actor=self.actor, type="follow")
+        middle = Notification.objects.create(recipient=self.owner, actor=self.other_user, type="follow")
+        newest_actor = User.objects.create_user(username="latest", password="password123")
+        newest = Notification.objects.create(recipient=self.owner, actor=newest_actor, type="follow")
+        self.client.force_authenticate(user=self.owner)
+
+        first_page = self.client.get(self.list_url, {"limit": 2})
+
+        self.assertEqual(first_page.status_code, 200)
+        self.assertEqual([item["id"] for item in first_page.data["results"]], [newest.id, middle.id])
+        self.assertTrue(first_page.data["has_more"])
+
+        second_page = self.client.get(self.list_url, {"limit": 2, "before": middle.id})
+
+        self.assertEqual(second_page.status_code, 200)
+        self.assertEqual([item["id"] for item in second_page.data["results"]], [oldest.id])
+        self.assertFalse(second_page.data["has_more"])
+
+    def test_invalid_notification_before_is_rejected(self):
+        self.client.force_authenticate(user=self.owner)
+
+        invalid_response = self.client.get(self.list_url, {"before": "bad-id"})
+        missing_response = self.client.get(self.list_url, {"before": 999999})
+
+        self.assertEqual(invalid_response.status_code, 400)
+        self.assertEqual(invalid_response.data["before"], ["before must be a valid notification id."])
+        self.assertEqual(missing_response.status_code, 400)
+        self.assertEqual(missing_response.data["before"], ["Notification not found."])

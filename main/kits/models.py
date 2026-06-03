@@ -4,6 +4,7 @@ from django.contrib.auth.models import User
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -93,6 +94,14 @@ KIT_REPORT_STATUS_CHOICES = [
     ('reviewed', 'Reviewed'),
     ('dismissed', 'Dismissed'),
     ('resolved', 'Resolved'),
+]
+
+NOTIFICATION_TYPE_CHOICES = [
+    ('kit_like', 'Kit like'),
+    ('follow', 'Follow'),
+    ('kit_comment', 'Kit comment'),
+    ('comment_like', 'Comment like'),
+    ('comment_reply', 'Comment reply'),
 ]
 
 AUTOMATED_VALUATION_UNAVAILABLE_MESSAGE = (
@@ -529,6 +538,66 @@ class Message(models.Model):
 
     def __str__(self):
         return f'Message {self.id} in conversation {self.conversation_id}'
+
+
+class Notification(models.Model):
+    recipient = models.ForeignKey(
+        User,
+        related_name='notifications',
+        on_delete=models.CASCADE,
+    )
+    actor = models.ForeignKey(
+        User,
+        related_name='notifications_sent',
+        on_delete=models.CASCADE,
+    )
+    type = models.CharField(max_length=32, choices=NOTIFICATION_TYPE_CHOICES)
+    kit = models.ForeignKey(
+        UserKit,
+        null=True,
+        blank=True,
+        related_name='notifications',
+        on_delete=models.CASCADE,
+    )
+    comment = models.ForeignKey(
+        KitComment,
+        null=True,
+        blank=True,
+        related_name='notifications',
+        on_delete=models.CASCADE,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [
+            models.Index(fields=['recipient', 'read_at', '-created_at', '-id']),
+            models.Index(fields=['recipient', 'type', '-created_at', '-id']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['recipient', 'actor', 'type', 'kit'],
+                condition=Q(type='kit_like', kit__isnull=False),
+                name='unique_kit_like_notification',
+            ),
+            models.UniqueConstraint(
+                fields=['recipient', 'actor', 'type'],
+                condition=Q(type='follow', kit__isnull=True),
+                name='unique_follow_notification',
+            ),
+            models.UniqueConstraint(
+                fields=['recipient', 'actor', 'type', 'comment'],
+                condition=Q(
+                    type__in=['kit_comment', 'comment_like', 'comment_reply'],
+                    comment__isnull=False,
+                ),
+                name='unique_comment_notification',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.actor.username} -> {self.recipient.username} ({self.type})'
 
 
 # Kit Images (multiple images per kit)
