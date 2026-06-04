@@ -3,7 +3,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import ValidationError, PermissionDenied
 from rest_framework.pagination import PageNumberPagination
 
 from rest_framework.throttling import ScopedRateThrottle
@@ -924,6 +924,9 @@ class MyCollectionValueHistoryAPI(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        if not getattr(request.user.profile, 'is_pro', False):
+            raise PermissionDenied('Collection value history is available for Pro members only.')
+
         if not request.user.collection_value_snapshots.exists():
             record_collection_value_snapshot(
                 request.user,

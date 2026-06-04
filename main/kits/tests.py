@@ -174,6 +174,8 @@ class CollectionValueSnapshotTests(APITestCase):
         self.client = APIClient()
         self.user = User.objects.create_user(username="history_owner", password="password123")
         self.other_user = User.objects.create_user(username="history_other", password="password123")
+        self.user.profile.is_pro = True
+        self.user.profile.save()
         self.client.force_authenticate(user=self.user)
         self.team = Team.objects.create(name="History FC", is_verified=True)
         self.kit = Kit.objects.create(
@@ -328,6 +330,14 @@ class CollectionValueSnapshotTests(APITestCase):
         response = self.client.get(reverse("my-collection-value-history"))
 
         self.assertEqual(response.status_code, 401)
+
+    def test_history_endpoint_requires_pro_membership(self):
+        self.user.profile.is_pro = False
+        self.user.profile.save()
+
+        response = self.client.get(reverse("my-collection-value-history"))
+
+        self.assertEqual(response.status_code, 403)
 
     def test_history_endpoint_returns_only_current_user_snapshots(self):
         CollectionValueSnapshot.objects.create(

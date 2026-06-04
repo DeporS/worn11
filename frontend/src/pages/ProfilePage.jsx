@@ -16,6 +16,7 @@ import MarketBadge from "../components/profile/MarketBadge";
 import UserAvatar from "../components/UserAvatar";
 import UserListModal from "../components/profile/UserListModal";
 import CollectionValueChartModal from "../components/profile/CollectionValueChartModal";
+import CollectionValueProModal from "../components/profile/CollectionValueProModal";
 
 import "../styles/profile.css";
 
@@ -62,6 +63,7 @@ const ProfilePage = ({ user }) => {
 	const [modalLoading, setModalLoading] = useState(false);
 	const [activeHighlightedKitId, setActiveHighlightedKitId] = useState(null);
 	const [isValueHistoryOpen, setIsValueHistoryOpen] = useState(false);
+	const [isValueHistoryProModalOpen, setIsValueHistoryProModalOpen] = useState(false);
 	const hasScrolledToHighlightedKitRef = useRef(false);
 	const highlightTimeoutRef = useRef(null);
 
@@ -251,6 +253,19 @@ const ProfilePage = ({ user }) => {
 		}
 	};
 
+	const handleTotalValueClick = () => {
+		if (!isOwner) {
+			return;
+		}
+
+		if (profileData?.is_pro) {
+			setIsValueHistoryOpen(true);
+			return;
+		}
+
+		setIsValueHistoryProModalOpen(true);
+	};
+
 	return (
 		<div className="container py-5 px-3 px-md-1">
 			{/* Profile headline */}
@@ -399,19 +414,9 @@ const ProfilePage = ({ user }) => {
 						<div className="d-flex justify-content-end gap-4 profile-stats-grid">
 							{/* Followers */}
 							<div
-								className="text-center cursor-pointer profile-stat-card"
+								className="text-center profile-stat-card profile-stat-card-clickable"
 								title={t("profile.seeFollowers")}
 								onClick={() => openFollowModal("followers")}
-								style={{
-									cursor: "pointer",
-									transition: "opacity 0.2s",
-								}}
-								onMouseEnter={(e) =>
-									(e.currentTarget.style.opacity = "0.7")
-								}
-								onMouseLeave={(e) =>
-									(e.currentTarget.style.opacity = "1")
-								}
 							>
 								<div className="d-flex justify-content-center align-items-center gap-2">
 									<FollowersIcon className="followers-icon" />
@@ -426,19 +431,9 @@ const ProfilePage = ({ user }) => {
 
 							{/* Following */}
 							<div
-								className="text-center cursor-pointer profile-stat-card"
+								className="text-center profile-stat-card profile-stat-card-clickable"
 								title={t("profile.seeFollowing")}
 								onClick={() => openFollowModal("following")}
-								style={{
-									cursor: "pointer",
-									transition: "opacity 0.2s",
-								}}
-								onMouseEnter={(e) =>
-									(e.currentTarget.style.opacity = "0.7")
-								}
-								onMouseLeave={(e) =>
-									(e.currentTarget.style.opacity = "1")
-								}
 							>
 								<div className="d-flex justify-content-center align-items-center gap-2">
 									<FollowingIcon className="following-icon" />
@@ -470,7 +465,7 @@ const ProfilePage = ({ user }) => {
 							<div
 								className={`text-center profile-stat-card ${isOwner ? "profile-stat-card-clickable" : ""}`}
 								title={t("profile.totalValueTitle")}
-								onClick={isOwner ? () => setIsValueHistoryOpen(true) : undefined}
+								onClick={isOwner ? handleTotalValueClick : undefined}
 							>
 								<div className="d-flex justify-content-center align-items-center gap-2">
 									<MoneyBagIcon className="money-bag-icon" />
@@ -812,6 +807,12 @@ const ProfilePage = ({ user }) => {
 				<CollectionValueChartModal
 					isOpen={isValueHistoryOpen}
 					onClose={() => setIsValueHistoryOpen(false)}
+				/>
+			) : null}
+			{isOwner ? (
+				<CollectionValueProModal
+					isOpen={isValueHistoryProModalOpen}
+					onClose={() => setIsValueHistoryProModalOpen(false)}
 				/>
 			) : null}
 		</div>

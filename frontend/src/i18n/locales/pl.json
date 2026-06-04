@@ -175,6 +175,13 @@
 	"collectionValue": {
 		"title": "Wartość kolekcji w czasie",
 		"subtitle": "Śledź, jak zmienia się wartość kolekcji po dodaniu, usunięciu i aktualizacji koszulek.",
+		"proTitle": "Historia wartości kolekcji to funkcja Pro",
+		"proSubtitle": "Śledź, jak zmienia się wartość kolekcji po dodaniu, usunięciu i aktualizacji koszulek.",
+		"proBenefitChart": "Wykres historii wartości",
+		"proBenefitInsights": "Statystyki kolekcji",
+		"proBenefitTracking": "Śledzenie zmian w czasie",
+		"proClose": "Może później",
+		"proUpgrade": "Przejdź na Pro",
 		"empty": "Za mało danych. Historia wartości kolekcji pojawi się po kolejnych zmianach.",
 		"loading": "Ładowanie historii wartości...",
 		"error": "Nie udało się załadować historii wartości kolekcji.",

@@ -144,6 +144,16 @@
 	border: 1px solid rgba(13, 110, 253, 0.08);
 	border-radius: 1rem;
 	padding: 0.85rem 0.9rem;
+	transition:
+		transform 0.18s ease,
+		box-shadow 0.18s ease,
+		border-color 0.18s ease;
+}
+
+.profile-stat-card:hover {
+	transform: translateY(-1px);
+	box-shadow: 0 10px 24px rgba(13, 110, 253, 0.08);
+	border-color: rgba(13, 110, 253, 0.16);
 }
 
 .profile-stat-card h4 {
@@ -156,15 +166,6 @@
 
 .profile-stat-card-clickable {
 	cursor: pointer;
-	transition:
-		transform 0.18s ease,
-		box-shadow 0.18s ease,
-		opacity 0.18s ease;
-}
-
-.profile-stat-card-clickable:hover {
-	transform: translateY(-1px);
-	box-shadow: 0 10px 24px rgba(13, 110, 253, 0.08);
 }
 
 .collection-value-modal-backdrop {
@@ -207,6 +208,35 @@
 .collection-value-modal-body {
 	padding: 1.25rem;
 	overflow-y: auto;
+}
+
+.collection-value-pro-benefits {
+	display: grid;
+	gap: 0.75rem;
+	margin-bottom: 1.25rem;
+}
+
+.collection-value-pro-benefit {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	padding: 0.85rem 0.95rem;
+	border-radius: 0.95rem;
+	background: #f8f9fa;
+	border: 1px solid rgba(15, 23, 42, 0.08);
+	color: #1f2937;
+}
+
+.collection-value-pro-benefit-icon {
+	font-size: 1.1rem;
+	line-height: 1;
+}
+
+.collection-value-pro-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 0.75rem;
+	flex-wrap: wrap;
 }
 
 .collection-value-status,
@@ -508,6 +538,14 @@
 	.collection-value-modal-header,
 	.collection-value-modal-body {
 		padding-inline: 1rem;
+	}
+
+	.collection-value-pro-actions {
+		flex-direction: column-reverse;
+	}
+
+	.collection-value-pro-actions .btn {
+		width: 100%;
 	}
 
 	.collection-value-modal-header {

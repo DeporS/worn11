@@ -175,6 +175,13 @@
 	"collectionValue": {
 		"title": "Collection value over time",
 		"subtitle": "Track how your collection value changes as you add, remove, and update kits.",
+		"proTitle": "Collection value history is a Pro feature",
+		"proSubtitle": "Track how your collection value changes as you add, remove, and update kits.",
+		"proBenefitChart": "Value history chart",
+		"proBenefitInsights": "Collection insights",
+		"proBenefitTracking": "Track changes over time",
+		"proClose": "Maybe later",
+		"proUpgrade": "Upgrade to Pro",
 		"empty": "Not enough history yet. Your collection value history will appear after future changes.",
 		"loading": "Loading value history...",
 		"error": "Could not load collection value history.",
