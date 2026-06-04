@@ -18,7 +18,7 @@ import { formatLocalizedDate } from "../../utils/dateFormat";
 
 import "../../styles/profile.css";
 
-const KitCard = ({ item, onDeleteSuccess, user }) => {
+const KitCard = ({ item, onDeleteSuccess, user, hideViewOnProfile = false }) => {
 	const { t, i18n } = useTranslation();
 	const navigate = useNavigate();
 	const [isDeleting, setIsDeleting] = useState(false);
@@ -209,7 +209,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 
 	return (
 		<>
-			<div className="card h-100 shadow-sm border-0 kit-card-relative">
+			<div className="card h-100 shadow-sm border-0 kit-card-relative profile-kit-card">
 				{item.for_sale && item.in_the_collection && (
 					<div className="ribbon">{t("kitCard.forSale")}</div>
 				)}
@@ -219,7 +219,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 				{/* VISIBLE ON LARGE SCREENS (md and above) */}
 				{/* ========================================== */}
 				<div
-					className="p-2 d-none d-md-block"
+					className="p-2 d-none d-md-block kit-card-media"
 					style={{ cursor: "pointer" }}
 					onClick={() => {
 						openViewer(0);
@@ -320,7 +320,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 					)}
 				</div>
 
-				<div className="card-body">
+				<div className="card-body kit-card-content">
 					{/* Team Name && Estimated Value */}
 					<div className="d-flex justify-content-between align-items-center mb-3 mt-0">
 						<div
@@ -422,9 +422,9 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 					</div>
 
 					{/* Contact Owner & View Offer + Edit/Delete Buttons */}
-					<div className="d-flex justify-content-between mt-1 align-items-center">
+					<div className="d-flex justify-content-between mt-1 align-items-center profile-kit-footer">
 						{/*Contact Owner & View Offer Links*/}
-						<div className="d-flex flex-column">
+						<div className="d-flex flex-column profile-kit-action-stack">
 							{item.is_owner ? (
 								<a className="minimal-not-for-sale-link">
 									<span>{t("kitCard.youAreTheOwner")}</span>
@@ -512,12 +512,12 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 						</div>
 					</div>
 
-					{/* Likes and Added At */}
-					<div className="d-flex justify-content-between mt-1 align-items-center">
+					{/* Footer */}
+					<div className="mt-2 profile-kit-footer">
 						{/* Likes */}
-						<div className="d-flex flex-column align-items-start">
+						<div className="d-flex flex-column align-items-start profile-kit-likes">
 							<div
-								className="d-flex align-items-center"
+								className="d-flex align-items-center profile-kit-like-row"
 								style={{ gap: "5px" }}
 							>
 							<button
@@ -537,7 +537,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 							</button>
 							<button
 								type="button"
-								className="p-0 bg-transparent border-0 small text-muted text-start"
+								className="p-0 bg-transparent border-0 small text-muted text-start profile-kit-like-text"
 								title={t("kitCard.seeWhoLikedThis")}
 								onClick={(e) => {
 									e.stopPropagation();
@@ -553,10 +553,10 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 							</div>
 						</div>
 
-						<div>
+						<div className="d-flex align-items-center justify-content-between profile-kit-owner-date">
 							{/* Owner */}
 							<small
-								className="me-3"
+								className="profile-kit-owner"
 								style={{ fontSize: "0.75rem" }}
 							>
 								<Link
@@ -572,7 +572,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 							</small>
 							{/* Added At */}
 							<small
-								className="text-muted"
+								className="text-muted profile-kit-date"
 								style={{ fontSize: "0.75rem" }}
 							>
 								<i className="bi bi-clock me-1"></i>
@@ -600,6 +600,7 @@ const KitCard = ({ item, onDeleteSuccess, user }) => {
 				currentUser={user}
 				item={item}
 				initialImageIndex={viewerState.initialImageIndex}
+				hideViewOnProfile={hideViewOnProfile}
 			/>
 		</>
 	);

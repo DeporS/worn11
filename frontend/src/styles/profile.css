@@ -154,6 +154,114 @@
 	line-height: 1.25;
 }
 
+@media (min-width: 992px) {
+	.profile-kits-grid {
+		--bs-gutter-x: 1.1rem;
+		--bs-gutter-y: 1.1rem;
+	}
+
+	.profile-kit-card .kit-card-media {
+		padding: 0.55rem !important;
+	}
+
+	.profile-kit-card .kit-card-content {
+		padding: 0.8rem !important;
+	}
+
+	.profile-kit-card .kit-info {
+		padding: 0.4rem !important;
+	}
+
+	.profile-kit-card .card-title {
+		font-size: 1rem;
+	}
+
+	.profile-kit-card .kit-info .small {
+		font-size: 0.8rem;
+	}
+
+	.profile-kit-card .minimal-offer-link,
+	.profile-kit-card .minimal-not-for-sale-link {
+		font-size: 0.8rem;
+	}
+
+	.profile-kit-card .profile-kit-action-stack {
+		align-items: center;
+		justify-content: center;
+		text-align: center;
+	}
+
+	.profile-kit-card .profile-kit-action-stack .minimal-offer-link,
+	.profile-kit-card .profile-kit-action-stack .minimal-not-for-sale-link {
+		justify-content: center;
+		align-self: center;
+	}
+
+	.profile-kit-card .profile-kit-footer {
+		display: flex;
+		flex-direction: column;
+		font-size: 0.74rem;
+		gap: 0.45rem;
+		line-height: 1.15;
+	}
+
+	.profile-kit-card .profile-kit-like-row {
+		gap: 0.4rem !important;
+		align-items: center !important;
+	}
+
+	.profile-kit-card .profile-kit-owner-date {
+		min-width: 0;
+		gap: 0.5rem;
+		flex-wrap: nowrap;
+		width: 100%;
+	}
+
+	.profile-kit-card .profile-kit-likes {
+		min-width: 0;
+		width: 100%;
+	}
+
+	.profile-kit-card .profile-kit-like-text {
+		font-size: 0.8rem !important;
+		line-height: 1.2 !important;
+		white-space: normal;
+		word-break: break-word;
+		color: #495057 !important;
+	}
+
+	.profile-kit-card .profile-kit-likes .btn.btn-link {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		line-height: 1;
+	}
+
+	.profile-kit-card .profile-kit-likes .btn.btn-link .bi {
+		font-size: 0.92rem !important;
+	}
+
+	.profile-kit-card .profile-kit-owner {
+		min-width: 0;
+		flex: 1 1 auto;
+		white-space: nowrap;
+		font-size: 0.74rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.profile-kit-card .profile-kit-date {
+		flex-shrink: 0;
+		white-space: nowrap;
+		font-size: 0.74rem;
+	}
+
+	.profile-kit-card .profile-kit-footer i,
+	.profile-kit-card .profile-kit-footer .bi {
+		font-size: 0.74rem !important;
+	}
+}
+
 /* RIBBON ON KITCARD */
 .ribbon {
 	position: absolute;

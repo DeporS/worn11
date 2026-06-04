@@ -95,6 +95,7 @@ const CommentsModal = ({
 	currentUser,
 	item,
 	initialImageIndex = 0,
+	hideViewOnProfile = false,
 }) => {
 	const { t } = useTranslation();
 	const navigate = useNavigate();
@@ -340,7 +341,7 @@ const CommentsModal = ({
 					<div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2 unified-kit-header-row">
 						<div className="unified-kit-header-main" style={{ minWidth: 0 }}>
 							<h5 className="fw-bold mb-0 unified-kit-title">{kitTitle}</h5>
-							{ownerUsername ? (
+							{!hideViewOnProfile && ownerUsername ? (
 								<button
 									type="button"
 									className="btn btn-link p-0 mt-2 text-decoration-none text-start text-dark d-inline-flex align-items-center gap-2"

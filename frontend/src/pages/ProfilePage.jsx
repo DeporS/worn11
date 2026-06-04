@@ -767,18 +767,19 @@ const ProfilePage = ({ user }) => {
 					<div className="spinner-border text-primary"></div>
 				</div>
 			) : (
-				<div className="row g-4">
+				<div className="row g-4 profile-kits-grid">
 					{myKits.map((item) => (
 						<div
 							key={item.id}
 							id={`profile-kit-${item.id}`}
-							className={`col-12 col-sm-12 col-md-12 col-lg-6 col-xl-6 col-xxl-4 col-xxl-4 ${String(item.id) === activeHighlightedKitId ? "profile-kit-highlight" : ""}`}
+							className={`col-12 col-sm-12 col-md-12 col-lg-6 col-xl-4 col-xxl-3 profile-kit-cell ${String(item.id) === activeHighlightedKitId ? "profile-kit-highlight" : ""}`}
 						>
-							<KitCard
-								item={item}
-								onDeleteSuccess={handleDeleteSuccess}
-								user={user}
-							/>
+								<KitCard
+									item={item}
+									onDeleteSuccess={handleDeleteSuccess}
+									user={user}
+									hideViewOnProfile
+								/>
 						</div>
 					))}
 
