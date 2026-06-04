@@ -336,9 +336,9 @@ const CommentsModal = ({
 				className="card shadow unified-kit-modal"
 				onClick={(e) => e.stopPropagation()}
 			>
-				<div className="card-header bg-white border-bottom-0 pt-3 pb-2">
-					<div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2">
-						<div style={{ minWidth: 0 }}>
+				<div className="card-header bg-white border-bottom-0 pt-3 pb-2 unified-kit-header">
+					<div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2 unified-kit-header-row">
+						<div className="unified-kit-header-main" style={{ minWidth: 0 }}>
 							<h5 className="fw-bold mb-0 unified-kit-title">{kitTitle}</h5>
 							{ownerUsername ? (
 								<button
@@ -358,7 +358,7 @@ const CommentsModal = ({
 								</button>
 							) : null}
 						</div>
-						<div className="d-flex align-items-center gap-2 ms-md-auto flex-wrap justify-content-start justify-content-md-end">
+						<div className="d-flex align-items-center gap-2 ms-md-auto flex-wrap justify-content-start justify-content-md-end unified-kit-actions">
 							{item?.for_sale && offerUrl && (
 								<a
 									href={offerUrl}
@@ -392,13 +392,16 @@ const CommentsModal = ({
 								<i className="bi bi-flag me-1" aria-hidden="true"></i>
 								{t("comments.reportKit")}
 							</button>
-							<button className="btn-close" onClick={onClose}></button>
+							<button
+								className="btn-close unified-kit-close"
+								onClick={onClose}
+							></button>
 						</div>
 					</div>
 				</div>
 
 				<div className="card-body p-0 unified-kit-body">
-					<div className="d-flex flex-column flex-lg-row h-100">
+					<div className="d-flex flex-column flex-lg-row h-100 unified-kit-layout">
 						<div className="unified-kit-media bg-dark text-white">
 							{activeImage ? (
 								<>
@@ -473,7 +476,7 @@ const CommentsModal = ({
 						</div>
 
 						<div className="unified-kit-comments bg-white">
-							<div className="overflow-auto h-100 p-3 p-lg-4">
+							<div className="overflow-auto h-100 p-3 p-lg-4 unified-kit-comments-scroll">
 								<div className="mb-4">
 									<textarea
 										className="form-control"

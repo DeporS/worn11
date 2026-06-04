@@ -147,7 +147,7 @@
 		"myShops": "Moje sklepy",
 		"findMe": "Tu mnie znajdziesz",
 		"follow": "Obserwuj",
-		"unfollow": "Przestań obserwować",
+		"unfollow": "Odobserwuj",
 		"message": "Wiadomość",
 		"followers": "Obserwujący",
 		"following": "Obserwowani",
@@ -213,7 +213,7 @@
 		"unknownOwner": "nieznany"
 	},
 	"kitModal": {
-		"ownerLabel": "Właściciel koszulki"
+		"ownerLabel": "Zobacz na profilu"
 	},
 	"forms": {
 		"addNewKit": "Dodaj nową koszulkę",
