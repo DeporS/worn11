@@ -44,6 +44,7 @@
 	},
 	"messages": {
 		"title": "Wiadomości",
+		"backToInbox": "Wróć do wiadomości",
 		"loadError": "Nie udało się załadować rozmów.",
 		"conversationError": "Nie udało się załadować tej rozmowy.",
 		"sendError": "Nie udało się wysłać wiadomości.",
@@ -210,6 +211,9 @@
 		"noPhoto": "Brak zdjęcia",
 		"unknownTeam": "Nieznany zespół",
 		"unknownOwner": "nieznany"
+	},
+	"kitModal": {
+		"ownerLabel": "Właściciel koszulki"
 	},
 	"forms": {
 		"addNewKit": "Dodaj nową koszulkę",

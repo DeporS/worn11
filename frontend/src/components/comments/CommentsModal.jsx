@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 
 import {
@@ -12,6 +13,7 @@ import {
 import CommentItem from "./CommentItem";
 import ReportKitModal from "../reports/ReportKitModal";
 import { copyKitShareUrl } from "../utils/kitShare";
+import UserAvatar from "../UserAvatar";
 
 const countComments = (items) =>
 	items.reduce(
@@ -95,6 +97,7 @@ const CommentsModal = ({
 	initialImageIndex = 0,
 }) => {
 	const { t } = useTranslation();
+	const navigate = useNavigate();
 	const [comments, setComments] = useState([]);
 	const [loading, setLoading] = useState(false);
 	const [draft, setDraft] = useState("");
@@ -109,8 +112,16 @@ const CommentsModal = ({
 	const images = item?.images || [];
 	const activeImage = images[currentImageIndex] || null;
 	const kitTitle = formatKitTitle(item);
-	const ownerLabel = formatOwnerLabel(item);
 	const offerUrl = getSafeUrl(item?.offer_link);
+	const ownerUsername = item?.owner_username?.trim() || "";
+	const ownerAvatar = item?.owner_avatar || item?.owner?.avatar || null;
+	const ownerUser = useMemo(
+		() => ({
+			username: ownerUsername || "?",
+			avatar: ownerAvatar,
+		}),
+		[ownerAvatar, ownerUsername],
+	);
 
 	useEffect(() => {
 		if (!isOpen) return;
@@ -297,6 +308,11 @@ const CommentsModal = ({
 		setCurrentImageIndex((prev) => Math.min(prev + 1, images.length - 1));
 	};
 
+	const handleOwnerClick = () => {
+		if (!ownerUsername) return;
+		navigate(`/profile/${ownerUsername}`);
+	};
+
 	return (
 		<div
 			className="d-flex justify-content-center align-items-center"
@@ -319,7 +335,23 @@ const CommentsModal = ({
 					<div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2">
 						<div style={{ minWidth: 0 }}>
 							<h5 className="fw-bold mb-0 unified-kit-title">{kitTitle}</h5>
-							<small className="text-muted d-block">{ownerLabel}</small>
+							{ownerUsername ? (
+								<button
+									type="button"
+									className="btn btn-link p-0 mt-2 text-decoration-none text-start text-dark d-inline-flex align-items-center gap-2"
+									onClick={handleOwnerClick}
+								>
+									<UserAvatar user={ownerUser} size={30} />
+									<span className="d-flex flex-column align-items-start min-w-0">
+										<span className="fw-semibold text-truncate" style={{ maxWidth: "220px" }}>
+											{ownerUsername}
+										</span>
+										<span className="small text-muted">
+											{t("kitModal.ownerLabel")}
+										</span>
+									</span>
+								</button>
+							) : null}
 						</div>
 						<div className="d-flex align-items-center gap-2 ms-md-auto flex-wrap justify-content-start justify-content-md-end">
 							{item?.for_sale && offerUrl && (
@@ -540,14 +572,6 @@ function formatKitTitle(item) {
 	const kitType = item?.kit?.kit_type?.trim();
 
 	return [teamName, season, kitType].filter(Boolean).join(" ") || "Kit";
-}
-
-function formatOwnerLabel(item) {
-	const owner = item?.owner_username?.trim();
-
-	if (!owner) return "";
-
-	return `${owner}'s Kit`;
 }
 
 function getSafeUrl(url) {

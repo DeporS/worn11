@@ -25,18 +25,45 @@ import api, {
 import ScrollToTop from "./components/utils/ScrollTop";
 import "./index.css";
 
+const AuthGate = ({ authLoading, user, children }) => {
+	if (authLoading) {
+		return (
+			<div className="container py-5">
+				<div className="d-flex justify-content-center align-items-center py-5">
+					<div className="spinner-border text-primary" role="status" />
+				</div>
+			</div>
+		);
+	}
+
+	if (!user) {
+		return <Navigate to="/" replace />;
+	}
+
+	return children;
+};
+
 function App() {
 	const [user, setUser] = useState(null); // User state
+	const [authLoading, setAuthLoading] = useState(true);
 	const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
 	const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
 
-	const fetchUserData = async () => {
+	const fetchUserData = async ({ clearAuthOnError = true } = {}) => {
 		try {
 			const response = await api.get("/auth/user/");
 			setUser(response.data);
+			return response.data;
 		} catch (error) {
 			console.error("Błąd pobierania profilu:", error);
-			handleLogout();
+			setUser(null);
+			if (clearAuthOnError) {
+				localStorage.removeItem("access_token");
+				localStorage.removeItem("refresh_token");
+			}
+			return null;
+		} finally {
+			setAuthLoading(false);
 		}
 	};
 
@@ -44,7 +71,10 @@ function App() {
 		const token = localStorage.getItem("access_token");
 		if (token) {
 			fetchUserData();
+			return;
 		}
+
+		setAuthLoading(false);
 	}, []);
 
 	useEffect(() => {
@@ -65,6 +95,7 @@ function App() {
 		return () => window.clearInterval(intervalId);
 	}, [user]);
 	const handleLoginSuccess = () => {
+		setAuthLoading(true);
 		fetchUserData();
 	};
 
@@ -72,6 +103,7 @@ function App() {
 		localStorage.removeItem("access_token");
 		localStorage.removeItem("refresh_token");
 		setUser(null);
+		setAuthLoading(false);
 		setUnreadMessagesCount(0);
 		setUnreadNotificationsCount(0);
 	};
@@ -131,11 +163,9 @@ function App() {
 					<Route
 						path="/my-collection"
 						element={
-							user ? (
+							<AuthGate authLoading={authLoading} user={user}>
 								<ProfilePage user={user} />
-							) : (
-								<Navigate to="/" />
-							)
+							</AuthGate>
 						}
 					/>
 
@@ -151,39 +181,44 @@ function App() {
 					<Route
 						path="/messages"
 						element={
-							user ? (
+							<AuthGate authLoading={authLoading} user={user}>
 								<MessagesPage
 									user={user}
 									refreshUnreadMessagesCount={refreshUnreadMessagesCount}
 								/>
-							) : (
-								<Navigate to="/" />
-							)
+							</AuthGate>
 						}
 					/>
 					<Route
 						path="/messages/:conversationId"
 						element={
-							user ? (
+							<AuthGate authLoading={authLoading} user={user}>
 								<MessagesPage
 									user={user}
 									refreshUnreadMessagesCount={refreshUnreadMessagesCount}
 								/>
-							) : (
-								<Navigate to="/" />
-							)
+							</AuthGate>
 						}
 					/>
-					<Route path="/feed" element={<FeedPage user={user} />} />
+					<Route
+						path="/feed"
+						element={
+							<AuthGate authLoading={authLoading} user={user}>
+								<FeedPage user={user} />
+							</AuthGate>
+						}
+					/>
 
 					{/* Edit Profile Page */}
 					<Route
 						path="/profile/edit"
 						element={
-							<EditProfilePage
-								user={user} // User logged in
-								setUser={setUser} // Function to update user state
-							/>
+							<AuthGate authLoading={authLoading} user={user}>
+								<EditProfilePage
+									user={user} // User logged in
+									setUser={setUser} // Function to update user state
+								/>
+							</AuthGate>
 						}
 					/>
 
@@ -191,7 +226,9 @@ function App() {
 					<Route
 						path="/add-kit"
 						element={
-							user ? <AddShirtFormPage /> : <Navigate to="/" />
+							<AuthGate authLoading={authLoading} user={user}>
+								<AddShirtFormPage />
+							</AuthGate>
 						}
 					/>
 
@@ -199,11 +236,9 @@ function App() {
 					<Route
 						path="/edit-kit/:id"
 						element={
-							user ? (
+							<AuthGate authLoading={authLoading} user={user}>
 								<EditShirtFormPage user={user} />
-							) : (
-								<Navigate to="/" />
-							)
+							</AuthGate>
 						}
 					/>
 

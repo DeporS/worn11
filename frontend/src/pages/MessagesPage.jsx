@@ -17,6 +17,7 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 	const MESSAGES_PAGE_SIZE = 30;
 	const { conversationId } = useParams();
 	const navigate = useNavigate();
+	const hasSelectedConversation = Boolean(conversationId);
 	const [conversations, setConversations] = useState([]);
 	const [loadingConversations, setLoadingConversations] = useState(true);
 	const [selectedConversation, setSelectedConversation] = useState(null);
@@ -29,6 +30,10 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 	const [pageError, setPageError] = useState("");
 	const [navbarHeight, setNavbarHeight] = useState(0);
 	const messageListRef = useRef(null);
+	const messageInputRef = useRef(null);
+	const sendingRef = useRef(false);
+	const shouldFocusComposerAfterSendRef = useRef(false);
+	const focusComposerRafRef = useRef(null);
 	const scrollTimeoutRef = useRef(null);
 	const scrollRafRef = useRef(null);
 	const shouldScrollToBottomRef = useRef(false);
@@ -129,6 +134,31 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 	}, [messages, selectedConversation, conversationId, loadingMessages]);
 
 	useEffect(() => {
+		if (!shouldFocusComposerAfterSendRef.current || sending) {
+			return undefined;
+		}
+
+		shouldFocusComposerAfterSendRef.current = false;
+
+		if (focusComposerRafRef.current) {
+			window.cancelAnimationFrame(focusComposerRafRef.current);
+		}
+
+		focusComposerRafRef.current = window.requestAnimationFrame(() => {
+			focusComposerRafRef.current = window.requestAnimationFrame(() => {
+				focusComposerRafRef.current = null;
+				messageInputRef.current?.focus();
+			});
+		});
+
+		return () => {
+			if (focusComposerRafRef.current) {
+				window.cancelAnimationFrame(focusComposerRafRef.current);
+			}
+		};
+	}, [sending, draft, conversationId]);
+
+	useEffect(() => {
 		const loadConversations = async () => {
 			setLoadingConversations(true);
 			setPageError("");
@@ -217,25 +247,35 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 
 	const handleSendMessage = async () => {
 		const body = draft.trim();
-		if (!body || !conversationId || sending) return;
+		if (!body || !conversationId || sendingRef.current) return;
+
+		let createdMessage;
 
 		try {
+			sendingRef.current = true;
 			setSending(true);
-			const created = await sendConversationMessage(conversationId, body);
-			shouldScrollToBottomRef.current = true;
-			setMessages((prev) => [...prev, created]);
-			setDraft("");
-			await refreshConversations();
-			if (refreshUnreadMessagesCount) {
-				await refreshUnreadMessagesCount();
-			}
+			createdMessage = await sendConversationMessage(conversationId, body);
 		} catch (error) {
 			console.error("Failed to send message", error);
 			const message =
 				error?.response?.data?.body?.[0] || t("messages.sendError");
 			Swal.fire(t("common.error"), message, "error");
+			return;
 		} finally {
+			sendingRef.current = false;
 			setSending(false);
+		}
+
+		shouldScrollToBottomRef.current = true;
+		setMessages((prev) => [...prev, createdMessage]);
+		setDraft("");
+		shouldFocusComposerAfterSendRef.current = true;
+
+		refreshConversations();
+		if (refreshUnreadMessagesCount) {
+			refreshUnreadMessagesCount().catch((error) => {
+				console.error("Failed to refresh unread messages count", error);
+			});
 		}
 	};
 
@@ -353,7 +393,9 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 				"--messages-navbar-height": `${navbarHeight}px`,
 			}}
 		>
-			<div className="messages-shell row g-4">
+			<div
+				className={`messages-shell row g-4 ${hasSelectedConversation ? "has-selected-conversation" : ""}`}
+			>
 				<div className="col-12 col-lg-4 messages-sidebar">
 					<div className="card shadow-sm border-0 messages-panel messages-sidebar-panel">
 						<div className="p-3 border-bottom">
@@ -430,6 +472,14 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 							) : selectedConversation ? (
 								<>
 									<div className="messages-thread-header d-flex align-items-center gap-3 p-3 border-bottom">
+										<button
+											type="button"
+											className="btn btn-link text-body p-0 messages-mobile-back"
+											onClick={() => navigate("/messages")}
+											aria-label={t("messages.backToInbox")}
+										>
+											<i className="bi bi-arrow-left fs-5"></i>
+										</button>
 										<UserAvatar
 											user={selectedConversation.other_user}
 											size={48}
@@ -489,6 +539,7 @@ const MessagesPage = ({ user, refreshUnreadMessagesCount }) => {
 									<div className="messages-thread-composer border-top p-3">
 										<div className="d-flex gap-2 align-items-end">
 											<textarea
+												ref={messageInputRef}
 												className="form-control"
 												rows="2"
 												style={{ resize: "none" }}

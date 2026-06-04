@@ -44,6 +44,7 @@
 	},
 	"messages": {
 		"title": "Messages",
+		"backToInbox": "Back to messages",
 		"loadError": "Could not load conversations.",
 		"conversationError": "Could not load this conversation.",
 		"sendError": "Could not send your message.",
@@ -210,6 +211,9 @@
 		"noPhoto": "No photo",
 		"unknownTeam": "Unknown team",
 		"unknownOwner": "unknown"
+	},
+	"kitModal": {
+		"ownerLabel": "Kit owner"
 	},
 	"forms": {
 		"addNewKit": "Add New Kit",
