@@ -77,6 +77,83 @@
 	z-index: 0;
 }
 
+.profile-kit-highlight {
+	border-radius: 1rem;
+	animation: profile-kit-highlight-pulse 2.8s ease;
+}
+
+.profile-kit-highlight .kit-card-relative {
+	outline: 3px solid rgba(13, 110, 253, 0.42);
+	box-shadow: 0 0 0 4px rgba(13, 110, 253, 0.12);
+	border-radius: 1rem;
+}
+
+.profile-header-card {
+	overflow-x: clip;
+}
+
+.profile-name-block,
+.profile-stats-panel {
+	min-width: 0;
+}
+
+.profile-name-block {
+	display: grid !important;
+	grid-template-columns: minmax(0, 1fr) auto;
+	column-gap: 0.75rem;
+	row-gap: 0.35rem;
+	align-items: center;
+}
+
+.profile-name-row {
+	grid-column: 1;
+}
+
+.profile-meta-row,
+.profile-secondary-row {
+	grid-column: 1 / -1;
+}
+
+.profile-actions {
+	grid-column: 2;
+	grid-row: 1;
+	justify-self: end;
+}
+
+.profile-username {
+	word-break: break-word;
+}
+
+.profile-actions,
+.profile-market-links,
+.profile-social-links {
+	min-width: 0;
+}
+
+.profile-stats-grid {
+	display: grid !important;
+	grid-template-columns: repeat(4, minmax(118px, 1fr));
+	gap: 0.85rem;
+	width: 100%;
+	max-width: 620px;
+}
+
+.profile-stat-card {
+	min-width: 0;
+	background: #f8f9fa;
+	border: 1px solid rgba(13, 110, 253, 0.08);
+	border-radius: 1rem;
+	padding: 0.85rem 0.9rem;
+}
+
+.profile-stat-card h4 {
+	font-size: 1.15rem;
+}
+
+.profile-stat-card span {
+	line-height: 1.25;
+}
+
 /* RIBBON ON KITCARD */
 .ribbon {
 	position: absolute;
@@ -411,6 +488,109 @@
 
 	.unified-kit-thumbs {
 		padding-bottom: 0.25rem;
+	}
+}
+
+@keyframes profile-kit-highlight-pulse {
+	0% {
+		transform: scale(0.992);
+	}
+
+	30% {
+		transform: scale(1);
+	}
+
+	100% {
+		transform: scale(1);
+	}
+}
+
+@media (max-width: 767.98px) {
+	.profile-header-card {
+		padding: 1.25rem 1rem !important;
+	}
+
+	.profile-header-layout {
+		align-items: stretch !important;
+		text-align: center;
+	}
+
+	.profile-identity-block {
+		flex-direction: column;
+		align-items: center !important;
+		gap: 1rem !important;
+		width: 100%;
+	}
+
+	.profile-name-block {
+		display: flex !important;
+		flex-direction: column;
+		width: 100%;
+		align-items: center;
+	}
+
+	.profile-name-row {
+		justify-content: center;
+		gap: 0.5rem !important;
+	}
+
+	.profile-username {
+		font-size: clamp(1.65rem, 6vw, 2rem);
+		line-height: 1.1;
+		text-align: center;
+	}
+
+	.profile-meta-row {
+		justify-content: center;
+		text-align: center;
+	}
+
+	.profile-actions {
+		display: grid !important;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.75rem;
+		width: 100%;
+		margin-top: 0.85rem;
+		margin-left: 0 !important;
+		justify-self: stretch;
+	}
+
+	.profile-action-button,
+	.profile-edit-button {
+		width: 100%;
+		justify-content: center;
+		min-width: 0;
+	}
+
+	.profile-action-button {
+		padding-left: 0.75rem !important;
+		padding-right: 0.75rem !important;
+	}
+
+	.profile-stats-panel {
+		width: 100%;
+		text-align: initial !important;
+	}
+
+	.profile-stats-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.85rem;
+		width: 100%;
+		max-width: none;
+	}
+
+	.profile-stat-card {
+		padding: 0.85rem 0.75rem;
+	}
+
+	.profile-market-links,
+	.profile-social-links {
+		justify-content: center;
+	}
+
+	.email-hidden {
+		flex-wrap: wrap;
+		justify-content: center;
 	}
 }
 

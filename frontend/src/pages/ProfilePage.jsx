@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import {
 	getUserCollection,
@@ -8,7 +8,7 @@ import {
 	getFollowingList,
 	startConversation,
 } from "../services/api";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import Swal from "sweetalert2";
 import KitCard from "../components/profile/KitCard";
 import SocialLink from "../components/profile/SocialLink";
@@ -31,8 +31,10 @@ import { localizeCountryName } from "../utils/localizedCountries";
 const ProfilePage = ({ user }) => {
 	const { t } = useTranslation();
 	const { username } = useParams(); // Get username from URL params
+	const [searchParams] = useSearchParams();
 	const navigate = useNavigate();
 	const profileUsername = username || user?.username;
+	const highlightedKitId = searchParams.get("highlightKit");
 	const isOwner = user?.username === profileUsername; // Check if viewing own profile
 
 	const [myKits, setMyKits] = useState([]);
@@ -57,6 +59,9 @@ const ProfilePage = ({ user }) => {
 	const [modalType, setModalType] = useState(null); // 'followers' or 'following' or null
 	const [modalUsers, setModalUsers] = useState([]); // Users list for modal
 	const [modalLoading, setModalLoading] = useState(false);
+	const [activeHighlightedKitId, setActiveHighlightedKitId] = useState(null);
+	const hasScrolledToHighlightedKitRef = useRef(false);
+	const highlightTimeoutRef = useRef(null);
 
 	useEffect(() => {
 		if (!profileUsername) return;
@@ -84,6 +89,60 @@ const ProfilePage = ({ user }) => {
 			})
 			.finally(() => setLoading(false));
 	}, [profileUsername, user?.username, t]);
+
+	useEffect(() => {
+		hasScrolledToHighlightedKitRef.current = false;
+		setActiveHighlightedKitId(null);
+
+		if (highlightTimeoutRef.current) {
+			window.clearTimeout(highlightTimeoutRef.current);
+			highlightTimeoutRef.current = null;
+		}
+	}, [profileUsername, highlightedKitId]);
+
+	useEffect(() => {
+		if (!highlightedKitId || loading || myKits.length === 0) {
+			return undefined;
+		}
+
+		const matchingKit = myKits.find(
+			(item) => String(item.id) === String(highlightedKitId),
+		);
+		if (!matchingKit || hasScrolledToHighlightedKitRef.current) {
+			return undefined;
+		}
+
+		let frameId = window.requestAnimationFrame(() => {
+			const element = document.getElementById(`profile-kit-${matchingKit.id}`);
+			if (!element) return;
+
+			hasScrolledToHighlightedKitRef.current = true;
+			setActiveHighlightedKitId(String(matchingKit.id));
+			element.scrollIntoView({
+				behavior: "smooth",
+				block: "center",
+			});
+
+			highlightTimeoutRef.current = window.setTimeout(() => {
+				setActiveHighlightedKitId((currentId) =>
+					currentId === String(matchingKit.id) ? null : currentId,
+				);
+				highlightTimeoutRef.current = null;
+			}, 2800);
+		});
+
+		return () => {
+			window.cancelAnimationFrame(frameId);
+		};
+	}, [highlightedKitId, loading, myKits]);
+
+	useEffect(() => {
+		return () => {
+			if (highlightTimeoutRef.current) {
+				window.clearTimeout(highlightTimeoutRef.current);
+			}
+		};
+	}, []);
 
 	if (!profileUsername)
 		return <div className="text-center mt-5">{t("profile.loginRequired")}</div>;
@@ -193,18 +252,18 @@ const ProfilePage = ({ user }) => {
 	return (
 		<div className="container py-5 px-3 px-md-1">
 			{/* Profile headline */}
-			<div className="container bg-white p-4 rounded shadow-sm mb-5">
-				<div className="d-flex flex-column flex-lg-row justify-content-between align-items-center gap-4">
-					<div className="d-flex align-items-center gap-4">
+			<div className="container bg-white p-4 rounded shadow-sm mb-5 profile-header-card">
+				<div className="d-flex flex-column flex-lg-row justify-content-between align-items-center gap-4 profile-header-layout">
+					<div className="d-flex align-items-center gap-4 profile-identity-block">
 						{/* Profile avatar */}
 						<UserAvatar user={profileData} size={80} />
 						<div
-							className="d-flex flex-column justify-content-center"
+							className="d-flex flex-column justify-content-center profile-name-block"
 							style={{ minHeight: "80px" }}
 						>
-							<div className="d-flex align-items-center gap-1">
+							<div className="d-flex align-items-center gap-1 flex-wrap profile-name-row">
 								{/* Username and edit button */}
-								<h2 className="fw-bold mb-0">
+								<h2 className="fw-bold mb-0 profile-username">
 									{profileUsername}
 								</h2>
 
@@ -251,47 +310,15 @@ const ProfilePage = ({ user }) => {
 								{isOwner ? (
 									<Link
 										to="/profile/edit"
-										className="edit-button"
+										className="edit-button profile-edit-button"
 										title={t("profile.editProfile")}
 									>
 										✏️
 									</Link>
-								) : (
-									<div className="d-flex align-items-center gap-2 ms-2">
-										<button
-											onClick={handleFollowToggle}
-											disabled={followLoading}
-											className={`btn btn-sm rounded-pill px-3 fw-bold ${
-												isFollowing
-													? "btn-outline-secondary"
-													: "btn-primary"
-											}`}
-										>
-											{isFollowing ? (
-												<>
-													<i className="bi bi-person-dash-fill me-1"></i>{" "}
-													{t("profile.unfollow")}
-												</>
-											) : (
-												<>
-													<i className="bi bi-person-plus-fill me-1"></i>{" "}
-													{t("profile.follow")}
-												</>
-											)}
-										</button>
-										<button
-											type="button"
-											onClick={handleMessageClick}
-											className="btn btn-sm btn-outline-dark rounded-pill px-3 fw-semibold"
-										>
-											<i className="bi bi-chat-dots me-1"></i>
-											{t("profile.message")}
-										</button>
-									</div>
-								)}
+								) : null}
 							</div>
 
-							<div className="d-flex align-items-center gap-1">
+							<div className="d-flex align-items-center gap-1 flex-wrap profile-meta-row">
 								{/* Name & Surname */}
 								{(profileData?.name ||
 									profileData?.surname) && (
@@ -328,15 +355,49 @@ const ProfilePage = ({ user }) => {
 								)}
 							</div>
 
-							<div className="d-flex align-items-center gap-3 mt-2 small text-secondary"></div>
+							{!isOwner ? (
+								<div className="d-flex align-items-center gap-2 profile-actions">
+									<button
+										onClick={handleFollowToggle}
+										disabled={followLoading}
+										className={`btn btn-sm rounded-pill px-3 fw-bold profile-action-button ${
+											isFollowing
+												? "btn-outline-secondary"
+												: "btn-primary"
+										}`}
+									>
+										{isFollowing ? (
+											<>
+												<i className="bi bi-person-dash-fill me-1"></i>{" "}
+												{t("profile.unfollow")}
+											</>
+										) : (
+											<>
+												<i className="bi bi-person-plus-fill me-1"></i>{" "}
+												{t("profile.follow")}
+											</>
+										)}
+									</button>
+									<button
+										type="button"
+										onClick={handleMessageClick}
+										className="btn btn-sm btn-outline-dark rounded-pill px-3 fw-semibold profile-action-button"
+									>
+										<i className="bi bi-chat-dots me-1"></i>
+										{t("profile.message")}
+									</button>
+								</div>
+							) : null}
+
+							<div className="d-flex align-items-center gap-3 mt-2 small text-secondary profile-secondary-row"></div>
 						</div>
 					</div>
-					<div className="text-end">
+					<div className="text-end profile-stats-panel">
 						{/* Row 1*/}
-						<div className="d-flex justify-content-end gap-4">
+						<div className="d-flex justify-content-end gap-4 profile-stats-grid">
 							{/* Followers */}
 							<div
-								className="text-center cursor-pointer"
+								className="text-center cursor-pointer profile-stat-card"
 								title={t("profile.seeFollowers")}
 								onClick={() => openFollowModal("followers")}
 								style={{
@@ -363,7 +424,7 @@ const ProfilePage = ({ user }) => {
 
 							{/* Following */}
 							<div
-								className="text-center cursor-pointer"
+								className="text-center cursor-pointer profile-stat-card"
 								title={t("profile.seeFollowing")}
 								onClick={() => openFollowModal("following")}
 								style={{
@@ -390,7 +451,7 @@ const ProfilePage = ({ user }) => {
 
 							{/* Kits */}
 							<div
-								className="text-center"
+								className="text-center profile-stat-card"
 								title={t("profile.kitsTitle")}
 							>
 								<div className="d-flex justify-content-center align-items-center gap-2">
@@ -404,7 +465,7 @@ const ProfilePage = ({ user }) => {
 								</span>
 							</div>
 							{/* Total Value */}
-							<div className="text-center" title={t("profile.totalValueTitle")}>
+							<div className="text-center profile-stat-card" title={t("profile.totalValueTitle")}>
 								<div className="d-flex justify-content-center align-items-center gap-2">
 									<MoneyBagIcon className="money-bag-icon" />
 									<h4 className="text-success fw-bold mb-0">
@@ -577,7 +638,7 @@ const ProfilePage = ({ user }) => {
 											>
 												{t("profile.myShops")}
 											</h6>
-											<div className="d-flex flex-wrap">
+											<div className="d-flex flex-wrap profile-market-links">
 												<MarketBadge
 													url={
 														profileData.vinted_link
@@ -619,7 +680,7 @@ const ProfilePage = ({ user }) => {
 											>
 												{t("profile.findMe")}
 											</h6>
-											<div className="d-flex gap-3 flex-wrap">
+											<div className="d-flex gap-3 flex-wrap profile-social-links">
 												<SocialLink
 													url={
 														profileData.instagram_link
@@ -710,7 +771,8 @@ const ProfilePage = ({ user }) => {
 					{myKits.map((item) => (
 						<div
 							key={item.id}
-							className="col-12 col-sm-12 col-md-12 col-lg-6 col-xl-6 col-xxl-4 col-xxl-4"
+							id={`profile-kit-${item.id}`}
+							className={`col-12 col-sm-12 col-md-12 col-lg-6 col-xl-6 col-xxl-4 col-xxl-4 ${String(item.id) === activeHighlightedKitId ? "profile-kit-highlight" : ""}`}
 						>
 							<KitCard
 								item={item}

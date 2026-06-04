@@ -310,7 +310,12 @@ const CommentsModal = ({
 
 	const handleOwnerClick = () => {
 		if (!ownerUsername) return;
-		navigate(`/profile/${ownerUsername}`);
+
+		const highlightQuery = item?.id
+			? `?highlightKit=${encodeURIComponent(String(item.id))}`
+			: "";
+
+		navigate(`/profile/${ownerUsername}${highlightQuery}`);
 	};
 
 	return (
