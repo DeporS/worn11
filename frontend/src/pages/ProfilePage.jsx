@@ -15,6 +15,7 @@ import SocialLink from "../components/profile/SocialLink";
 import MarketBadge from "../components/profile/MarketBadge";
 import UserAvatar from "../components/UserAvatar";
 import UserListModal from "../components/profile/UserListModal";
+import CollectionValueChartModal from "../components/profile/CollectionValueChartModal";
 
 import "../styles/profile.css";
 
@@ -60,6 +61,7 @@ const ProfilePage = ({ user }) => {
 	const [modalUsers, setModalUsers] = useState([]); // Users list for modal
 	const [modalLoading, setModalLoading] = useState(false);
 	const [activeHighlightedKitId, setActiveHighlightedKitId] = useState(null);
+	const [isValueHistoryOpen, setIsValueHistoryOpen] = useState(false);
 	const hasScrolledToHighlightedKitRef = useRef(false);
 	const highlightTimeoutRef = useRef(null);
 
@@ -465,7 +467,11 @@ const ProfilePage = ({ user }) => {
 								</span>
 							</div>
 							{/* Total Value */}
-							<div className="text-center profile-stat-card" title={t("profile.totalValueTitle")}>
+							<div
+								className={`text-center profile-stat-card ${isOwner ? "profile-stat-card-clickable" : ""}`}
+								title={t("profile.totalValueTitle")}
+								onClick={isOwner ? () => setIsValueHistoryOpen(true) : undefined}
+							>
 								<div className="d-flex justify-content-center align-items-center gap-2">
 									<MoneyBagIcon className="money-bag-icon" />
 									<h4 className="text-success fw-bold mb-0">
@@ -802,6 +808,12 @@ const ProfilePage = ({ user }) => {
 				users={modalUsers}
 				loading={modalLoading}
 			/>
+			{isOwner ? (
+				<CollectionValueChartModal
+					isOpen={isValueHistoryOpen}
+					onClose={() => setIsValueHistoryOpen(false)}
+				/>
+			) : null}
 		</div>
 	);
 };

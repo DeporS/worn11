@@ -65,6 +65,11 @@ export const getUserStats = async (username) => {
 	}
 };
 
+export const getMyCollectionValueHistory = async () => {
+	const response = await api.get("/me/collection-value-history/");
+	return response.data;
+};
+
 // Toggle follow/unfollow a user
 export const toggleFollowUser = async (username) => {
 	const response = await api.post(`/users/${username}/follow/`);

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Country, League, Team, Kit, UserKit, UserKitImage, User, Profile, KitComment, KitReport, Conversation, Message, Notification, build_team_slug
+from .models import Country, League, Team, Kit, UserKit, UserKitImage, User, Profile, KitComment, KitReport, Conversation, Message, Notification, CollectionValueSnapshot, build_team_slug
 from django.contrib.auth.models import User
 from dj_rest_auth.serializers import UserDetailsSerializer
 import json
@@ -309,6 +309,12 @@ class NotificationSerializer(serializers.ModelSerializer):
 
     def get_is_read(self, obj):
         return obj.read_at is not None
+
+
+class CollectionValueSnapshotSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CollectionValueSnapshot
+        fields = ['id', 'created_at', 'total_value', 'kits_count', 'reason']
 
 # Team Serializer
 class TeamSerializer(serializers.ModelSerializer):

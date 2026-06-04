@@ -172,6 +172,27 @@
 		"kitsCount_one": "{{count}} kit",
 		"kitsCount_other": "{{count}} kits"
 	},
+	"collectionValue": {
+		"title": "Collection value over time",
+		"subtitle": "Track how your collection value changes as you add, remove, and update kits.",
+		"empty": "Not enough history yet. Your collection value history will appear after future changes.",
+		"loading": "Loading value history...",
+		"error": "Could not load collection value history.",
+		"currentValue": "Current value",
+		"tooltipValue": "Value",
+		"tooltipDate": "Date",
+		"tooltipKits": "Kits",
+		"tooltipReason": "Reason",
+		"reasonInitial": "Initial",
+		"reasonKitAdded": "Kit added",
+		"reasonKitRemoved": "Kit removed",
+		"reasonKitUpdated": "Kit updated",
+		"reasonValueUpdated": "Value updated",
+		"reasonCollectionStatusChanged": "Collection status changed",
+		"reasonBackfill": "Backfill",
+		"kitsCount": "{{count}} kits",
+		"close": "Close"
+	},
 	"kitCard": {
 		"authLikeText": "Only logged-in users can like kits.",
 		"deleteTitle": "Are you sure?",

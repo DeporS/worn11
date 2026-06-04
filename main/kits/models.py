@@ -4,7 +4,7 @@ from django.contrib.auth.models import User
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
-from django.db.models import Q
+from django.db.models import Q, Sum, Count
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -308,6 +308,77 @@ class UserKit(models.Model):
     
     def __str__(self):
         return f"{self.user.username}'s {self.kit} ({self.size}, {self.condition})"
+
+
+def calculate_collection_total_value(user):
+    stats = UserKit.objects.filter(
+        user=user,
+        in_the_collection=True,
+    ).aggregate(
+        total_value=Sum('final_value'),
+        kits_count=Count('id'),
+    )
+    return (
+        stats['total_value'] or Decimal('0.00'),
+        stats['kits_count'] or 0,
+    )
+
+
+class CollectionValueSnapshot(models.Model):
+    REASON_INITIAL = 'initial'
+    REASON_KIT_ADDED = 'kit_added'
+    REASON_KIT_REMOVED = 'kit_removed'
+    REASON_KIT_UPDATED = 'kit_updated'
+    REASON_VALUE_UPDATED = 'value_updated'
+    REASON_COLLECTION_STATUS_CHANGED = 'collection_status_changed'
+    REASON_BACKFILL = 'backfill'
+
+    REASON_CHOICES = [
+        (REASON_INITIAL, 'Initial'),
+        (REASON_KIT_ADDED, 'Kit added'),
+        (REASON_KIT_REMOVED, 'Kit removed'),
+        (REASON_KIT_UPDATED, 'Kit updated'),
+        (REASON_VALUE_UPDATED, 'Value updated'),
+        (REASON_COLLECTION_STATUS_CHANGED, 'Collection status changed'),
+        (REASON_BACKFILL, 'Backfill'),
+    ]
+
+    user = models.ForeignKey(
+        User,
+        related_name='collection_value_snapshots',
+        on_delete=models.CASCADE,
+    )
+    total_value = models.DecimalField(max_digits=12, decimal_places=2)
+    kits_count = models.PositiveIntegerField(default=0)
+    reason = models.CharField(max_length=64, choices=REASON_CHOICES)
+    related_userkit = models.ForeignKey(
+        UserKit,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at', 'id']
+        indexes = [
+            models.Index(fields=['user', 'created_at']),
+            models.Index(fields=['user', 'id']),
+        ]
+
+    def __str__(self):
+        return f'{self.user.username} {self.total_value} ({self.reason})'
+
+
+def record_collection_value_snapshot(user, reason, related_userkit=None):
+    total_value, kits_count = calculate_collection_total_value(user)
+    return CollectionValueSnapshot.objects.create(
+        user=user,
+        total_value=total_value,
+        kits_count=kits_count,
+        reason=reason,
+        related_userkit=related_userkit,
+    )
 
 
 class KitComment(models.Model):

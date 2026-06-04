@@ -16,8 +16,8 @@ from django.utils import timezone
 from urllib.parse import urlencode
 import re
 
-from .models import League, UserKit, UserKitImage, Kit, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country, Follow, KitComment, KitCommentLike, KitReport, Conversation, Message, Notification, build_team_slug
-from .serializers import LeagueSerializer, UserKitSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer, CountrySerializer, KitCommentSerializer, KitCommentWriteSerializer, KitReportSerializer, ConversationListSerializer, ConversationDetailSerializer, ConversationStartSerializer, MessageSerializer, MessageWriteSerializer, KitSearchSuggestionSerializer, NotificationSerializer
+from .models import League, UserKit, UserKitImage, Kit, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country, Follow, KitComment, KitCommentLike, KitReport, Conversation, Message, Notification, CollectionValueSnapshot, calculate_collection_total_value, record_collection_value_snapshot, build_team_slug
+from .serializers import LeagueSerializer, UserKitSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer, CountrySerializer, KitCommentSerializer, KitCommentWriteSerializer, KitReportSerializer, ConversationListSerializer, ConversationDetailSerializer, ConversationStartSerializer, MessageSerializer, MessageWriteSerializer, KitSearchSuggestionSerializer, NotificationSerializer, CollectionValueSnapshotSerializer
 
 
 SUPPORTED_KIT_TYPES = [
@@ -643,7 +643,12 @@ class MyCollectionAPI(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         # Automatically assign the logged-in user on save
-        serializer.save(user=self.request.user)
+        user_kit = serializer.save(user=self.request.user)
+        record_collection_value_snapshot(
+            self.request.user,
+            CollectionValueSnapshot.REASON_KIT_ADDED,
+            related_userkit=user_kit,
+        )
 
 # Endpoint: Detail, update, delete for a specific kit in collection
 class MyCollectionDetailAPI(generics.RetrieveUpdateDestroyAPIView):
@@ -656,6 +661,49 @@ class MyCollectionDetailAPI(generics.RetrieveUpdateDestroyAPIView):
             .prefetch_related('images')\
             .annotate(likes_count=Count('likes', distinct=True), comments_count=Count('comments', distinct=True))\
             .order_by('-added_at')
+
+    def perform_update(self, serializer):
+        instance = self.get_object()
+        previous_state = {
+            'manual_value': instance.manual_value,
+            'in_the_collection': instance.in_the_collection,
+            'kit_id': instance.kit_id,
+            'size': instance.size,
+            'condition': instance.condition,
+            'shirt_technology': instance.shirt_technology,
+        }
+
+        updated_instance = serializer.save()
+
+        if previous_state['in_the_collection'] != updated_instance.in_the_collection:
+            reason = CollectionValueSnapshot.REASON_COLLECTION_STATUS_CHANGED
+        elif previous_state['manual_value'] != updated_instance.manual_value:
+            reason = CollectionValueSnapshot.REASON_VALUE_UPDATED
+        elif previous_state['kit_id'] != updated_instance.kit_id:
+            reason = CollectionValueSnapshot.REASON_KIT_UPDATED
+        elif (
+            previous_state['size'] != updated_instance.size
+            or previous_state['condition'] != updated_instance.condition
+            or previous_state['shirt_technology'] != updated_instance.shirt_technology
+        ):
+            reason = CollectionValueSnapshot.REASON_VALUE_UPDATED
+        else:
+            reason = None
+
+        if reason is not None:
+            record_collection_value_snapshot(
+                self.request.user,
+                reason,
+                related_userkit=updated_instance,
+            )
+
+    def perform_destroy(self, instance):
+        user = instance.user
+        super().perform_destroy(instance)
+        record_collection_value_snapshot(
+            user,
+            CollectionValueSnapshot.REASON_KIT_REMOVED,
+        )
 
 # Endpoint: Show other user's collection
 class UserCollectionAPI(generics.ListAPIView):
@@ -832,17 +880,11 @@ class UserCollectionStatsAPI(APIView):
         user = get_object_or_404(User, username=username)
 
         # Calculate stats
-        stats = UserKit.objects.filter(
-            user=user,
-            in_the_collection=True
-        ).aggregate(
-            total_value=Sum('final_value'), # Sum the value of all kits
-            total_kits=Count('id')          # Count the number of kits
-        )
+        total_value, total_kits = calculate_collection_total_value(user)
 
         # 3Assign calculated data to the user object
-        user.total_value = stats['total_value'] or 0
-        user.total_kits = stats['total_kits'] or 0
+        user.total_value = total_value
+        user.total_kits = total_kits
 
         # Calculate followers and following counts
         user.followers_count = user.followers.count()
@@ -876,6 +918,21 @@ class UserSearchAPI(generics.ListAPIView):
         ).annotate(
             kits_count=Count('collection') # Count kits for each user
         ).order_by('-kits_count')[:10] # Limit to top 10 results
+
+
+class MyCollectionValueHistoryAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not request.user.collection_value_snapshots.exists():
+            record_collection_value_snapshot(
+                request.user,
+                CollectionValueSnapshot.REASON_INITIAL,
+            )
+
+        snapshots = request.user.collection_value_snapshots.order_by('created_at', 'id')
+        serializer = CollectionValueSnapshotSerializer(snapshots, many=True)
+        return Response({'results': serializer.data})
 
 
 class KitSearchSuggestionsAPI(generics.ListAPIView):

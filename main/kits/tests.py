@@ -9,7 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient, APITestCase
 
-from .models import Kit, Team, UserKit, UserKitImage, KitComment, KitReport, Conversation, Message, Follow, Notification, AUTOMATED_VALUATION_UNAVAILABLE_MESSAGE
+from .models import Kit, Team, UserKit, UserKitImage, KitComment, KitReport, Conversation, Message, Follow, Notification, CollectionValueSnapshot, AUTOMATED_VALUATION_UNAVAILABLE_MESSAGE
 
 
 class UserKitPricingTests(APITestCase):
@@ -167,6 +167,220 @@ class UserKitCollectionFlagTests(APITestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.data["in_the_collection"])
+
+
+class CollectionValueSnapshotTests(APITestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(username="history_owner", password="password123")
+        self.other_user = User.objects.create_user(username="history_other", password="password123")
+        self.client.force_authenticate(user=self.user)
+        self.team = Team.objects.create(name="History FC", is_verified=True)
+        self.kit = Kit.objects.create(
+            team=self.team,
+            season="2024/2025",
+            kit_type="Home",
+            estimated_price=Decimal("100.00"),
+        )
+
+    def create_user_kit(self, **overrides):
+        defaults = {
+            "user": self.user,
+            "kit": self.kit,
+            "shirt_technology": "REPLICA",
+            "condition": "VERY_GOOD",
+            "size": "L",
+        }
+        defaults.update(overrides)
+        return UserKit.objects.create(**defaults)
+
+    def test_creating_userkit_records_kit_added_snapshot(self):
+        response = self.client.post(
+            reverse("api-my-collection"),
+            {
+                "team_name": self.team.name,
+                "season": self.kit.season,
+                "kit_type": self.kit.kit_type,
+                "size": "L",
+                "condition": "VERY_GOOD",
+                "shirt_technology": "REPLICA",
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        snapshot = CollectionValueSnapshot.objects.get(user=self.user)
+        self.assertEqual(snapshot.reason, CollectionValueSnapshot.REASON_KIT_ADDED)
+        self.assertEqual(snapshot.total_value, Decimal("100.00"))
+        self.assertEqual(snapshot.kits_count, 1)
+
+    def test_updating_manual_value_records_value_snapshot(self):
+        user_kit = self.create_user_kit()
+
+        response = self.client.patch(
+            reverse("api-my-collection-detail", args=[user_kit.id]),
+            {"manual_value": "175.00"},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        snapshot = CollectionValueSnapshot.objects.get(user=self.user)
+        self.assertEqual(snapshot.reason, CollectionValueSnapshot.REASON_VALUE_UPDATED)
+        self.assertEqual(snapshot.total_value, Decimal("175.00"))
+        self.assertEqual(snapshot.related_userkit_id, user_kit.id)
+
+    def test_setting_in_the_collection_false_records_lower_snapshot(self):
+        user_kit = self.create_user_kit()
+
+        response = self.client.patch(
+            reverse("api-my-collection-detail", args=[user_kit.id]),
+            {"in_the_collection": False},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        snapshot = CollectionValueSnapshot.objects.get(user=self.user)
+        self.assertEqual(snapshot.reason, CollectionValueSnapshot.REASON_COLLECTION_STATUS_CHANGED)
+        self.assertEqual(snapshot.total_value, Decimal("0.00"))
+        self.assertEqual(snapshot.kits_count, 0)
+
+    def test_restoring_in_the_collection_true_records_higher_snapshot(self):
+        user_kit = self.create_user_kit(in_the_collection=False)
+
+        response = self.client.patch(
+            reverse("api-my-collection-detail", args=[user_kit.id]),
+            {"in_the_collection": True},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        snapshot = CollectionValueSnapshot.objects.get(user=self.user)
+        self.assertEqual(snapshot.reason, CollectionValueSnapshot.REASON_COLLECTION_STATUS_CHANGED)
+        self.assertEqual(snapshot.total_value, Decimal("100.00"))
+        self.assertEqual(snapshot.kits_count, 1)
+
+    def test_deleting_userkit_records_kit_removed_snapshot(self):
+        user_kit = self.create_user_kit()
+
+        response = self.client.delete(
+            reverse("api-my-collection-detail", args=[user_kit.id]),
+        )
+
+        self.assertEqual(response.status_code, 204)
+        snapshot = CollectionValueSnapshot.objects.get(user=self.user)
+        self.assertEqual(snapshot.reason, CollectionValueSnapshot.REASON_KIT_REMOVED)
+        self.assertEqual(snapshot.total_value, Decimal("0.00"))
+        self.assertEqual(snapshot.kits_count, 0)
+        self.assertIsNone(snapshot.related_userkit_id)
+
+    def test_likes_do_not_record_snapshots(self):
+        user_kit = self.create_user_kit(user=self.other_user)
+
+        response = self.client.post(reverse("toggle-like", args=[user_kit.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(CollectionValueSnapshot.objects.count(), 0)
+
+    def test_comments_do_not_record_snapshots(self):
+        user_kit = self.create_user_kit(user=self.other_user)
+
+        response = self.client.post(
+            reverse("kit-comments", args=[user_kit.id]),
+            {"body": "Great one"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(CollectionValueSnapshot.objects.count(), 0)
+
+    def test_follows_do_not_record_snapshots(self):
+        response = self.client.post(reverse("toggle-follow", args=[self.other_user.username]))
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(CollectionValueSnapshot.objects.count(), 0)
+
+    def test_snapshot_calculation_uses_only_active_collection_kits(self):
+        self.create_user_kit()
+        self.create_user_kit(manual_value=Decimal("250.00"), in_the_collection=False)
+
+        response = self.client.get(reverse("my-collection-value-history"))
+
+        self.assertEqual(response.status_code, 200)
+        snapshot = CollectionValueSnapshot.objects.get(user=self.user)
+        self.assertEqual(snapshot.reason, CollectionValueSnapshot.REASON_INITIAL)
+        self.assertEqual(snapshot.total_value, Decimal("100.00"))
+        self.assertEqual(snapshot.kits_count, 1)
+
+    def test_total_value_history_matches_profile_stats_logic(self):
+        self.create_user_kit(manual_value=Decimal("220.00"))
+
+        stats_response = self.client.get(reverse("user-stats", args=[self.user.username]))
+        history_response = self.client.get(reverse("my-collection-value-history"))
+
+        self.assertEqual(stats_response.status_code, 200)
+        self.assertEqual(history_response.status_code, 200)
+        self.assertEqual(Decimal(stats_response.data["total_value"]), Decimal("220.00"))
+        self.assertEqual(Decimal(history_response.data["results"][0]["total_value"]), Decimal("220.00"))
+
+    def test_history_endpoint_requires_authentication(self):
+        self.client.force_authenticate(user=None)
+
+        response = self.client.get(reverse("my-collection-value-history"))
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_history_endpoint_returns_only_current_user_snapshots(self):
+        CollectionValueSnapshot.objects.create(
+            user=self.other_user,
+            total_value=Decimal("999.00"),
+            kits_count=9,
+            reason=CollectionValueSnapshot.REASON_INITIAL,
+        )
+        own_kit = self.create_user_kit(manual_value=Decimal("120.00"))
+        CollectionValueSnapshot.objects.create(
+            user=self.user,
+            total_value=own_kit.final_value,
+            kits_count=1,
+            reason=CollectionValueSnapshot.REASON_KIT_ADDED,
+            related_userkit=own_kit,
+        )
+
+        response = self.client.get(reverse("my-collection-value-history"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertEqual(response.data["results"][0]["total_value"], "120.00")
+
+    def test_history_endpoint_creates_lazy_initial_snapshot(self):
+        self.create_user_kit(manual_value=Decimal("333.00"))
+
+        response = self.client.get(reverse("my-collection-value-history"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(CollectionValueSnapshot.objects.filter(user=self.user).count(), 1)
+        self.assertEqual(response.data["results"][0]["reason"], CollectionValueSnapshot.REASON_INITIAL)
+
+    def test_history_endpoint_returns_chronological_order(self):
+        first = CollectionValueSnapshot.objects.create(
+            user=self.user,
+            total_value=Decimal("100.00"),
+            kits_count=1,
+            reason=CollectionValueSnapshot.REASON_INITIAL,
+        )
+        second = CollectionValueSnapshot.objects.create(
+            user=self.user,
+            total_value=Decimal("200.00"),
+            kits_count=2,
+            reason=CollectionValueSnapshot.REASON_KIT_ADDED,
+        )
+
+        response = self.client.get(reverse("my-collection-value-history"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["id"] for item in response.data["results"]],
+            [first.id, second.id],
+        )
 
     def test_update_other_fields_preserves_in_the_collection(self):
         user_kit = UserKit.objects.create(

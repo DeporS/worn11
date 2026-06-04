@@ -172,6 +172,27 @@
 		"kitsCount_one": "{{count}} koszulka",
 		"kitsCount_other": "{{count}} koszulek"
 	},
+	"collectionValue": {
+		"title": "Wartość kolekcji w czasie",
+		"subtitle": "Śledź, jak zmienia się wartość kolekcji po dodaniu, usunięciu i aktualizacji koszulek.",
+		"empty": "Za mało danych. Historia wartości kolekcji pojawi się po kolejnych zmianach.",
+		"loading": "Ładowanie historii wartości...",
+		"error": "Nie udało się załadować historii wartości kolekcji.",
+		"currentValue": "Aktualna wartość",
+		"tooltipValue": "Wartość",
+		"tooltipDate": "Data",
+		"tooltipKits": "Koszulki",
+		"tooltipReason": "Powód",
+		"reasonInitial": "Początkowo",
+		"reasonKitAdded": "Dodano koszulkę",
+		"reasonKitRemoved": "Usunięto koszulkę",
+		"reasonKitUpdated": "Zaktualizowano koszulkę",
+		"reasonValueUpdated": "Zaktualizowano wartość",
+		"reasonCollectionStatusChanged": "Zmieniono status kolekcji",
+		"reasonBackfill": "Uzupełnienie historii",
+		"kitsCount": "{{count}} koszulek",
+		"close": "Zamknij"
+	},
 	"kitCard": {
 		"authLikeText": "Tylko zalogowani użytkownicy mogą lajkować koszulki.",
 		"deleteTitle": "Czy na pewno?",
