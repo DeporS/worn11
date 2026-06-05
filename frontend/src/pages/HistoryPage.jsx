@@ -182,6 +182,7 @@ const HistoryPage = ({ user }) => {
 					kits={kits}
 					loading={loading}
 					selectedTeamName={selectedTeam?.name}
+					selectedTeamId={selectedTeam?.id}
 					user={user}
 				/>
 			)}

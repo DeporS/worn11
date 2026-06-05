@@ -1,8 +1,20 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useParams, useSearchParams, useNavigate } from "react-router-dom";
-import { getKitVariants, resolveTeam } from "../services/api";
+import { getKitVariants, getMyWishlist, resolveTeam } from "../services/api";
 import KitCardHistory from "../components/history/KitCardHistory";
+import WishlistToggleButton from "../components/wishlist/WishlistToggleButton";
+
+const normalizeKitTypeForClient = (kitType) => {
+	const normalized = (kitType || "").trim().toLowerCase();
+	if (normalized === "gk" || normalized === "goalkeeper") {
+		return "Goalkeeper";
+	}
+	if (normalized.startsWith("special")) {
+		return "Special";
+	}
+	return kitType;
+};
 
 const KitVariantsPage = ({ user }) => {
 	const { t } = useTranslation();
@@ -14,8 +26,11 @@ const KitVariantsPage = ({ user }) => {
 	const type = searchParams.get("type");
 
 	const [kits, setKits] = useState([]);
-	const [teamName, setTeamName] = useState("");
+	const [teamData, setTeamData] = useState(null);
+	const [isWishlisted, setIsWishlisted] = useState(false);
 	const [loading, setLoading] = useState(true);
+	const teamName = teamData?.name || "";
+	const teamId = teamData?.id || null;
 	const displayTeamName = teamName || t("history.unknownTeam");
 	const addCardState = {
 		prefill: {
@@ -37,12 +52,45 @@ const KitVariantsPage = ({ user }) => {
 
 	useEffect(() => {
 		resolveTeam(teamIdentifier)
-			.then((data) => setTeamName(data.name || ""))
+			.then((data) => setTeamData(data || null))
 			.catch((err) => {
 				console.error(err);
-				setTeamName("");
+				setTeamData(null);
 			});
 	}, [teamIdentifier]);
+
+	useEffect(() => {
+		if (!user || !teamId || !season || !type) {
+			setIsWishlisted(false);
+			return;
+		}
+
+		let cancelled = false;
+
+		getMyWishlist()
+			.then((items) => {
+				if (cancelled) {
+					return;
+				}
+				const match = (Array.isArray(items) ? items : []).some(
+					(item) =>
+						item.team_id === teamId &&
+						item.season === season &&
+						item.kit_type === normalizeKitTypeForClient(type),
+				);
+				setIsWishlisted(match);
+			})
+			.catch((err) => {
+				console.error(err);
+				if (!cancelled) {
+					setIsWishlisted(false);
+				}
+			});
+
+		return () => {
+			cancelled = true;
+		};
+	}, [teamId, season, type, user]);
 
 	return (
 		<div className="container py-5" style={{ maxWidth: "1400px" }}>
@@ -53,6 +101,20 @@ const KitVariantsPage = ({ user }) => {
 			<h2 className="mb-4 fw-bold">
 				{t("history.variantsTitle", { team: displayTeamName, type, season })}
 			</h2>
+
+			{teamId && season && type ? (
+				<div className="mb-4">
+					<WishlistToggleButton
+						currentUser={user}
+						teamId={teamId}
+						season={season}
+						kitType={type}
+						initialIsWishlisted={isWishlisted}
+						className="btn btn-outline-dark rounded-pill px-4"
+						onToggle={(payload) => setIsWishlisted(Boolean(payload?.is_wishlisted))}
+					/>
+				</div>
+			) : null}
 
 			{loading ? (
 				<div className="text-center py-5">

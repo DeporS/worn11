@@ -18,7 +18,13 @@ import { formatLocalizedDate } from "../../utils/dateFormat";
 
 import "../../styles/profile.css";
 
-const KitCard = ({ item, onDeleteSuccess, user, hideViewOnProfile = false }) => {
+const KitCard = ({
+	item,
+	onDeleteSuccess,
+	onWishlistToggle,
+	user,
+	hideViewOnProfile = false,
+}) => {
 	const { t, i18n } = useTranslation();
 	const navigate = useNavigate();
 	const [isDeleting, setIsDeleting] = useState(false);
@@ -601,6 +607,7 @@ const KitCard = ({ item, onDeleteSuccess, user, hideViewOnProfile = false }) => 
 				item={item}
 				initialImageIndex={viewerState.initialImageIndex}
 				hideViewOnProfile={hideViewOnProfile}
+				onWishlistToggle={(payload) => onWishlistToggle?.(payload, item)}
 			/>
 		</>
 	);

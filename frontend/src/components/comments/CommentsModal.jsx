@@ -6,6 +6,7 @@ import Swal from "sweetalert2";
 import {
 	addKitComment,
 	deleteComment,
+	getMyWishlist,
 	getKitComments,
 	replyToComment,
 	toggleCommentLike,
@@ -14,6 +15,7 @@ import CommentItem from "./CommentItem";
 import ReportKitModal from "../reports/ReportKitModal";
 import { copyKitShareUrl } from "../utils/kitShare";
 import UserAvatar from "../UserAvatar";
+import WishlistToggleButton from "../wishlist/WishlistToggleButton";
 import "../../styles/profile.css";
 
 const countComments = (items) =>
@@ -89,6 +91,17 @@ const removeCommentFromTree = (items, commentId) =>
 			};
 		});
 
+const normalizeKitTypeForClient = (kitType) => {
+	const normalized = (kitType || "").trim().toLowerCase();
+	if (normalized === "gk" || normalized === "goalkeeper") {
+		return "Goalkeeper";
+	}
+	if (normalized.startsWith("special")) {
+		return "Special";
+	}
+	return kitType;
+};
+
 const CommentsModal = ({
 	isOpen,
 	onClose,
@@ -97,6 +110,7 @@ const CommentsModal = ({
 	item,
 	initialImageIndex = 0,
 	hideViewOnProfile = false,
+	onWishlistToggle,
 }) => {
 	const { t } = useTranslation();
 	const navigate = useNavigate();
@@ -110,6 +124,7 @@ const CommentsModal = ({
 	const [currentImageIndex, setCurrentImageIndex] = useState(0);
 	const [reportModalOpen, setReportModalOpen] = useState(false);
 	const [isPrivateNoteOpen, setIsPrivateNoteOpen] = useState(false);
+	const [isWishlisted, setIsWishlisted] = useState(false);
 
 	const totalComments = useMemo(() => countComments(comments), [comments]);
 	const images = item?.images || [];
@@ -132,6 +147,9 @@ const CommentsModal = ({
 			(currentUser?.username && currentUser.username === ownerUsername));
 	const privateNote = item?.private_note?.trim() || "";
 	const hasPrivateNote = isOwner && privateNote.length > 0;
+	const variantTeamId = item?.kit?.team?.id || null;
+	const variantSeason = item?.kit?.season || null;
+	const variantKitType = item?.kit?.kit_type || null;
 
 	useEffect(() => {
 		if (!isOpen) return;
@@ -144,6 +162,7 @@ const CommentsModal = ({
 	useEffect(() => {
 		if (!isOpen) {
 			setIsPrivateNoteOpen(false);
+			setIsWishlisted(false);
 		}
 	}, [isOpen, item?.id]);
 
@@ -177,6 +196,42 @@ const CommentsModal = ({
 
 		loadComments();
 	}, [isOpen, kitId, t]);
+
+	useEffect(() => {
+		if (!isOpen || !currentUser || !variantTeamId || !variantSeason || !variantKitType) {
+			return;
+		}
+
+		let cancelled = false;
+
+		const loadWishlistState = async () => {
+			try {
+				const items = await getMyWishlist();
+				if (cancelled) {
+					return;
+				}
+
+				const normalizedKitType = normalizeKitTypeForClient(variantKitType);
+				const match = (Array.isArray(items) ? items : []).some(
+					(wishlistItem) =>
+						wishlistItem.team_id === variantTeamId &&
+						wishlistItem.season === variantSeason &&
+						wishlistItem.kit_type === normalizedKitType,
+				);
+				setIsWishlisted(match);
+			} catch (error) {
+				if (!cancelled) {
+					setIsWishlisted(false);
+				}
+			}
+		};
+
+		loadWishlistState();
+
+		return () => {
+			cancelled = true;
+		};
+	}, [currentUser, isOpen, variantKitType, variantSeason, variantTeamId]);
 
 	useEffect(() => {
 		if (!isOpen) return;
@@ -375,13 +430,28 @@ const CommentsModal = ({
 							) : null}
 						</div>
 						<div className="d-flex align-items-center gap-2 ms-md-auto flex-wrap justify-content-start justify-content-md-end unified-kit-actions">
-								{hasPrivateNote ? (
-									<button
-										type="button"
-										className="btn btn-outline-secondary btn-sm rounded-pill private-note-toggle"
-										onClick={() =>
-											setIsPrivateNoteOpen((previous) => !previous)
-										}
+							{variantTeamId && variantSeason && variantKitType ? (
+								<WishlistToggleButton
+									currentUser={currentUser}
+									teamId={variantTeamId}
+									season={variantSeason}
+									kitType={variantKitType}
+									sourceUserKitId={item?.id || null}
+									initialIsWishlisted={isWishlisted}
+									className="btn btn-outline-secondary btn-sm rounded-pill private-note-toggle"
+									onToggle={(payload) => {
+										setIsWishlisted(Boolean(payload?.is_wishlisted));
+										onWishlistToggle?.(payload);
+									}}
+								/>
+							) : null}
+							{hasPrivateNote ? (
+								<button
+									type="button"
+									className="btn btn-outline-secondary btn-sm rounded-pill private-note-toggle"
+									onClick={() =>
+										setIsPrivateNoteOpen((previous) => !previous)
+									}
 									aria-expanded={isPrivateNoteOpen}
 								>
 									<i className="bi bi-lock-fill me-1" aria-hidden="true"></i>

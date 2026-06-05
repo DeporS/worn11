@@ -7,6 +7,7 @@ import {
 } from "react-router-dom";
 import CollectionPage from "./pages/CollectionPage";
 import ProfilePage from "./pages/ProfilePage";
+import ProfileWishlistPage from "./pages/ProfileWishlistPage";
 import AddShirtFormPage from "./pages/AddShirtFormPage";
 import EditShirtFormPage from "./pages/EditShirtFormPage";
 import EditProfilePage from "./pages/EditProfilePage";
@@ -173,6 +174,10 @@ function App() {
 					<Route
 						path="/profile/:username"
 						element={<ProfilePage user={user} />}
+					/>
+					<Route
+						path="/profile/:username/wishlist"
+						element={<ProfileWishlistPage user={user} />}
 					/>
 					<Route
 						path="/profile/:username/kits/:kitId"

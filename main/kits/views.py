@@ -16,8 +16,8 @@ from django.utils import timezone
 from urllib.parse import urlencode
 import re
 
-from .models import League, UserKit, UserKitImage, Kit, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country, Follow, KitComment, KitCommentLike, KitReport, Conversation, Message, Notification, CollectionValueSnapshot, calculate_collection_total_value, record_collection_value_snapshot, build_team_slug
-from .serializers import LeagueSerializer, UserKitSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer, CountrySerializer, KitCommentSerializer, KitCommentWriteSerializer, KitReportSerializer, ConversationListSerializer, ConversationDetailSerializer, ConversationStartSerializer, MessageSerializer, MessageWriteSerializer, KitSearchSuggestionSerializer, NotificationSerializer, CollectionValueSnapshotSerializer
+from .models import League, UserKit, UserKitImage, WishlistItem, Kit, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country, Follow, KitComment, KitCommentLike, KitReport, Conversation, Message, Notification, CollectionValueSnapshot, calculate_collection_total_value, record_collection_value_snapshot, build_team_slug, normalize_wishlist_kit_type
+from .serializers import LeagueSerializer, UserKitSerializer, WishlistItemSerializer, WishlistToggleSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer, CountrySerializer, KitCommentSerializer, KitCommentWriteSerializer, KitReportSerializer, ConversationListSerializer, ConversationDetailSerializer, ConversationStartSerializer, MessageSerializer, MessageWriteSerializer, KitSearchSuggestionSerializer, NotificationSerializer, CollectionValueSnapshotSerializer
 
 
 SUPPORTED_KIT_TYPES = [
@@ -32,6 +32,7 @@ SUPPORTED_KIT_TYPES = [
 ]
 
 MIN_SEASON_START_YEAR = 1940
+FREE_WISHLIST_LIMIT = 10
 
 KIT_TYPE_ALIASES = {
     'home': 'Home',
@@ -51,6 +52,12 @@ KIT_TYPE_ALIASES = {
 KIT_TYPE_ORDER = {
     kit_type: index for index, kit_type in enumerate(SUPPORTED_KIT_TYPES)
 }
+
+
+def get_wishlist_limit(user):
+    if getattr(getattr(user, 'profile', None), 'is_pro', False):
+        return None
+    return FREE_WISHLIST_LIMIT
 
 EXACT_SEASON_PATTERN = re.compile(r'\b(\d{4})\s*/\s*(\d{4})\b')
 SHORT_SEASON_PATTERN = re.compile(r'\b(\d{2})\s*/\s*(\d{2})\b')
@@ -437,6 +444,74 @@ def normalize_stored_kit_type(kit_type):
         return 'Special'
 
     return normalized_type
+
+
+def get_wishlist_type_filter(kit_type):
+    normalized_type = normalize_wishlist_kit_type(kit_type)
+
+    if normalized_type == 'Goalkeeper':
+        return Q(kit__kit_type__iexact='GK') | Q(kit__kit_type__iexact='Goalkeeper')
+
+    if normalized_type == 'Special':
+        return Q(kit__kit_type__iexact='Special') | Q(kit__kit_type__istartswith='Special')
+
+    return Q(kit__kit_type__iexact=normalized_type)
+
+
+def build_wishlist_preview_map(items, request=None):
+    wishlist_items = list(items)
+    if not wishlist_items:
+        return {}
+
+    team_ids = {item.team_id for item in wishlist_items}
+    seasons = {item.season for item in wishlist_items}
+    requested_types = {item.kit_type for item in wishlist_items}
+
+    type_filter = Q()
+    for requested_type in requested_types:
+        type_filter |= get_wishlist_type_filter(requested_type)
+
+    matching_kits = UserKit.objects.filter(
+        kit__team_id__in=team_ids,
+        kit__season__in=seasons,
+    ).filter(
+        type_filter
+    ).select_related(
+        'kit',
+        'kit__team',
+    ).prefetch_related(
+        Prefetch('images', queryset=UserKitImage.objects.order_by('order', 'created_at', 'id'), to_attr='ordered_preview_images')
+    ).annotate(
+        likes_count=Count('likes', distinct=True),
+    ).order_by(
+        'kit__team_id',
+        'kit__season',
+        '-likes_count',
+        '-added_at',
+        'id',
+    )
+
+    preview_map = {}
+    for user_kit in matching_kits:
+        preview_key = (
+            user_kit.kit.team_id,
+            user_kit.kit.season,
+            normalize_wishlist_kit_type(user_kit.kit.kit_type),
+        )
+        if preview_key in preview_map:
+            continue
+
+        preview_image = next(iter(getattr(user_kit, 'ordered_preview_images', [])), None)
+        if preview_image is None:
+            continue
+
+        preview_url = preview_image.image.url
+        if request is not None:
+            preview_url = request.build_absolute_uri(preview_url)
+
+        preview_map[preview_key] = preview_url
+
+    return preview_map
 
 
 def get_team_by_identifier(team_identifier):
@@ -936,6 +1011,104 @@ class MyCollectionValueHistoryAPI(APIView):
         snapshots = request.user.collection_value_snapshots.order_by('created_at', 'id')
         serializer = CollectionValueSnapshotSerializer(snapshots, many=True)
         return Response({'results': serializer.data})
+
+
+class WishlistListMixin:
+    serializer_class = WishlistItemSerializer
+    pagination_class = None
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        preview_map = getattr(self, '_wishlist_preview_map', None)
+        if preview_map is not None:
+            context['wishlist_preview_map'] = preview_map
+        return context
+
+    def list(self, request, *args, **kwargs):
+        queryset = list(self.get_queryset())
+        self._wishlist_preview_map = build_wishlist_preview_map(queryset, request)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+
+class MyWishlistAPI(WishlistListMixin, generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return WishlistItem.objects.filter(user=self.request.user).select_related('team', 'user', 'source_userkit')
+
+
+class UserWishlistAPI(WishlistListMixin, generics.ListAPIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get_queryset(self):
+        return WishlistItem.objects.filter(
+            user__username=self.kwargs['username']
+        ).select_related('team', 'user', 'source_userkit')
+
+
+class WishlistDetailAPI(generics.DestroyAPIView):
+    serializer_class = WishlistItemSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return WishlistItem.objects.filter(user=self.request.user).select_related('team', 'user', 'source_userkit')
+
+
+class WishlistToggleAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = WishlistToggleSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        team = Team.objects.get(pk=serializer.validated_data['team_id'])
+        season = serializer.validated_data['season']
+        kit_type = serializer.validated_data['kit_type']
+        source_userkit = serializer.validated_data.get('source_userkit')
+
+        existing_item = WishlistItem.objects.filter(
+            user=request.user,
+            team=team,
+            season=season,
+            kit_type=kit_type,
+        ).first()
+
+        if existing_item is not None:
+            existing_item.delete()
+            return Response({
+                'is_wishlisted': False,
+                'item': None,
+            }, status=status.HTTP_200_OK)
+
+        wishlist_limit = get_wishlist_limit(request.user)
+        current_count = WishlistItem.objects.filter(user=request.user).count()
+        if wishlist_limit is not None and current_count >= wishlist_limit:
+            return Response({
+                'detail': 'Wishlist limit reached.',
+                'code': 'wishlist_limit_reached',
+                'limit': wishlist_limit,
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        wishlist_item = WishlistItem.objects.create(
+            user=request.user,
+            team=team,
+            season=season,
+            kit_type=kit_type,
+            source_userkit=source_userkit,
+        )
+        preview_map = build_wishlist_preview_map([wishlist_item], request)
+        response_serializer = WishlistItemSerializer(
+            wishlist_item,
+            context={
+                'request': request,
+                'wishlist_preview_map': preview_map,
+            },
+        )
+        return Response({
+            'is_wishlisted': True,
+            'item': response_serializer.data,
+        }, status=status.HTTP_200_OK)
 
 
 class KitSearchSuggestionsAPI(generics.ListAPIView):

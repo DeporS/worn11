@@ -108,9 +108,54 @@ AUTOMATED_VALUATION_UNAVAILABLE_MESSAGE = (
     "Automated valuation is not available for this kit yet, so its value will be set to 0."
 )
 
+CANONICAL_WISHLIST_KIT_TYPES = [
+    'Home',
+    'Away',
+    'Third',
+    'Fourth',
+    'Cup',
+    'Training',
+    'Goalkeeper',
+    'Special',
+]
+
+WISHLIST_KIT_TYPE_ALIASES = {
+    'home': 'Home',
+    'away': 'Away',
+    'third': 'Third',
+    'fourth': 'Fourth',
+    'cup': 'Cup',
+    'training': 'Training',
+    'gk': 'Goalkeeper',
+    'goalkeeper': 'Goalkeeper',
+    'keeper': 'Goalkeeper',
+    'goalie': 'Goalkeeper',
+    'special': 'Special',
+    'special edition': 'Special',
+}
+
 
 def build_team_slug(team_name):
     return slugify(team_name or "")
+
+
+def normalize_wishlist_kit_type(kit_type):
+    cleaned = ' '.join((kit_type or '').strip().split())
+    if not cleaned:
+        return ''
+
+    lowered = cleaned.lower()
+    if lowered in WISHLIST_KIT_TYPE_ALIASES:
+        return WISHLIST_KIT_TYPE_ALIASES[lowered]
+
+    if lowered.startswith('special'):
+        return 'Special'
+
+    for canonical_type in CANONICAL_WISHLIST_KIT_TYPES:
+        if canonical_type.lower() == lowered:
+            return canonical_type
+
+    return cleaned
 
 # User profile
 class Profile(models.Model):
@@ -380,6 +425,41 @@ def record_collection_value_snapshot(user, reason, related_userkit=None):
         reason=reason,
         related_userkit=related_userkit,
     )
+
+
+class WishlistItem(models.Model):
+    user = models.ForeignKey(User, related_name='wishlist_items', on_delete=models.CASCADE)
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name='wishlist_items')
+    season = models.CharField(max_length=20)
+    kit_type = models.CharField(max_length=32)
+    source_userkit = models.ForeignKey(
+        UserKit,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='wishlist_references',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'team', 'season', 'kit_type'],
+                name='unique_user_wishlist_variant',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['user', 'created_at']),
+            models.Index(fields=['team', 'season', 'kit_type']),
+        ]
+
+    def save(self, *args, **kwargs):
+        self.kit_type = normalize_wishlist_kit_type(self.kit_type)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'{self.user.username} wants {self.team.name} {self.season} {self.kit_type}'
 
 
 class KitComment(models.Model):

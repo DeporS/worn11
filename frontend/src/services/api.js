@@ -70,6 +70,36 @@ export const getMyCollectionValueHistory = async () => {
 	return response.data;
 };
 
+export const getMyWishlist = async () => {
+	const response = await api.get("/me/wishlist/");
+	return response.data;
+};
+
+export const getUserWishlist = async (username) => {
+	const response = await api.get(`/users/${username}/wishlist/`);
+	return response.data;
+};
+
+export const toggleWishlistItem = async ({
+	teamId,
+	season,
+	kitType,
+	sourceUserKitId,
+}) => {
+	const response = await api.post("/wishlist/toggle/", {
+		team_id: teamId,
+		season,
+		kit_type: kitType,
+		...(sourceUserKitId ? { source_userkit_id: sourceUserKitId } : {}),
+	});
+	return response.data;
+};
+
+export const removeWishlistItem = async (id) => {
+	const response = await api.delete(`/wishlist/${id}/`);
+	return response.data;
+};
+
 // Toggle follow/unfollow a user
 export const toggleFollowUser = async (username) => {
 	const response = await api.post(`/users/${username}/follow/`);

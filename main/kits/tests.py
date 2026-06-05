@@ -5,11 +5,12 @@ from urllib.parse import urlencode
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import IntegrityError
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient, APITestCase
 
-from .models import Kit, Team, UserKit, UserKitImage, KitComment, KitReport, Conversation, Message, Follow, Notification, CollectionValueSnapshot, AUTOMATED_VALUATION_UNAVAILABLE_MESSAGE
+from .models import Kit, Team, UserKit, UserKitImage, WishlistItem, KitComment, KitReport, Conversation, Message, Follow, Notification, CollectionValueSnapshot, AUTOMATED_VALUATION_UNAVAILABLE_MESSAGE
 
 
 class UserKitPricingTests(APITestCase):
@@ -561,6 +562,292 @@ class UserKitPrivateNoteTests(APITestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("private_note", response.data)
+
+
+class WishlistItemAPITests(APITestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(username="wishlist_owner", password="password123")
+        self.other_user = User.objects.create_user(username="wishlist_other", password="password123")
+        self.team = Team.objects.create(name="Arsenal F.C.", is_verified=True)
+        self.goalkeeper_team = Team.objects.create(name="Chelsea F.C.", is_verified=True)
+        self.special_team = Team.objects.create(name="Barcelona", is_verified=True)
+
+    def create_user_kit(self, *, team, season, kit_type, owner=None, image_name=None):
+        owner = owner or self.other_user
+        kit = Kit.objects.create(team=team, season=season, kit_type=kit_type, estimated_price=Decimal("50.00"))
+        user_kit = UserKit.objects.create(
+            user=owner,
+            kit=kit,
+            shirt_technology="REPLICA",
+            condition="VERY_GOOD",
+            size="L",
+        )
+        if image_name:
+            UserKitImage.objects.create(
+                user_kit=user_kit,
+                image=SimpleUploadedFile(image_name, b"fake-image-bytes", content_type="image/jpeg"),
+            )
+        return user_kit
+
+    def create_wishlist_item(self, **overrides):
+        defaults = {
+            "user": self.user,
+            "team": self.team,
+            "season": "2018/2019",
+            "kit_type": "Away",
+        }
+        defaults.update(overrides)
+        return WishlistItem.objects.create(**defaults)
+
+    def toggle_payload(self, **overrides):
+        payload = {
+            "team_id": self.team.id,
+            "season": "2018/2019",
+            "kit_type": "Away",
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_authenticated_user_can_add_wishlist_item(self):
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.post(reverse("wishlist-toggle"), self.toggle_payload(), format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["is_wishlisted"])
+        self.assertEqual(WishlistItem.objects.count(), 1)
+        self.assertEqual(response.data["item"]["team_name"], self.team.name)
+        self.assertEqual(response.data["item"]["kit_type"], "Away")
+
+    def test_unauthenticated_user_cannot_add_wishlist_item(self):
+        response = self.client.post(reverse("wishlist-toggle"), self.toggle_payload(), format="json")
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(WishlistItem.objects.count(), 0)
+
+    def test_duplicate_variant_is_blocked_by_unique_constraint(self):
+        self.create_wishlist_item()
+
+        with self.assertRaises(IntegrityError):
+            WishlistItem.objects.create(
+                user=self.user,
+                team=self.team,
+                season="2018/2019",
+                kit_type="Away",
+            )
+
+    def test_toggle_existing_item_removes_it(self):
+        self.client.force_authenticate(user=self.user)
+        self.create_wishlist_item()
+
+        response = self.client.post(reverse("wishlist-toggle"), self.toggle_payload(), format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data["is_wishlisted"])
+        self.assertEqual(WishlistItem.objects.count(), 0)
+
+    def test_free_user_limit_is_enforced_at_ten_items(self):
+        self.client.force_authenticate(user=self.user)
+
+        for index in range(10):
+            team = Team.objects.create(name=f"Free Limit FC {index}", is_verified=True)
+            WishlistItem.objects.create(
+                user=self.user,
+                team=team,
+                season="2018/2019",
+                kit_type="Away",
+            )
+
+        response = self.client.post(reverse("wishlist-toggle"), self.toggle_payload(), format="json")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["code"], "wishlist_limit_reached")
+        self.assertEqual(response.data["limit"], 10)
+        self.assertEqual(WishlistItem.objects.filter(user=self.user).count(), 10)
+
+    def test_pro_user_can_exceed_free_limit(self):
+        self.user.profile.is_pro = True
+        self.user.profile.save()
+        self.client.force_authenticate(user=self.user)
+
+        for index in range(10):
+            team = Team.objects.create(name=f"Pro Limit FC {index}", is_verified=True)
+            WishlistItem.objects.create(
+                user=self.user,
+                team=team,
+                season="2018/2019",
+                kit_type="Away",
+            )
+
+        response = self.client.post(reverse("wishlist-toggle"), self.toggle_payload(), format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["is_wishlisted"])
+        self.assertEqual(WishlistItem.objects.filter(user=self.user).count(), 11)
+
+    def test_existing_item_toggle_off_works_even_at_free_limit(self):
+        self.client.force_authenticate(user=self.user)
+        existing_item = self.create_wishlist_item()
+
+        for index in range(9):
+            team = Team.objects.create(name=f"Limit Toggle FC {index}", is_verified=True)
+            WishlistItem.objects.create(
+                user=self.user,
+                team=team,
+                season="2018/2019",
+                kit_type="Away",
+            )
+
+        response = self.client.post(reverse("wishlist-toggle"), self.toggle_payload(), format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data["is_wishlisted"])
+        self.assertFalse(WishlistItem.objects.filter(pk=existing_item.id).exists())
+
+    def test_owner_can_delete_own_wishlist_item(self):
+        self.client.force_authenticate(user=self.user)
+        item = self.create_wishlist_item()
+
+        response = self.client.delete(reverse("wishlist-detail", args=[item.id]))
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(WishlistItem.objects.filter(pk=item.id).exists())
+
+    def test_user_cannot_delete_other_users_wishlist_item(self):
+        self.client.force_authenticate(user=self.other_user)
+        item = WishlistItem.objects.create(
+            user=self.user,
+            team=self.team,
+            season="2018/2019",
+            kit_type="Away",
+        )
+
+        response = self.client.delete(reverse("wishlist-detail", args=[item.id]))
+
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(WishlistItem.objects.filter(pk=item.id).exists())
+
+    def test_my_wishlist_endpoint_returns_only_current_user_items(self):
+        self.client.force_authenticate(user=self.user)
+        own_item = self.create_wishlist_item()
+        WishlistItem.objects.create(
+            user=self.other_user,
+            team=self.goalkeeper_team,
+            season="2019/2020",
+            kit_type="Goalkeeper",
+        )
+
+        response = self.client.get(reverse("my-wishlist"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["id"], own_item.id)
+        self.assertEqual(response.data[0]["owner_username"], self.user.username)
+
+    def test_public_user_wishlist_endpoint_returns_items(self):
+        item = self.create_wishlist_item()
+
+        response = self.client.get(reverse("user-wishlist", args=[self.user.username]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["id"], item.id)
+        self.assertEqual(response.data[0]["owner_username"], self.user.username)
+        self.assertNotIn("user", response.data[0])
+
+    def test_serializer_includes_preview_image_when_matching_upload_exists(self):
+        self.create_user_kit(
+            team=self.team,
+            season="2018/2019",
+            kit_type="Away",
+            image_name="away-preview.jpg",
+        )
+        self.create_wishlist_item()
+
+        response = self.client.get(reverse("user-wishlist", args=[self.user.username]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data[0]["has_uploads"])
+        self.assertIn("/media/user_kits/", response.data[0]["preview_image"])
+
+    def test_preview_prefers_most_liked_matching_upload(self):
+        less_liked = self.create_user_kit(
+            team=self.team,
+            season="2018/2019",
+            kit_type="Away",
+            image_name="less-liked.jpg",
+        )
+        most_liked = self.create_user_kit(
+            team=self.team,
+            season="2018/2019",
+            kit_type="Away",
+            image_name="most-liked.jpg",
+        )
+        fan_one = User.objects.create_user(username="fan_one", password="password123")
+        fan_two = User.objects.create_user(username="fan_two", password="password123")
+        less_liked.likes.add(fan_one)
+        most_liked.likes.add(fan_one, fan_two)
+        self.create_wishlist_item()
+
+        response = self.client.get(reverse("user-wishlist", args=[self.user.username]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("most-liked", response.data[0]["preview_image"])
+
+    def test_goalkeeper_compatibility_matches_stored_gk_upload(self):
+        self.create_user_kit(
+            team=self.goalkeeper_team,
+            season="2020/2021",
+            kit_type="GK",
+            image_name="goalkeeper-preview.jpg",
+        )
+        WishlistItem.objects.create(
+            user=self.user,
+            team=self.goalkeeper_team,
+            season="2020/2021",
+            kit_type="Goalkeeper",
+        )
+
+        response = self.client.get(reverse("user-wishlist", args=[self.user.username]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data[0]["kit_type"], "Goalkeeper")
+        self.assertTrue(response.data[0]["has_uploads"])
+        self.assertIn("goalkeeper-preview", response.data[0]["preview_image"])
+
+    def test_special_compatibility_matches_special_edition_upload(self):
+        self.create_user_kit(
+            team=self.special_team,
+            season="2021/2022",
+            kit_type="Special Edition",
+            image_name="special-preview.jpg",
+        )
+        WishlistItem.objects.create(
+            user=self.user,
+            team=self.special_team,
+            season="2021/2022",
+            kit_type="Special",
+        )
+
+        response = self.client.get(reverse("user-wishlist", args=[self.user.username]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data[0]["kit_type"], "Special")
+        self.assertTrue(response.data[0]["has_uploads"])
+        self.assertIn("special-preview", response.data[0]["preview_image"])
+
+    def test_wishlist_url_is_generated_and_encoded(self):
+        item = self.create_wishlist_item(season="2018/2019", kit_type="Away")
+
+        response = self.client.get(reverse("user-wishlist", args=[self.user.username]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data[0]["id"], item.id)
+        self.assertEqual(
+            response.data[0]["url"],
+            f"/history/team/arsenal-fc/variants?{urlencode({'season': '2018/2019', 'type': 'Away'})}",
+        )
 
 
 class KitCommentAPITests(APITestCase):

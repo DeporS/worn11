@@ -754,13 +754,22 @@ const ProfilePage = ({ user }) => {
 			</div>
 
 			{/* Add Kit Button */}
-			{isOwner && (
-				<div className="d-flex justify-content-center my-5">
-					<Link to="/add-kit" className="add-ghost">
-						{t("profile.addKit")}
+			<div className="d-flex justify-content-center my-5">
+				<div className="d-flex flex-wrap justify-content-center gap-3">
+					<Link
+						to={`/profile/${profileUsername}/wishlist`}
+						className="btn btn-outline-dark rounded-pill px-4 py-2 profile-wishlist-link"
+					>
+						<i className="bi bi-bookmark-heart me-2"></i>
+						{t("wishlist.open")}
 					</Link>
+					{isOwner ? (
+						<Link to="/add-kit" className="add-ghost">
+							{t("profile.addKit")}
+						</Link>
+					) : null}
 				</div>
-			)}
+			</div>
 
 			{/* Shirt list */}
 			{loading ? (

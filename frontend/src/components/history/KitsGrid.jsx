@@ -1,14 +1,35 @@
-import React, { useMemo, useState, useRef, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Link } from 'react-router-dom';
-import KitCard from '../history/KitCardHistory';
-import SeasonRow from './SeasonRow';
 
-import '../../styles/history.css';
+import { getMyWishlist } from "../../services/api";
+import SeasonRow from "./SeasonRow";
 
-const KitsGrid = ({ kits, loading, selectedTeamName, user }) => {
+import "../../styles/history.css";
+
+const normalizeWishlistKitType = (kitType) => {
+    const normalized = (kitType || "").trim().toLowerCase();
+    if (normalized === "gk" || normalized === "goalkeeper") {
+        return "Goalkeeper";
+    }
+    if (normalized.startsWith("special")) {
+        return "Special";
+    }
+    return kitType;
+};
+
+const buildWishlistKey = (teamId, season, kitType) =>
+    `${teamId || ""}::${(season || "").trim()}::${normalizeWishlistKitType(kitType)}`;
+
+const KitsGrid = ({
+    kits,
+    loading,
+    selectedTeamName,
+    selectedTeamId,
+    user,
+}) => {
     const { t } = useTranslation();
     const [showEmpty, setShowEmpty] = useState(true);
+    const [wishlistItems, setWishlistItems] = useState([]);
 
     // Generate seasons from current year down to 1940/1941
     const seasons = useMemo(() => {
@@ -22,7 +43,7 @@ const KitsGrid = ({ kits, loading, selectedTeamName, user }) => {
 
     // Data organization: best kit per season and type
     const organizedKits = useMemo(() => {
-        const map = {}; 
+        const map = {};
         if (!kits) return map;
 
         kits.forEach(userKit => {
@@ -39,6 +60,62 @@ const KitsGrid = ({ kits, loading, selectedTeamName, user }) => {
         });
         return map;
     }, [kits]);
+
+    const wishlistKeySet = useMemo(() => {
+        return new Set(
+            (Array.isArray(wishlistItems) ? wishlistItems : []).map((item) =>
+                buildWishlistKey(item.team_id, item.season, item.kit_type),
+            ),
+        );
+    }, [wishlistItems]);
+
+    const isWishlistedForVariant = (teamId, season, kitType) =>
+        wishlistKeySet.has(buildWishlistKey(teamId, season, kitType));
+
+    const refreshWishlist = () => {
+        if (!user) {
+            setWishlistItems([]);
+            return Promise.resolve([]);
+        }
+
+        return getMyWishlist()
+            .then((items) => {
+                const nextItems = Array.isArray(items) ? items : [];
+                setWishlistItems(nextItems);
+                return nextItems;
+            })
+            .catch((error) => {
+                console.error("Failed to refresh wishlist for history page", error);
+                return wishlistItems;
+            });
+    };
+
+    useEffect(() => {
+        if (!user) {
+            setWishlistItems([]);
+            return undefined;
+        }
+
+        let cancelled = false;
+
+        getMyWishlist()
+            .then((items) => {
+                if (cancelled) {
+                    return;
+                }
+                setWishlistItems(Array.isArray(items) ? items : []);
+            })
+            .catch((error) => {
+                console.error("Failed to load wishlist for history page", error);
+                if (!cancelled) {
+                    setWishlistItems([]);
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [user]);
 
 
     if (loading) return <div className="text-center py-5"><div className="spinner-border text-primary"></div></div>;
@@ -69,13 +146,16 @@ const KitsGrid = ({ kits, loading, selectedTeamName, user }) => {
 
             {/* --- SEASONS LIST --- */}
             {seasons.map((season) => (
-                <SeasonRow 
+                <SeasonRow
                     key={season}
                     season={season}
                     organizedKits={organizedKits}
                     showEmpty={showEmpty}
                     selectedTeamName={selectedTeamName}
+                    selectedTeamId={selectedTeamId}
                     user={user}
+                    isWishlistedForVariant={isWishlistedForVariant}
+                    onWishlistToggle={refreshWishlist}
                 />
             ))}
         </div>

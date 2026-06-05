@@ -2,8 +2,20 @@ import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import KitCardHistory from "./KitCardHistory";
+import WishlistToggleButton from "../wishlist/WishlistToggleButton";
 
 import "../../styles/history.css";
+
+const normalizeWishlistKitType = (kitType) => {
+	const normalized = (kitType || "").trim().toLowerCase();
+	if (normalized === "gk" || normalized === "goalkeeper") {
+		return "Goalkeeper";
+	}
+	if (normalized.startsWith("special")) {
+		return "Special";
+	}
+	return kitType;
+};
 
 const SHIRT_TYPES = [
 	{ value: "Home", label: "Home" },
@@ -21,7 +33,10 @@ const SeasonRow = ({
 	organizedKits,
 	showEmpty,
 	selectedTeamName,
+	selectedTeamId,
 	user,
+	isWishlistedForVariant,
+	onWishlistToggle,
 }) => {
 	const { t } = useTranslation();
 	const [isExpanded, setIsExpanded] = useState(false);
@@ -81,9 +96,16 @@ const SeasonRow = ({
 			</div>
 
 			{/* Kits Grid */}
-			<div className="row g-2 g-md-3 row-cols-2 row-cols-md-3 row-cols-lg-4 row-cols-xl-5">
+				<div className="row g-2 g-md-3 row-cols-2 row-cols-md-3 row-cols-lg-4 row-cols-xl-5">
 				{visibleTypes.map((typeObj) => {
 					const bestKit = organizedKits[season]?.[typeObj.value];
+					const wishlistKitType = normalizeWishlistKitType(typeObj.value);
+					const wishlistTeamId = bestKit?.kit?.team?.id || selectedTeamId;
+					const wishlistIsActive = isWishlistedForVariant?.(
+						wishlistTeamId,
+						season,
+						wishlistKitType,
+					);
 
 					// If we hide empty and this specific kit is missing -> skip slot
 					if (!showEmpty && !bestKit) return null;
@@ -95,7 +117,7 @@ const SeasonRow = ({
 						>
 							<div
 								key={`${season}-${typeObj.value}`}
-								className="d-flex flex-column h-100 w-100"
+								className="d-flex flex-column h-100 w-100 history-slot-shell"
 								style={{ minHeight: "240px" }}
 							>
 								<div className="text-center mb-2">
@@ -134,14 +156,25 @@ const SeasonRow = ({
 								</div>
 
 								{bestKit ? (
-									<div className="">
+									<div className="position-relative history-card-entry">
+									<WishlistToggleButton
+										currentUser={user}
+										teamId={bestKit.kit?.team?.id}
+										season={season}
+										kitType={wishlistKitType}
+										sourceUserKitId={bestKit.id}
+										initialIsWishlisted={wishlistIsActive}
+										className="btn btn-light btn-sm rounded-circle shadow-sm history-wishlist-button"
+										iconOnly
+										onToggle={onWishlistToggle}
+									/>
 										<KitCardHistory
 											item={bestKit}
 											user={user}
 										/>
 									</div>
 								) : (
-									<div className="d-flex flex-grow-1 align-items-center justify-content-center p-3">
+									<div className="d-flex flex-grow-1 align-items-center justify-content-center p-3 position-relative history-missing-slot">
 										<Link
 											to="/add-kit"
 											className="add-missing-card"
@@ -162,6 +195,16 @@ const SeasonRow = ({
 												{t("history.addMissingKit")}
 											</span>
 										</Link>
+										<WishlistToggleButton
+											currentUser={user}
+											teamId={selectedTeamId}
+											season={season}
+											kitType={wishlistKitType}
+											initialIsWishlisted={wishlistIsActive}
+											className="btn btn-light btn-sm rounded-circle shadow-sm history-wishlist-button"
+											iconOnly
+											onToggle={onWishlistToggle}
+										/>
 									</div>
 								)}
 							</div>

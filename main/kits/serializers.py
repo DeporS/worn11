@@ -1,8 +1,9 @@
 from rest_framework import serializers
-from .models import Country, League, Team, Kit, UserKit, UserKitImage, User, Profile, KitComment, KitReport, Conversation, Message, Notification, CollectionValueSnapshot, build_team_slug
+from .models import Country, League, Team, Kit, UserKit, UserKitImage, WishlistItem, User, Profile, KitComment, KitReport, Conversation, Message, Notification, CollectionValueSnapshot, CANONICAL_WISHLIST_KIT_TYPES, build_team_slug, normalize_wishlist_kit_type
 from django.contrib.auth.models import User
 from dj_rest_auth.serializers import UserDetailsSerializer
 import json
+from urllib.parse import urlencode
 
 
 class CommentAuthorSerializer(serializers.ModelSerializer):
@@ -360,6 +361,103 @@ class KitSearchSuggestionSerializer(serializers.Serializer):
     url = serializers.CharField(read_only=True)
     preview_image = serializers.CharField(read_only=True, allow_null=True)
     has_uploads = serializers.BooleanField(read_only=True)
+
+
+class WishlistToggleSerializer(serializers.Serializer):
+    team_id = serializers.IntegerField()
+    season = serializers.CharField()
+    kit_type = serializers.CharField()
+    source_userkit_id = serializers.IntegerField(required=False, allow_null=True)
+
+    def validate_team_id(self, value):
+        team = Team.objects.filter(pk=value).first()
+        if team is None:
+            raise serializers.ValidationError('Team not found.')
+        return value
+
+    def validate_season(self, value):
+        cleaned = ' '.join((value or '').strip().split())
+        if not cleaned:
+            raise serializers.ValidationError('Season is required.')
+        return cleaned
+
+    def validate_kit_type(self, value):
+        normalized_type = normalize_wishlist_kit_type(value)
+        if normalized_type not in CANONICAL_WISHLIST_KIT_TYPES:
+            raise serializers.ValidationError('Kit type is invalid.')
+        return normalized_type
+
+    def validate_source_userkit_id(self, value):
+        if value is None:
+            return None
+
+        if not UserKit.objects.filter(pk=value).exists():
+            raise serializers.ValidationError('Source kit not found.')
+        return value
+
+    def validate(self, attrs):
+        source_userkit_id = attrs.get('source_userkit_id')
+        if source_userkit_id is None:
+            return attrs
+
+        source_userkit = UserKit.objects.select_related('kit', 'kit__team').filter(pk=source_userkit_id).first()
+        if source_userkit is None:
+            raise serializers.ValidationError({'source_userkit_id': 'Source kit not found.'})
+
+        source_kit_type = normalize_wishlist_kit_type(source_userkit.kit.kit_type)
+        if (
+            source_userkit.kit.team_id != attrs['team_id']
+            or source_userkit.kit.season != attrs['season']
+            or source_kit_type != attrs['kit_type']
+        ):
+            raise serializers.ValidationError({
+                'source_userkit_id': 'Source kit must match the same team, season, and kit type.',
+            })
+
+        attrs['source_userkit'] = source_userkit
+        return attrs
+
+
+class WishlistItemSerializer(serializers.ModelSerializer):
+    team_id = serializers.IntegerField(source='team.id', read_only=True)
+    team_name = serializers.CharField(source='team.name', read_only=True)
+    team_slug = serializers.SerializerMethodField()
+    source_userkit_id = serializers.IntegerField(source='source_userkit.id', read_only=True)
+    preview_image = serializers.SerializerMethodField()
+    has_uploads = serializers.SerializerMethodField()
+    owner_username = serializers.CharField(source='user.username', read_only=True)
+    url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = WishlistItem
+        fields = [
+            'id',
+            'team_id',
+            'team_name',
+            'team_slug',
+            'season',
+            'kit_type',
+            'source_userkit_id',
+            'preview_image',
+            'has_uploads',
+            'created_at',
+            'owner_username',
+            'url',
+        ]
+
+    def get_team_slug(self, obj):
+        return build_team_slug(obj.team.name)
+
+    def get_preview_image(self, obj):
+        preview_map = self.context.get('wishlist_preview_map', {})
+        return preview_map.get((obj.team_id, obj.season, obj.kit_type))
+
+    def get_has_uploads(self, obj):
+        preview_map = self.context.get('wishlist_preview_map', {})
+        return (obj.team_id, obj.season, obj.kit_type) in preview_map
+
+    def get_url(self, obj):
+        return f"/history/team/{build_team_slug(obj.team.name)}/variants?{urlencode({'season': obj.season, 'type': obj.kit_type})}"
 
 # UserKit Image Serializer
 class UserKitImageSerializer(serializers.ModelSerializer):
