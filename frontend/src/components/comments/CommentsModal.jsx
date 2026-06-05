@@ -14,6 +14,7 @@ import CommentItem from "./CommentItem";
 import ReportKitModal from "../reports/ReportKitModal";
 import { copyKitShareUrl } from "../utils/kitShare";
 import UserAvatar from "../UserAvatar";
+import "../../styles/profile.css";
 
 const countComments = (items) =>
 	items.reduce(
@@ -108,6 +109,7 @@ const CommentsModal = ({
 	const [replySubmitting, setReplySubmitting] = useState(false);
 	const [currentImageIndex, setCurrentImageIndex] = useState(0);
 	const [reportModalOpen, setReportModalOpen] = useState(false);
+	const [isPrivateNoteOpen, setIsPrivateNoteOpen] = useState(false);
 
 	const totalComments = useMemo(() => countComments(comments), [comments]);
 	const images = item?.images || [];
@@ -123,6 +125,13 @@ const CommentsModal = ({
 		}),
 		[ownerAvatar, ownerUsername],
 	);
+	const isOwner =
+		Boolean(currentUser) &&
+		(Boolean(item?.is_owner) ||
+			(item?.owner_id && currentUser?.id === item.owner_id) ||
+			(currentUser?.username && currentUser.username === ownerUsername));
+	const privateNote = item?.private_note?.trim() || "";
+	const hasPrivateNote = isOwner && privateNote.length > 0;
 
 	useEffect(() => {
 		if (!isOpen) return;
@@ -131,6 +140,12 @@ const CommentsModal = ({
 		const safeIndex = Math.min(Math.max(initialImageIndex, 0), maxIndex);
 		setCurrentImageIndex(safeIndex);
 	}, [images.length, initialImageIndex, isOpen]);
+
+	useEffect(() => {
+		if (!isOpen) {
+			setIsPrivateNoteOpen(false);
+		}
+	}, [isOpen, item?.id]);
 
 	useEffect(() => {
 		if (!isOpen) {
@@ -360,6 +375,21 @@ const CommentsModal = ({
 							) : null}
 						</div>
 						<div className="d-flex align-items-center gap-2 ms-md-auto flex-wrap justify-content-start justify-content-md-end unified-kit-actions">
+								{hasPrivateNote ? (
+									<button
+										type="button"
+										className="btn btn-outline-secondary btn-sm rounded-pill private-note-toggle"
+										onClick={() =>
+											setIsPrivateNoteOpen((previous) => !previous)
+										}
+									aria-expanded={isPrivateNoteOpen}
+								>
+									<i className="bi bi-lock-fill me-1" aria-hidden="true"></i>
+									{isPrivateNoteOpen
+										? t("kitModal.hidePrivateNote")
+										: t("kitModal.showPrivateNote")}
+								</button>
+							) : null}
 							{item?.for_sale && offerUrl && (
 								<a
 									href={offerUrl}
@@ -478,6 +508,15 @@ const CommentsModal = ({
 
 						<div className="unified-kit-comments bg-white">
 							<div className="overflow-auto h-100 p-3 p-lg-4 unified-kit-comments-scroll">
+								{hasPrivateNote && isPrivateNoteOpen ? (
+									<div className="private-note-panel">
+										<div className="private-note-label">
+											<i className="bi bi-lock-fill" aria-hidden="true"></i>
+											<span>{t("kitModal.privateNote")}</span>
+										</div>
+										<div className="private-note-body">{privateNote}</div>
+									</div>
+								) : null}
 								<div className="mb-4">
 									<textarea
 										className="form-control"

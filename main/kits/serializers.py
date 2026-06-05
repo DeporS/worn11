@@ -369,6 +369,8 @@ class UserKitImageSerializer(serializers.ModelSerializer):
 
 # UserKit Serializer
 class UserKitSerializer(serializers.ModelSerializer):
+    PRIVATE_NOTE_MAX_LENGTH = 2000
+
     # Read-only nested serializers
     kit = KitSerializer(read_only=True)
     images = UserKitImageSerializer(many=True, read_only=True)
@@ -381,6 +383,7 @@ class UserKitSerializer(serializers.ModelSerializer):
     comments_count = serializers.SerializerMethodField()
     is_liked = serializers.SerializerMethodField() # To check if the current user liked this UserKit
     valuation_warning = serializers.SerializerMethodField()
+    has_private_note = serializers.SerializerMethodField()
 
     # Write-only fields for creating/updating UserKit
     team_name = serializers.CharField(write_only=True)
@@ -410,9 +413,9 @@ class UserKitSerializer(serializers.ModelSerializer):
             # Write-only fields
             'team_name', 'season', 'kit_type', 'new_images', 'deleted_images', 'images_order',
             # Modifiable fields
-            'condition', 'shirt_technology', 'size', 'for_sale', 'manual_value', 'likes_count', 'comments_count', 'is_liked', 'valuation_warning', 'player_name', 'player_number', 'offer_link', 'in_the_collection'
+            'condition', 'shirt_technology', 'size', 'for_sale', 'manual_value', 'likes_count', 'comments_count', 'is_liked', 'valuation_warning', 'player_name', 'player_number', 'private_note', 'offer_link', 'in_the_collection', 'has_private_note'
         ]
-        read_only_fields = ['user', 'final_value', 'kit', 'images', 'condition_display', 'technology_display', 'size_display', 'added_at', 'is_owner', 'owner_id', 'owner_username', 'owner_avatar', 'likes_count', 'comments_count', 'is_liked', 'valuation_warning']
+        read_only_fields = ['user', 'final_value', 'kit', 'images', 'condition_display', 'technology_display', 'size_display', 'added_at', 'is_owner', 'owner_id', 'owner_username', 'owner_avatar', 'likes_count', 'comments_count', 'is_liked', 'valuation_warning', 'has_private_note']
     
     # Getting is_owner field
     def get_is_owner(self, obj):
@@ -433,6 +436,28 @@ class UserKitSerializer(serializers.ModelSerializer):
 
     def get_valuation_warning(self, obj):
         return obj.get_valuation_warning()
+
+    def get_has_private_note(self, obj):
+        return bool((obj.private_note or '').strip()) if self.get_is_owner(obj) else False
+
+    def validate_private_note(self, value):
+        cleaned = (value or '').strip()
+        if len(cleaned) > self.PRIVATE_NOTE_MAX_LENGTH:
+            raise serializers.ValidationError(
+                f'Private note cannot be longer than {self.PRIVATE_NOTE_MAX_LENGTH} characters.'
+            )
+        return cleaned
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+
+        if self.get_is_owner(instance):
+            representation['has_private_note'] = bool((instance.private_note or '').strip())
+        else:
+            representation.pop('private_note', None)
+            representation.pop('has_private_note', None)
+
+        return representation
 
     # Override create method to handle nested kit creation
     def create(self, validated_data):

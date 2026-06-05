@@ -33,6 +33,7 @@ const AddShirtFormPage = () => {
 	const [selectedFiles, setSelectedFiles] = useState([]);
 	const [playerName, setPlayerName] = useState("");
 	const [playerNumber, setPlayerNumber] = useState("");
+	const [privateNote, setPrivateNote] = useState("");
 	const [offerLink, setOfferLink] = useState("");
 
 	// Error states
@@ -337,6 +338,7 @@ const AddShirtFormPage = () => {
 		formData.append("manual_value", manualValue);
 		formData.append("player_name", playerName);
 		formData.append("player_number", playerNumber);
+		formData.append("private_note", privateNote);
 		formData.append("offer_link", offerLink);
 
 		selectedFiles.forEach((item) => {
@@ -1258,6 +1260,43 @@ const AddShirtFormPage = () => {
 											{linkError}
 										</div>
 									)}
+								</div>
+
+								<div
+									className="mb-4 p-3 rounded border bg-light border-light"
+									style={{ transition: "all 0.3s ease" }}
+								>
+									<div className="d-flex align-items-center gap-2 mb-3 text-muted">
+										<i className="bi bi-lock fs-5"></i>
+										<span
+											className="fw-bold text-uppercase"
+											style={{
+												fontSize: "0.75rem",
+												letterSpacing: "1px",
+											}}
+										>
+											{t("forms.privateNoteLabel")}
+										</span>
+									</div>
+
+									<div className="form-floating">
+										<textarea
+											className="form-control"
+											id="floatingPrivateNote"
+											placeholder={t("forms.privateNotePlaceholder")}
+											style={{ minHeight: "140px" }}
+											maxLength={2000}
+											value={privateNote}
+											onChange={(e) => setPrivateNote(e.target.value)}
+										/>
+										<label htmlFor="floatingPrivateNote">
+											{t("forms.privateNote")}
+										</label>
+									</div>
+									<div className="form-text mt-2 small d-flex justify-content-between gap-3">
+										<span>{t("forms.privateNoteHelp")}</span>
+										<span>{privateNote.length}/2000</span>
+									</div>
 								</div>
 
 								{/* Buttons */}

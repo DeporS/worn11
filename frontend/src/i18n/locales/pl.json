@@ -188,8 +188,8 @@
 		"currentValue": "Aktualna wartość",
 		"tooltipValue": "Wartość",
 		"tooltipDate": "Data",
-		"tooltipKits": "Koszulki",
-		"tooltipReason": "Powód",
+		"tooltipKits": "Kolekcja",
+		"tooltipReason": "Zmiana",
 		"reasonInitial": "Początkowo",
 		"reasonKitAdded": "Dodano koszulkę",
 		"reasonKitRemoved": "Usunięto koszulkę",
@@ -241,7 +241,11 @@
 		"unknownOwner": "nieznany"
 	},
 	"kitModal": {
-		"ownerLabel": "Zobacz na profilu"
+		"ownerLabel": "Zobacz na profilu",
+		"privateNote": "Prywatna notatka",
+		"showPrivateNote": "Pokaż prywatną notatkę",
+		"hidePrivateNote": "Ukryj prywatną notatkę",
+		"privateNoteEmpty": "Brak prywatnej notatki."
 	},
 	"forms": {
 		"addNewKit": "Dodaj nową koszulkę",
@@ -272,6 +276,10 @@
 		"forSale": "NA SPRZEDAŻ",
 		"notForSale": "NIE NA SPRZEDAŻ",
 		"leaveValueBlank": "Zostaw puste, aby wyliczyć automatycznie.",
+		"privateNote": "Prywatna notatka",
+		"privateNoteLabel": "Prywatna notatka (Opcjonalnie)",
+		"privateNotePlaceholder": "Dodaj szczegóły zakupu, wspomnienia, sprzedawcę, uwagi o rozmiarze...",
+		"privateNoteHelp": "Tylko Ty widzisz tę notatkę.",
 		"offerLinkOptional": "Link do oferty (Opcjonalnie)",
 		"offerLinkLabel": "Pełny URL do miejsca, gdzie koszulka jest wystawiona",
 		"uploading": "Wysyłanie...",

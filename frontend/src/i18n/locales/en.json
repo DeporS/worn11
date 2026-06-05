@@ -241,7 +241,11 @@
 		"unknownOwner": "unknown"
 	},
 	"kitModal": {
-		"ownerLabel": "View on profile"
+		"ownerLabel": "View on profile",
+		"privateNote": "Private note",
+		"showPrivateNote": "Show private note",
+		"hidePrivateNote": "Hide private note",
+		"privateNoteEmpty": "No private note yet."
 	},
 	"forms": {
 		"addNewKit": "Add New Kit",
@@ -272,6 +276,10 @@
 		"forSale": "FOR SALE",
 		"notForSale": "NOT FOR SALE",
 		"leaveValueBlank": "Leave value blank to auto-calculate.",
+		"privateNote": "Private note",
+		"privateNoteLabel": "Private note (Optional)",
+		"privateNotePlaceholder": "Add purchase details, memories, seller info, sizing notes...",
+		"privateNoteHelp": "Only you can see this note.",
 		"offerLinkOptional": "Offer link (Optional)",
 		"offerLinkLabel": "Full URL to where your kit is listed",
 		"uploading": "Uploading...",

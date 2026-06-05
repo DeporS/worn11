@@ -246,6 +246,7 @@ class UserKit(models.Model):
     size = models.CharField(max_length=10, choices=SIZE_CHOICES)
     player_name = models.CharField(max_length=100, null=True, blank=True)
     player_number = models.CharField(max_length=10, null=True, blank=True)
+    private_note = models.TextField(blank=True, default='')
     for_sale = models.BooleanField(default=False)
     offer_link = models.URLField(max_length=2048, null=True, blank=True)
 

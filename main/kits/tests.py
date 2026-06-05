@@ -416,6 +416,153 @@ class CollectionValueSnapshotTests(APITestCase):
         self.assertFalse(response.data["in_the_collection"])
 
 
+class UserKitPrivateNoteTests(APITestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.owner = User.objects.create_user(username="note_owner", password="password123")
+        self.other_user = User.objects.create_user(username="note_other", password="password123")
+        self.team = Team.objects.create(name="Private Note FC", is_verified=True)
+        self.kit = Kit.objects.create(
+            team=self.team,
+            season="2024/2025",
+            kit_type="Home",
+            estimated_price=Decimal("90.00"),
+        )
+        self.user_kit = UserKit.objects.create(
+            user=self.owner,
+            kit=self.kit,
+            shirt_technology="REPLICA",
+            condition="VERY_GOOD",
+            size="L",
+            private_note="Collector-only details",
+        )
+
+    def test_create_userkit_saves_private_note(self):
+        self.client.force_authenticate(user=self.owner)
+
+        response = self.client.post(
+            reverse("api-my-collection"),
+            {
+                "team_name": self.team.name,
+                "season": "2025/2026",
+                "kit_type": "Away",
+                "size": "L",
+                "condition": "VERY_GOOD",
+                "shirt_technology": "REPLICA",
+                "private_note": "  Bought from a local seller  ",
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        created = UserKit.objects.get(pk=response.data["id"])
+        self.assertEqual(created.private_note, "Bought from a local seller")
+        self.assertEqual(response.data["private_note"], "Bought from a local seller")
+        self.assertTrue(response.data["has_private_note"])
+
+    def test_update_userkit_updates_private_note(self):
+        self.client.force_authenticate(user=self.owner)
+
+        response = self.client.patch(
+            reverse("api-my-collection-detail", args=[self.user_kit.id]),
+            {"private_note": "  Updated note  "},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.user_kit.refresh_from_db()
+        self.assertEqual(self.user_kit.private_note, "Updated note")
+        self.assertEqual(response.data["private_note"], "Updated note")
+        self.assertTrue(response.data["has_private_note"])
+
+    def test_owner_can_see_private_note_in_own_collection_response(self):
+        self.client.force_authenticate(user=self.owner)
+
+        response = self.client.get(reverse("api-user-collection", args=[self.owner.username]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data[0]["private_note"], "Collector-only details")
+        self.assertTrue(response.data[0]["has_private_note"])
+
+    def test_owner_can_see_private_note_in_direct_kit_response(self):
+        self.client.force_authenticate(user=self.owner)
+
+        response = self.client.get(reverse("kit-detail", args=[self.user_kit.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["private_note"], "Collector-only details")
+        self.assertTrue(response.data["has_private_note"])
+
+    def test_non_owner_cannot_see_private_note_in_public_profile_response(self):
+        self.client.force_authenticate(user=self.other_user)
+
+        response = self.client.get(reverse("api-user-collection", args=[self.owner.username]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("private_note", response.data[0])
+        self.assertNotIn("has_private_note", response.data[0])
+
+    def test_non_owner_cannot_see_private_note_in_direct_kit_response(self):
+        self.client.force_authenticate(user=self.other_user)
+
+        response = self.client.get(reverse("kit-detail", args=[self.user_kit.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("private_note", response.data)
+        self.assertNotIn("has_private_note", response.data)
+
+    def test_anonymous_user_cannot_see_private_note(self):
+        response = self.client.get(reverse("kit-detail", args=[self.user_kit.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("private_note", response.data)
+        self.assertNotIn("has_private_note", response.data)
+
+    def test_explore_response_does_not_leak_private_note(self):
+        response = self.client.get(reverse("explore-kits"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("private_note", response.data[0])
+        self.assertNotIn("has_private_note", response.data[0])
+
+    def test_feed_response_does_not_leak_private_note(self):
+        Follow.objects.create(follower=self.other_user, following=self.owner)
+        self.client.force_authenticate(user=self.other_user)
+
+        response = self.client.get(reverse("following-feed"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertNotIn("private_note", response.data["results"][0])
+        self.assertNotIn("has_private_note", response.data["results"][0])
+
+    def test_private_note_update_does_not_create_collection_value_snapshot(self):
+        self.owner.profile.is_pro = True
+        self.owner.profile.save()
+        self.client.force_authenticate(user=self.owner)
+
+        response = self.client.patch(
+            reverse("api-my-collection-detail", args=[self.user_kit.id]),
+            {"private_note": "Fresh note only"},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(CollectionValueSnapshot.objects.count(), 0)
+
+    def test_private_note_max_length_validation(self):
+        self.client.force_authenticate(user=self.owner)
+
+        response = self.client.patch(
+            reverse("api-my-collection-detail", args=[self.user_kit.id]),
+            {"private_note": "a" * 2001},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("private_note", response.data)
+
+
 class KitCommentAPITests(APITestCase):
     def setUp(self):
         self.client = APIClient()

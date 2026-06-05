@@ -406,6 +406,49 @@
 	word-break: break-word;
 }
 
+.private-note-toggle {
+	border-color: #d1d5db;
+	color: #4b5563;
+	background: #fff;
+	box-shadow: none;
+}
+
+.private-note-toggle:hover,
+.private-note-toggle:focus {
+	border-color: #cbd5e1;
+	color: #111827;
+	background: #f8fafc;
+	box-shadow: none;
+}
+
+.private-note-panel {
+	margin-bottom: 1rem;
+	padding: 0.9rem 1rem;
+	border: 1px solid #e5e7eb;
+	border-radius: 12px;
+	background: #f8fafc;
+	box-shadow: none;
+}
+
+.private-note-label {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	margin-bottom: 0.45rem;
+	font-size: 0.78rem;
+	font-weight: 700;
+	letter-spacing: 0.03em;
+	text-transform: uppercase;
+	color: #6b7280;
+}
+
+.private-note-body {
+	white-space: pre-wrap;
+	word-break: break-word;
+	color: #374151;
+	line-height: 1.55;
+}
+
 @media (min-width: 992px) {
 	.collection-value-chart-point-details {
 		display: none;
