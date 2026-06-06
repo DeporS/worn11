@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 const CHART_WIDTH = 720;
@@ -7,42 +7,252 @@ const PADDING_X = 36;
 const PADDING_Y = 24;
 const DESKTOP_TOOLTIP_EDGE_INSET = 18;
 const DESKTOP_TOOLTIP_VERTICAL_THRESHOLD = 78;
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
+const MIN_VISIBLE_DAY_WINDOW_DAYS = 7;
+const MIN_VISIBLE_WEEK_WINDOW_WEEKS = 6;
+const MIN_VISIBLE_MONTH_WINDOW_MONTHS = 6;
 
 const formatCurrency = (value) =>
 	`$${Number(value || 0).toLocaleString(undefined, {
 		maximumFractionDigits: 0,
 	})}`;
 
-const formatPointDate = (value, language) =>
+const formatDate = (value, language) =>
 	new Intl.DateTimeFormat(language, {
 		day: "numeric",
 		month: "short",
 		year: "numeric",
-	}).format(new Date(value));
+	}).format(value);
 
-const getReasonLabel = (reason, t) => {
-	const reasonKeyMap = {
-		initial: "collectionValue.reasonInitial",
-		kit_added: "collectionValue.reasonKitAdded",
-		kit_removed: "collectionValue.reasonKitRemoved",
-		kit_updated: "collectionValue.reasonKitUpdated",
-		value_updated: "collectionValue.reasonValueUpdated",
-		collection_status_changed: "collectionValue.reasonCollectionStatusChanged",
-		backfill: "collectionValue.reasonBackfill",
-	};
+const formatMonth = (value, language) =>
+	new Intl.DateTimeFormat(language, {
+		month: "long",
+		year: "numeric",
+	}).format(value);
 
-	return reasonKeyMap[reason] ? t(reasonKeyMap[reason]) : reason;
+const parseSnapshotDate = (snapshot) => {
+	const parsedDate = new Date(snapshot?.created_at);
+	return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
 };
 
-const CollectionValueLineChart = ({ points = [] }) => {
+const getStartOfDay = (date) =>
+	new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+const getStartOfWeek = (date) => {
+	const startOfDay = getStartOfDay(date);
+	const day = startOfDay.getDay();
+	const diff = day === 0 ? -6 : 1 - day;
+	startOfDay.setDate(startOfDay.getDate() + diff);
+	return startOfDay;
+};
+
+const getStartOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1);
+
+const addDays = (date, days) => {
+	const nextDate = new Date(date);
+	nextDate.setDate(nextDate.getDate() + days);
+	return nextDate;
+};
+
+const addWeeks = (date, weeks) => addDays(date, weeks * 7);
+
+const addMonths = (date, months) =>
+	new Date(date.getFullYear(), date.getMonth() + months, 1);
+
+const getDateRangeDays = (snapshots) => {
+	if (snapshots.length <= 1) {
+		return 0;
+	}
+
+	const firstDate = parseSnapshotDate(snapshots[0]);
+	const lastDate = parseSnapshotDate(snapshots[snapshots.length - 1]);
+	if (!firstDate || !lastDate) {
+		return 0;
+	}
+
+	return Math.max(
+		0,
+		Math.round((getStartOfDay(lastDate) - getStartOfDay(firstDate)) / DAY_IN_MS),
+	);
+};
+
+const getGranularityForRange = (rangeDays) => {
+	if (rangeDays <= 90) {
+		return "day";
+	}
+
+	if (rangeDays <= 730) {
+		return "week";
+	}
+
+	return "month";
+};
+
+const getBucketStart = (date, granularity) => {
+	if (granularity === "month") {
+		return getStartOfMonth(date);
+	}
+
+	if (granularity === "week") {
+		return getStartOfWeek(date);
+	}
+
+	return getStartOfDay(date);
+};
+
+const getBucketKey = (date, granularity) => {
+	const bucketStart = getBucketStart(date, granularity);
+	return bucketStart.toISOString();
+};
+
+const getBucketLabel = (bucketStart, granularity, language, t) => {
+	if (granularity === "month") {
+		return formatMonth(bucketStart, language);
+	}
+
+	if (granularity === "week") {
+		return t("collectionValue.weekOf", {
+			date: formatDate(bucketStart, language),
+		});
+	}
+
+	return formatDate(bucketStart, language);
+};
+
+// Group raw snapshots into a cleaner analytics series by taking the final state
+// in each day/week/month bucket based on total history range.
+const buildCollectionValueSeries = (snapshots, language, t) => {
+	const sortedSnapshots = [...(Array.isArray(snapshots) ? snapshots : [])]
+		.map((snapshot) => {
+			const parsedDate = parseSnapshotDate(snapshot);
+			return parsedDate ? { ...snapshot, parsedDate } : null;
+		})
+		.filter(Boolean)
+		.sort((left, right) => left.parsedDate - right.parsedDate);
+
+	if (sortedSnapshots.length === 0) {
+		return {
+			granularity: "day",
+			points: [],
+			latestRawSnapshot: null,
+		};
+	}
+
+	const granularity = getGranularityForRange(getDateRangeDays(sortedSnapshots));
+	const groupedSnapshots = new Map();
+
+	sortedSnapshots.forEach((snapshot) => {
+		groupedSnapshots.set(getBucketKey(snapshot.parsedDate, granularity), snapshot);
+	});
+
+	const points = Array.from(groupedSnapshots.values()).map((snapshot) => {
+		const bucketStart = getBucketStart(snapshot.parsedDate, granularity);
+		return {
+			id: snapshot.id ?? `${granularity}-${bucketStart.toISOString()}`,
+			bucketKey: getBucketKey(snapshot.parsedDate, granularity),
+			bucketStart,
+			createdAt: snapshot.created_at,
+			totalValue: Number(snapshot.total_value || 0),
+			kitsCount: Number(snapshot.kits_count || 0),
+			displayDate: getBucketLabel(bucketStart, granularity, language, t),
+			rawSnapshot: snapshot,
+		};
+	});
+
+	return {
+		granularity,
+		points,
+		latestRawSnapshot: sortedSnapshots[sortedSnapshots.length - 1],
+	};
+};
+
+const getXAxisLabelIndexes = (count) => {
+	if (count <= 1) {
+		return [0];
+	}
+
+	if (count <= 4) {
+		return Array.from({ length: count }, (_, index) => index);
+	}
+
+	if (count <= 8) {
+		return [0, Math.floor((count - 1) / 2), count - 1];
+	}
+
+	return [
+		0,
+		Math.floor((count - 1) / 3),
+		Math.floor(((count - 1) * 2) / 3),
+		count - 1,
+	];
+};
+
+const getMinimumDomainStart = (latestBucketStart, granularity) => {
+	if (granularity === "month") {
+		return addMonths(latestBucketStart, -(MIN_VISIBLE_MONTH_WINDOW_MONTHS - 1));
+	}
+
+	if (granularity === "week") {
+		return addWeeks(latestBucketStart, -(MIN_VISIBLE_WEEK_WINDOW_WEEKS - 1));
+	}
+
+	return addDays(latestBucketStart, -(MIN_VISIBLE_DAY_WINDOW_DAYS - 1));
+};
+
+const getTimeDomain = (seriesPoints, granularity) => {
+	const firstBucketStart = seriesPoints[0]?.bucketStart;
+	const lastBucketStart = seriesPoints[seriesPoints.length - 1]?.bucketStart;
+
+	if (!firstBucketStart || !lastBucketStart) {
+		return {
+			domainStart: null,
+			domainEnd: null,
+			domainRange: 1,
+		};
+	}
+
+	const minimumDomainStart = getMinimumDomainStart(lastBucketStart, granularity);
+	const domainStart =
+		firstBucketStart < minimumDomainStart ? firstBucketStart : minimumDomainStart;
+	const domainEnd = lastBucketStart;
+	const domainRange = Math.max(1, domainEnd.getTime() - domainStart.getTime());
+
+	return {
+		domainStart,
+		domainEnd,
+		domainRange,
+	};
+};
+
+const getYDomain = (values) => {
+	const maxValue = Math.max(...values);
+	const paddedMaxValue = Math.max(maxValue * 1.1, maxValue + 40, 100);
+
+	return {
+		maxValue,
+		paddedMinValue: 0,
+		paddedMaxValue,
+		valueRange: Math.max(1, paddedMaxValue),
+	};
+};
+
+const CollectionValueLineChart = ({ points: rawPoints = [] }) => {
 	const { t, i18n } = useTranslation();
 	const [activePoint, setActivePoint] = useState(null);
-	const hasPoints = Array.isArray(points) && points.length > 0;
-	const lastRawPoint = hasPoints ? points[points.length - 1] : null;
-	const summaryValue = hasPoints ? formatCurrency(lastRawPoint.total_value) : formatCurrency(0);
-	const summaryCount = lastRawPoint?.kits_count || 0;
 
-	if (!Array.isArray(points) || points.length < 2) {
+	const { granularity, points, latestRawSnapshot } = useMemo(
+		() => buildCollectionValueSeries(rawPoints, i18n.language, t),
+		[rawPoints, i18n.language, t],
+	);
+
+	const hasPoints = points.length > 0;
+	const summarySnapshot = latestRawSnapshot || null;
+	const summaryValue = hasPoints
+		? formatCurrency(summarySnapshot?.total_value)
+		: formatCurrency(0);
+	const summaryCount = Number(summarySnapshot?.kits_count || 0);
+
+	if (!hasPoints) {
 		return (
 			<div className="collection-value-chart-shell">
 				<div className="collection-value-chart-summary">
@@ -65,31 +275,40 @@ const CollectionValueLineChart = ({ points = [] }) => {
 		);
 	}
 
-	const values = points.map((point) => Number(point.total_value || 0));
-	const minValue = Math.min(...values);
-	const maxValue = Math.max(...values);
-	const valueRange = maxValue - minValue || 1;
-	const stepX = points.length > 1 ? (CHART_WIDTH - PADDING_X * 2) / (points.length - 1) : 0;
+	const values = points.map((point) => point.totalValue);
+	const { paddedMinValue, paddedMaxValue, valueRange } = getYDomain(values);
+	const { domainStart, domainRange } = getTimeDomain(points, granularity);
+	const getXForDate = (date) => {
+		const elapsedTime = Math.max(0, date.getTime() - domainStart.getTime());
+		const normalizedX = elapsedTime / domainRange;
+		return PADDING_X + normalizedX * (CHART_WIDTH - PADDING_X * 2);
+	};
 
-	const chartPoints = points.map((point, index) => {
-		const x = PADDING_X + index * stepX;
-		const normalized = (Number(point.total_value || 0) - minValue) / valueRange;
+	const chartPoints = points.map((point) => {
+		const x = getXForDate(point.bucketStart);
+		const normalized = (point.totalValue - paddedMinValue) / valueRange;
 		const y = CHART_HEIGHT - PADDING_Y - normalized * (CHART_HEIGHT - PADDING_Y * 2);
 		return {
 			...point,
 			x,
 			y,
-			labelDate: formatPointDate(point.created_at, i18n.language),
-			labelValue: formatCurrency(point.total_value),
+			labelValue: formatCurrency(point.totalValue),
 		};
 	});
 
-	const path = chartPoints
-		.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
-		.join(" ");
+	const path =
+		chartPoints.length > 1
+			? chartPoints
+					.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
+					.join(" ")
+			: "";
 
-	const firstPoint = chartPoints[0];
-	const lastPoint = chartPoints[chartPoints.length - 1];
+	const xAxisLabelIndexes = new Set(getXAxisLabelIndexes(chartPoints.length));
+	const dateLabelKey =
+		granularity === "day"
+			? "collectionValue.tooltipDate"
+			: "collectionValue.tooltipPeriod";
+
 	const desktopTooltipPosition = activePoint
 		? {
 				left:
@@ -111,6 +330,7 @@ const CollectionValueLineChart = ({ points = [] }) => {
 						: "above",
 			}
 		: null;
+
 	return (
 		<div className="collection-value-chart-shell">
 			<div className="collection-value-chart-summary">
@@ -119,11 +339,11 @@ const CollectionValueLineChart = ({ points = [] }) => {
 						{t("collectionValue.currentValue")}
 					</span>
 					<div className="collection-value-summary-number">
-						{lastPoint.labelValue}
+						{summaryValue}
 					</div>
 				</div>
 				<div className="collection-value-summary-count">
-					{t("collectionValue.kitsCount", { count: lastPoint.kits_count || 0 })}
+					{t("collectionValue.kitsCount", { count: summaryCount })}
 				</div>
 			</div>
 			<div
@@ -149,10 +369,10 @@ const CollectionValueLineChart = ({ points = [] }) => {
 						</div>
 						<div className="collection-value-chart-tooltip-row">
 							<span className="collection-value-chart-tooltip-label">
-								{t("collectionValue.tooltipDate")}
+								{t(dateLabelKey)}
 							</span>
 							<span className="collection-value-chart-tooltip-value">
-								{activePoint.labelDate}
+								{activePoint.displayDate}
 							</span>
 						</div>
 						<div className="collection-value-chart-tooltip-row">
@@ -161,20 +381,10 @@ const CollectionValueLineChart = ({ points = [] }) => {
 							</span>
 							<span className="collection-value-chart-tooltip-value">
 								{t("collectionValue.kitsCount", {
-									count: activePoint.kits_count || 0,
+									count: activePoint.kitsCount,
 								})}
 							</span>
 						</div>
-						{activePoint.reason ? (
-							<div className="collection-value-chart-tooltip-row">
-								<span className="collection-value-chart-tooltip-label">
-									{t("collectionValue.tooltipReason")}
-								</span>
-								<span className="collection-value-chart-tooltip-value">
-									{getReasonLabel(activePoint.reason, t)}
-								</span>
-							</div>
-						) : null}
 					</div>
 				) : null}
 				<svg
@@ -197,9 +407,9 @@ const CollectionValueLineChart = ({ points = [] }) => {
 						y2={CHART_HEIGHT - PADDING_Y}
 						className="collection-value-axis"
 					/>
-					<path d={path} className="collection-value-line" />
-					{chartPoints.map((point) => (
-						<g key={point.id}>
+					{path ? <path d={path} className="collection-value-line" /> : null}
+					{chartPoints.map((point, index) => (
+						<React.Fragment key={point.id}>
 							<circle
 								cx={point.x}
 								cy={point.y}
@@ -213,22 +423,29 @@ const CollectionValueLineChart = ({ points = [] }) => {
 									setActivePoint(point);
 								}}
 								tabIndex="0"
-							>
-								<title>{`${point.labelDate} • ${point.labelValue}`}</title>
-							</circle>
-						</g>
+							/>
+							{xAxisLabelIndexes.has(index) ? (
+								<text
+									x={getXForDate(point.bucketStart)}
+									y={CHART_HEIGHT - 6}
+									className="collection-value-axis-label"
+									textAnchor="middle"
+								>
+									{point.displayDate}
+								</text>
+							) : null}
+						</React.Fragment>
 					))}
-					<text x={firstPoint.x} y={CHART_HEIGHT - 6} className="collection-value-axis-label" textAnchor="start">
-						{firstPoint.labelDate}
-					</text>
-					<text x={lastPoint.x} y={CHART_HEIGHT - 6} className="collection-value-axis-label" textAnchor="end">
-						{lastPoint.labelDate}
-					</text>
 					<text x={PADDING_X - 8} y={PADDING_Y + 4} className="collection-value-axis-label" textAnchor="end">
-						{formatCurrency(maxValue)}
+						{formatCurrency(paddedMaxValue)}
 					</text>
-					<text x={PADDING_X - 8} y={CHART_HEIGHT - PADDING_Y + 4} className="collection-value-axis-label" textAnchor="end">
-						{formatCurrency(minValue)}
+					<text
+						x={PADDING_X - 8}
+						y={CHART_HEIGHT - PADDING_Y + 4}
+						className="collection-value-axis-label"
+						textAnchor="end"
+					>
+						{formatCurrency(0)}
 					</text>
 				</svg>
 			</div>
@@ -245,10 +462,10 @@ const CollectionValueLineChart = ({ points = [] }) => {
 						</div>
 						<div className="collection-value-chart-point-detail">
 							<span className="collection-value-chart-point-detail-label">
-								{t("collectionValue.tooltipDate")}
+								{t(dateLabelKey)}
 							</span>
 							<span className="collection-value-chart-point-detail-value">
-								{activePoint.labelDate}
+								{activePoint.displayDate}
 							</span>
 						</div>
 						<div className="collection-value-chart-point-detail">
@@ -257,20 +474,10 @@ const CollectionValueLineChart = ({ points = [] }) => {
 							</span>
 							<span className="collection-value-chart-point-detail-value">
 								{t("collectionValue.kitsCount", {
-									count: activePoint.kits_count || 0,
+									count: activePoint.kitsCount,
 								})}
 							</span>
 						</div>
-						{activePoint.reason ? (
-							<div className="collection-value-chart-point-detail">
-								<span className="collection-value-chart-point-detail-label">
-									{t("collectionValue.tooltipReason")}
-								</span>
-								<span className="collection-value-chart-point-detail-value">
-									{getReasonLabel(activePoint.reason, t)}
-								</span>
-							</div>
-						) : null}
 					</div>
 				</div>
 			) : null}
