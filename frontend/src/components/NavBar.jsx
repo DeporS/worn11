@@ -45,24 +45,27 @@ const NavBar = ({
 							alt="WORN11 Logo"
 							style={{ height: "40px", marginRight: "10px" }}
 						/>
-						<span
-							style={{
-								fontWeight: 800,
-								letterSpacing: "-0.5px",
-								fontSize: "1.6rem",
-							}}
-						>
-							WORN
-						</span>
-						<span
-							className="text-primary"
-							style={{
-								fontWeight: 900,
-								marginLeft: "1px",
-								fontSize: "1.9rem",
-							}}
-						>
-							11
+						<span className="navbar-brand-wordmark">
+							<span
+								style={{
+									fontWeight: 800,
+									letterSpacing: "-0.5px",
+									fontSize: "1.6rem",
+								}}
+							>
+								WORN
+							</span>
+							<span
+								className="text-primary"
+								style={{
+									fontWeight: 900,
+									marginLeft: "1px",
+									fontSize: "1.9rem",
+								}}
+							>
+								11
+							</span>
+							<span className="navbar-brand-domain">.com</span>
 						</span>
 					</div>
 				</Link>
