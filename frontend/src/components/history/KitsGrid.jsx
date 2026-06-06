@@ -6,7 +6,7 @@ import SeasonRow from "./SeasonRow";
 
 import "../../styles/history.css";
 
-const normalizeWishlistKitType = (kitType) => {
+const normalizeHistoryKitType = (kitType) => {
     const normalized = (kitType || "").trim().toLowerCase();
     if (normalized === "gk" || normalized === "goalkeeper") {
         return "Goalkeeper";
@@ -18,7 +18,7 @@ const normalizeWishlistKitType = (kitType) => {
 };
 
 const buildWishlistKey = (teamId, season, kitType) =>
-    `${teamId || ""}::${(season || "").trim()}::${normalizeWishlistKitType(kitType)}`;
+    `${teamId || ""}::${(season || "").trim()}::${normalizeHistoryKitType(kitType)}`;
 
 const KitsGrid = ({
     kits,
@@ -48,13 +48,21 @@ const KitsGrid = ({
 
         kits.forEach(userKit => {
             const season = userKit.kit.season;
-            const type = userKit.kit.kit_type;
+            const type = normalizeHistoryKitType(userKit.kit.kit_type);
             const likes = userKit.likes_count || 0;
+            const currentBestKit = map[season]?.[type];
+            const currentBestLikes = currentBestKit?.likes_count || 0;
+            const shouldReplace =
+                !currentBestKit ||
+                likes > currentBestLikes ||
+                (likes === currentBestLikes &&
+                    new Date(userKit.added_at || 0).getTime() >
+                        new Date(currentBestKit.added_at || 0).getTime());
 
             if (!map[season]) map[season] = {};
-            
-            // if new has more likes, replace
-            if (!map[season][type] || likes > (map[season][type].likes_count || 0)) {
+
+            // Keep one deterministic representative per canonical type.
+            if (shouldReplace) {
                 map[season][type] = userKit;
             }
         });

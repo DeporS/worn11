@@ -850,6 +850,44 @@ class WishlistItemAPITests(APITestCase):
         )
 
 
+class TopKitsByTeamAPITests(APITestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.owner = User.objects.create_user(username="museum_owner", password="password123")
+        self.team = Team.objects.create(name="Museum FC", is_verified=True)
+
+    def create_user_kit(self, season, kit_type, added_at):
+        kit = Kit.objects.create(
+            team=self.team,
+            season=season,
+            kit_type=kit_type,
+            estimated_price=Decimal("50.00"),
+        )
+        user_kit = UserKit.objects.create(
+            user=self.owner,
+            kit=kit,
+            shirt_technology="REPLICA",
+            condition="VERY_GOOD",
+            size="L",
+        )
+        UserKit.objects.filter(id=user_kit.id).update(added_at=added_at)
+        return user_kit
+
+    def test_top_kits_by_team_endpoint_returns_full_team_dataset_without_pagination(self):
+        for index in range(13):
+            self.create_user_kit(
+                season=f"20{10 + index}/20{11 + index}",
+                kit_type="Home",
+                added_at=timezone.now() - timedelta(hours=index),
+            )
+
+        response = self.client.get(reverse("top-kits-by-team", args=[self.team.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsInstance(response.data, list)
+        self.assertEqual(len(response.data), 13)
+
+
 class KitCommentAPITests(APITestCase):
     def setUp(self):
         self.client = APIClient()

@@ -1704,7 +1704,7 @@ class TeamsByLeagueAPI(generics.ListAPIView):
 class TopKitsByTeamAPI(generics.ListAPIView):
     serializer_class = UserKitSerializer
     permission_classes = [permissions.AllowAny]
-    pagination_class = StandardResultsSetPagination
+    pagination_class = None
 
     def get_queryset(self):
         team_id = self.kwargs['team_id']

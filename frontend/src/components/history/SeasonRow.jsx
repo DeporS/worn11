@@ -6,7 +6,7 @@ import WishlistToggleButton from "../wishlist/WishlistToggleButton";
 
 import "../../styles/history.css";
 
-const normalizeWishlistKitType = (kitType) => {
+const normalizeHistoryKitType = (kitType) => {
 	const normalized = (kitType || "").trim().toLowerCase();
 	if (normalized === "gk" || normalized === "goalkeeper") {
 		return "Goalkeeper";
@@ -20,7 +20,7 @@ const normalizeWishlistKitType = (kitType) => {
 const SHIRT_TYPES = [
 	{ value: "Home", label: "Home" },
 	{ value: "Away", label: "Away" },
-	{ value: "GK", label: "Goalkeeper" },
+	{ value: "Goalkeeper", label: "Goalkeeper" },
 	{ value: "Third", label: "Third" },
 	{ value: "Fourth", label: "Fourth" },
 	{ value: "Cup", label: "Cup" },
@@ -71,13 +71,23 @@ const SeasonRow = ({
 	}, []);
 
 	// DISPLAY LOGIC
-	const hasAnyKit = SHIRT_TYPES.some((t) => organizedKits[season]?.[t.value]);
+	const hasAnyKit = SHIRT_TYPES.some(
+		(typeObj) => organizedKits[season]?.[normalizeHistoryKitType(typeObj.value)],
+	);
 	if (!showEmpty && !hasAnyKit) return null;
 
-	// Slice the array depending on the screen size
-	const visibleTypes = isExpanded
-		? SHIRT_TYPES
-		: SHIRT_TYPES.slice(0, itemsPerRow);
+	// When missing kits are hidden, only render real uploads.
+	// Otherwise keep the current collapsed/expanded row behavior.
+	const visibleTypes = showEmpty
+		? (isExpanded ? SHIRT_TYPES : SHIRT_TYPES.slice(0, itemsPerRow))
+		: SHIRT_TYPES.filter(
+				(typeObj) =>
+					organizedKits[season]?.[normalizeHistoryKitType(typeObj.value)],
+			);
+
+	if (visibleTypes.length === 0) {
+		return null;
+	}
 
 	// Show the button only if there are more types than fit in one row
 	const hasMore = SHIRT_TYPES.length > itemsPerRow;
@@ -98,8 +108,9 @@ const SeasonRow = ({
 			{/* Kits Grid */}
 				<div className="row g-2 g-md-3 row-cols-2 row-cols-md-3 row-cols-lg-4 row-cols-xl-5">
 				{visibleTypes.map((typeObj) => {
-					const bestKit = organizedKits[season]?.[typeObj.value];
-					const wishlistKitType = normalizeWishlistKitType(typeObj.value);
+					const typeKey = normalizeHistoryKitType(typeObj.value);
+					const bestKit = organizedKits[season]?.[typeKey];
+					const wishlistKitType = typeKey;
 					const wishlistTeamId = bestKit?.kit?.team?.id || selectedTeamId;
 					const wishlistIsActive = isWishlistedForVariant?.(
 						wishlistTeamId,
@@ -123,7 +134,7 @@ const SeasonRow = ({
 								<div className="text-center mb-2">
 									{bestKit ? (
 										<Link
-											to={`/history/team/${bestKit.kit.team.slug || bestKit.kit.team.id}/variants?season=${encodeURIComponent(season)}&type=${encodeURIComponent(typeObj.value)}`}
+											to={`/history/team/${bestKit.kit.team.slug || bestKit.kit.team.id}/variants?season=${encodeURIComponent(season)}&type=${encodeURIComponent(typeKey)}`}
 											className="text-decoration-none"
 											title={t("history.seeAllUploadsTitle", {
 												season,
@@ -185,7 +196,7 @@ const SeasonRow = ({
 											state={{
 												prefill: {
 													season,
-													type: typeObj.value,
+													type: typeKey,
 													team: selectedTeamName,
 												},
 											}}
