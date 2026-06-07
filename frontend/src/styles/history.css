@@ -221,6 +221,12 @@
     min-width: 0;
 }
 
+.history-season-grid {
+    max-width: 1280px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
 @media (max-width: 575.98px) {
     .history-wishlist-button {
         top: 0.45rem;

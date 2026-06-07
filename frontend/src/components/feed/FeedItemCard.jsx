@@ -83,7 +83,7 @@ const FeedItemCard = ({ item, onOpenKit }) => {
 		},
 		{
 			icon: "bi bi-layers",
-			label: item.technology_display,
+			label: item.shirt_version_display || item.technology_display,
 			title: t("kitCard.technology"),
 		},
 		{

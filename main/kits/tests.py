@@ -1,16 +1,706 @@
 from decimal import Decimal
 from datetime import timedelta
+from importlib import import_module
 from urllib.parse import urlencode
 
+from django.apps import apps as django_apps
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient, APITestCase
 
-from .models import Kit, Team, UserKit, UserKitImage, WishlistItem, KitComment, KitReport, Conversation, Message, Follow, Notification, CollectionValueSnapshot, AUTOMATED_VALUATION_UNAVAILABLE_MESSAGE
+from .models import Kit, KitType, KitTypeAlias, ShirtVersion, Team, UserKit, UserKitImage, WishlistItem, KitComment, KitReport, Conversation, Message, Follow, Notification, CollectionValueSnapshot, AUTOMATED_VALUATION_UNAVAILABLE_MESSAGE, TECHNOLOGIE_MULTIPLIERS, calculate_collection_total_value
+from .serializers import KitSerializer, UserKitSerializer, WishlistItemSerializer
+
+
+class CatalogFoundationTests(APITestCase):
+    @staticmethod
+    def run_catalog_backfill():
+        migration = import_module(
+            'kits.migrations.0029_shirtversion_kittype_kit_kit_type_ref_and_more'
+        )
+        migration.seed_and_backfill_catalogs(django_apps, None)
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='catalog_collector', password='password123')
+        self.team = Team.objects.create(name='Catalog FC', is_verified=True)
+
+    def test_seeded_kit_types_exist_with_expected_metadata(self):
+        expected = {
+            'HOME': ('Home', 'outfield', 'primary', 10),
+            'GOALKEEPER': ('Goalkeeper', 'goalkeeper', 'primary', 70),
+            'SECOND_GOALKEEPER': ('Second Goalkeeper', 'goalkeeper', 'expanded', 80),
+            'ANNIVERSARY': ('Anniversary', 'special', 'none', 110),
+            'RETRO_REISSUE': ('Retro/Reissue', 'special', 'none', 180),
+        }
+
+        for code, values in expected.items():
+            kit_type = KitType.objects.get(canonical_code=code)
+            self.assertEqual(
+                (kit_type.name, kit_type.category, kit_type.default_visibility, kit_type.sort_order),
+                values,
+            )
+            self.assertEqual(kit_type.status, 'approved')
+
+        self.assertEqual(KitType.objects.filter(status='approved').count(), 18)
+
+    def test_seeded_aliases_cover_legacy_and_collector_names(self):
+        expected = {
+            'gk': 'GOALKEEPER',
+            'goalkeeper': 'GOALKEEPER',
+            'special edition': 'SPECIAL',
+            'special': 'SPECIAL',
+            '2nd gk': 'SECOND_GOALKEEPER',
+            'champions league': 'EUROPEAN',
+        }
+
+        for alias, code in expected.items():
+            self.assertEqual(
+                KitTypeAlias.objects.get(alias_normalized=alias).kit_type.canonical_code,
+                code,
+            )
+
+    def test_duplicate_normalized_alias_is_rejected(self):
+        goalkeeper = KitType.objects.get(canonical_code='GOALKEEPER')
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            KitTypeAlias.objects.create(alias_normalized='gk', kit_type=goalkeeper)
+
+    def test_seeded_shirt_versions_preserve_legacy_multipliers(self):
+        expected = {
+            'REPLICA': Decimal('1.000'),
+            'PLAYER_ISSUE': Decimal('1.500'),
+            'MATCH_WORN': Decimal('5.000'),
+        }
+
+        for code, multiplier in expected.items():
+            version = ShirtVersion.objects.get(code=code)
+            self.assertEqual(version.valuation_multiplier, multiplier)
+            self.assertEqual(version.valuation_multiplier, TECHNOLOGIE_MULTIPLIERS[code])
+
+    def test_supporter_code_is_displayed_as_stadium(self):
+        stadium = ShirtVersion.objects.get(code='SUPPORTER')
+
+        self.assertEqual(stadium.name, 'Stadium')
+        self.assertEqual(stadium.valuation_multiplier, Decimal('1.000'))
+
+    def test_uncertain_versions_use_conservative_valuation(self):
+        conservative_codes = [
+            'TEAM_ISSUED',
+            'MATCH_ISSUE',
+            'MATCH_PREPARED',
+            'TRAINING_ISSUE',
+            'SAMPLE',
+            'PROTOTYPE',
+        ]
+
+        for version in ShirtVersion.objects.filter(code__in=conservative_codes):
+            self.assertEqual(version.valuation_multiplier, Decimal('1.000'))
+            self.assertTrue(version.manual_value_recommended)
+
+        self.assertEqual(
+            ShirtVersion.objects.filter(code__in=conservative_codes).count(),
+            len(conservative_codes),
+        )
+
+    def test_product_technologies_are_not_shirt_versions(self):
+        prohibited_terms = [
+            'adizero',
+            'climacool',
+            'aeroready',
+            'heat.rdy',
+            'dri-fit',
+            'vaporknit',
+            'drycell',
+        ]
+        catalog_text = ' '.join(
+            f'{version.code} {version.name}'.lower()
+            for version in ShirtVersion.objects.all()
+        )
+
+        for term in prohibited_terms:
+            self.assertNotIn(term, catalog_text)
+
+    def test_backfill_maps_kit_and_wishlist_types_without_changing_legacy_text(self):
+        kits = [
+            Kit.objects.create(team=self.team, season='2020/2021', kit_type='Home'),
+            Kit.objects.create(team=self.team, season='2021/2022', kit_type='GK'),
+            Kit.objects.create(team=self.team, season='2022/2023', kit_type='Goalkeeper'),
+            Kit.objects.create(team=self.team, season='2023/2024', kit_type='Special Edition'),
+            Kit.objects.create(team=self.team, season='2024/2025', kit_type='Special'),
+        ]
+        wishlist_item = WishlistItem.objects.create(
+            user=self.user,
+            team=self.team,
+            season='2021/2022',
+            kit_type='Goalkeeper',
+        )
+
+        self.run_catalog_backfill()
+
+        expected_codes = ['HOME', 'GOALKEEPER', 'GOALKEEPER', 'SPECIAL', 'SPECIAL']
+        for kit, expected_code in zip(kits, expected_codes):
+            kit.refresh_from_db()
+            self.assertEqual(kit.kit_type_ref.canonical_code, expected_code)
+
+        self.assertEqual(kits[1].kit_type, 'GK')
+        self.assertEqual(kits[3].kit_type, 'Special Edition')
+        wishlist_item.refresh_from_db()
+        self.assertEqual(wishlist_item.kit_type_ref.canonical_code, 'GOALKEEPER')
+        self.assertEqual(wishlist_item.kit_type, 'Goalkeeper')
+
+    def test_unknown_legacy_type_creates_pending_catalog_entry(self):
+        kit = Kit.objects.create(
+            team=self.team,
+            season='2004/2005',
+            kit_type='One-off Celebration',
+        )
+
+        self.run_catalog_backfill()
+
+        kit.refresh_from_db()
+        self.assertEqual(kit.kit_type, 'One-off Celebration')
+        self.assertEqual(kit.kit_type_ref.name, 'One-off Celebration')
+        self.assertEqual(kit.kit_type_ref.status, 'pending')
+        self.assertEqual(kit.kit_type_ref.category, 'other')
+        self.assertEqual(kit.kit_type_ref.default_visibility, 'none')
+
+    def test_backfill_preserves_values_totals_and_snapshots(self):
+        base_price = Decimal('100.00')
+        expected_values = {
+            'REPLICA': Decimal('100.00'),
+            'PLAYER_ISSUE': Decimal('150.00'),
+            'MATCH_WORN': Decimal('500.00'),
+        }
+        user_kits = []
+
+        for index, (technology, expected_value) in enumerate(expected_values.items()):
+            kit = Kit.objects.create(
+                team=self.team,
+                season=f'20{index:02d}/20{index + 1:02d}',
+                kit_type='Away',
+                estimated_price=base_price,
+            )
+            user_kit = UserKit.objects.create(
+                user=self.user,
+                kit=kit,
+                shirt_technology=technology,
+                condition='VERY_GOOD',
+                size='L',
+            )
+            self.assertEqual(user_kit.final_value, expected_value)
+            user_kits.append(user_kit)
+
+        total_before = calculate_collection_total_value(self.user)
+        snapshots_before = CollectionValueSnapshot.objects.count()
+        stored_values_before = {
+            user_kit.pk: user_kit.final_value for user_kit in user_kits
+        }
+
+        self.run_catalog_backfill()
+
+        expected_version_codes = ['REPLICA', 'PLAYER_ISSUE', 'MATCH_WORN']
+        for user_kit, expected_code in zip(user_kits, expected_version_codes):
+            user_kit.refresh_from_db()
+            self.assertEqual(user_kit.shirt_version.code, expected_code)
+            self.assertEqual(user_kit.final_value, stored_values_before[user_kit.pk])
+
+        self.assertEqual(calculate_collection_total_value(self.user), total_before)
+        self.assertEqual(CollectionValueSnapshot.objects.count(), snapshots_before)
+
+    def test_manual_value_still_overrides_automatic_valuation(self):
+        kit = Kit.objects.create(
+            team=self.team,
+            season='2025/2026',
+            kit_type='Third',
+            estimated_price=Decimal('100.00'),
+        )
+        user_kit = UserKit.objects.create(
+            user=self.user,
+            kit=kit,
+            shirt_technology='MATCH_WORN',
+            condition='VERY_GOOD',
+            size='L',
+            manual_value=Decimal('123.45'),
+        )
+
+        self.assertEqual(user_kit.final_value, Decimal('123.45'))
+
+        self.run_catalog_backfill()
+        user_kit.refresh_from_db()
+        self.assertEqual(user_kit.final_value, Decimal('123.45'))
+
+
+class CatalogCompatibilityAPITests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='compatibility_owner', password='password123')
+        self.team = Team.objects.create(name='Compatibility FC', is_verified=True)
+        self.home_type = KitType.objects.get(canonical_code='HOME')
+        self.replica_version = ShirtVersion.objects.get(code='REPLICA')
+
+    def create_user_kit(self, *, with_catalog_refs=True, technology='REPLICA'):
+        kit = Kit.objects.create(
+            team=self.team,
+            season='2024/2025',
+            kit_type='Home',
+            kit_type_ref=self.home_type if with_catalog_refs else None,
+            estimated_price=Decimal('100.00'),
+        )
+        return UserKit.objects.create(
+            user=self.user,
+            kit=kit,
+            shirt_technology=technology,
+            shirt_version=(
+                ShirtVersion.objects.get(code=technology)
+                if with_catalog_refs
+                else None
+            ),
+            condition='VERY_GOOD',
+            size='L',
+        )
+
+    def test_kit_serializer_keeps_legacy_type_and_adds_catalog_fields(self):
+        user_kit = self.create_user_kit()
+
+        data = KitSerializer(user_kit.kit).data
+
+        self.assertEqual(data['kit_type'], 'Home')
+        self.assertEqual(data['kit_type_id'], self.home_type.id)
+        self.assertEqual(data['kit_type_slug'], 'home')
+        self.assertEqual(data['kit_type_display'], 'Home')
+        self.assertEqual(data['kit_type_canonical_code'], 'HOME')
+
+    def test_kit_serializer_falls_back_when_catalog_reference_is_null(self):
+        kit = Kit.objects.create(
+            team=self.team,
+            season='2023/2024',
+            kit_type='Legacy Celebration',
+        )
+
+        data = KitSerializer(kit).data
+
+        self.assertEqual(data['kit_type'], 'Legacy Celebration')
+        self.assertIsNone(data['kit_type_id'])
+        self.assertIsNone(data['kit_type_slug'])
+        self.assertEqual(data['kit_type_display'], 'Legacy Celebration')
+        self.assertIsNone(data['kit_type_canonical_code'])
+
+    def test_userkit_serializer_keeps_legacy_version_fields_and_adds_catalog_fields(self):
+        self.replica_version.valuation_note = 'Use automatic valuation for standard retail shirts.'
+        self.replica_version.save(update_fields=['valuation_note'])
+        user_kit = self.create_user_kit()
+
+        data = UserKitSerializer(user_kit).data
+
+        self.assertEqual(data['shirt_technology'], 'REPLICA')
+        self.assertEqual(data['technology_display'], 'Replica')
+        self.assertEqual(data['shirt_version_id'], self.replica_version.id)
+        self.assertEqual(data['shirt_version_code'], 'REPLICA')
+        self.assertEqual(data['shirt_version_display'], 'Replica')
+        self.assertFalse(data['shirt_version_manual_value_recommended'])
+        self.assertEqual(
+            data['shirt_version_valuation_note'],
+            'Use automatic valuation for standard retail shirts.',
+        )
+
+    def test_userkit_serializer_falls_back_to_legacy_technology(self):
+        user_kit = self.create_user_kit(with_catalog_refs=False, technology='PLAYER_ISSUE')
+
+        data = UserKitSerializer(user_kit).data
+
+        self.assertEqual(data['shirt_technology'], 'PLAYER_ISSUE')
+        self.assertEqual(data['technology_display'], 'Player Issue')
+        self.assertIsNone(data['shirt_version_id'])
+        self.assertEqual(data['shirt_version_code'], 'PLAYER_ISSUE')
+        self.assertEqual(data['shirt_version_display'], 'Player Issue')
+        self.assertFalse(data['shirt_version_manual_value_recommended'])
+        self.assertEqual(data['shirt_version_valuation_note'], '')
+
+    def test_wishlist_serializer_adds_catalog_fields_without_changing_legacy_type(self):
+        item = WishlistItem.objects.create(
+            user=self.user,
+            team=self.team,
+            season='2024/2025',
+            kit_type='Home',
+            kit_type_ref=self.home_type,
+        )
+
+        data = WishlistItemSerializer(item).data
+
+        self.assertEqual(data['kit_type'], 'Home')
+        self.assertEqual(data['kit_type_id'], self.home_type.id)
+        self.assertEqual(data['kit_type_slug'], 'home')
+        self.assertEqual(data['kit_type_display'], 'Home')
+        self.assertEqual(data['kit_type_canonical_code'], 'HOME')
+
+    def test_options_keeps_legacy_arrays_and_adds_catalog_arrays(self):
+        response = self.client.get(reverse('kit-options'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data['technologies'],
+            [
+                {'value': 'PLAYER_ISSUE', 'label': 'Player Issue'},
+                {'value': 'REPLICA', 'label': 'Replica'},
+                {'value': 'MATCH_WORN', 'label': 'Match Worn'},
+            ],
+        )
+        self.assertEqual(response.data['types'][0], {'value': 'Home', 'label': 'Home'})
+
+        home_option = next(
+            option for option in response.data['kit_types']
+            if option['canonical_code'] == 'HOME'
+        )
+        self.assertEqual(
+            home_option,
+            {
+                'id': self.home_type.id,
+                'name': 'Home',
+                'slug': 'home',
+                'canonical_code': 'HOME',
+                'category': 'outfield',
+                'default_visibility': 'primary',
+                'sort_order': 10,
+            },
+        )
+
+        replica_option = next(
+            option for option in response.data['shirt_versions']
+            if option['code'] == 'REPLICA'
+        )
+        self.assertEqual(replica_option['id'], self.replica_version.id)
+        self.assertEqual(replica_option['name'], 'Replica')
+        self.assertIn('description', replica_option)
+        self.assertFalse(replica_option['manual_value_recommended'])
+        self.assertIn('valuation_note', replica_option)
+        self.assertEqual(replica_option['sort_order'], 20)
+
+    def test_phase_b_does_not_change_legacy_runtime_valuation(self):
+        expected_values = {
+            'REPLICA': Decimal('100.00'),
+            'PLAYER_ISSUE': Decimal('150.00'),
+            'MATCH_WORN': Decimal('500.00'),
+        }
+
+        for index, (technology, expected_value) in enumerate(expected_values.items()):
+            kit = Kit.objects.create(
+                team=self.team,
+                season=f'201{index}/201{index + 1}',
+                kit_type='Home',
+                kit_type_ref=self.home_type,
+                estimated_price=Decimal('100.00'),
+            )
+            user_kit = UserKit.objects.create(
+                user=self.user,
+                kit=kit,
+                shirt_technology=technology,
+                shirt_version=ShirtVersion.objects.get(code=technology),
+                condition='VERY_GOOD',
+                size='L',
+            )
+
+            self.assertEqual(user_kit.final_value, expected_value)
+
+
+class ShirtVersionWriteAPITests(APITestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(username='version_writer', password='password123')
+        self.client.force_authenticate(user=self.user)
+        self.team = Team.objects.create(name='Version Write FC', is_verified=True)
+
+    def create_kit_with_price(self, season, kit_type='Home'):
+        return Kit.objects.create(
+            team=self.team,
+            season=season,
+            kit_type=kit_type,
+            estimated_price=Decimal('100.00'),
+        )
+
+    def create_payload(self, kit, **overrides):
+        payload = {
+            'team_name': self.team.name,
+            'season': kit.season,
+            'kit_type': kit.kit_type,
+            'size': 'L',
+            'condition': 'VERY_GOOD',
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_legacy_versions_keep_exact_existing_valuation(self):
+        expected = {
+            'REPLICA': Decimal('100.00'),
+            'PLAYER_ISSUE': Decimal('150.00'),
+            'MATCH_WORN': Decimal('500.00'),
+        }
+
+        for index, (code, final_value) in enumerate(expected.items()):
+            kit = self.create_kit_with_price(f'202{index}/202{index + 1}')
+            response = self.client.post(
+                reverse('api-my-collection'),
+                self.create_payload(kit, shirt_version_code=code),
+                format='multipart',
+            )
+
+            self.assertEqual(response.status_code, 201)
+            user_kit = UserKit.objects.get(pk=response.data['id'])
+            self.assertEqual(user_kit.shirt_version.code, code)
+            self.assertEqual(user_kit.shirt_technology, code)
+            self.assertEqual(user_kit.final_value, final_value)
+            self.assertEqual(response.data['shirt_version_code'], code)
+
+    def test_new_version_uses_catalog_multiplier_and_neutral_legacy_fallback(self):
+        kit = self.create_kit_with_price('2024/2025')
+
+        response = self.client.post(
+            reverse('api-my-collection'),
+            self.create_payload(kit, shirt_version_code='MATCH_PREPARED'),
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        user_kit = UserKit.objects.get(pk=response.data['id'])
+        self.assertEqual(user_kit.shirt_version.code, 'MATCH_PREPARED')
+        self.assertEqual(user_kit.shirt_technology, 'REPLICA')
+        self.assertEqual(user_kit.final_value, Decimal('100.00'))
+        self.assertEqual(response.data['shirt_version_display'], 'Match Prepared')
+
+    def test_shirt_version_id_is_accepted(self):
+        kit = self.create_kit_with_price('2025/2026')
+        sample = ShirtVersion.objects.get(code='SAMPLE')
+
+        response = self.client.post(
+            reverse('api-my-collection'),
+            self.create_payload(kit, shirt_version_id=sample.id),
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        user_kit = UserKit.objects.get(pk=response.data['id'])
+        self.assertEqual(user_kit.shirt_version, sample)
+        self.assertEqual(user_kit.shirt_technology, 'REPLICA')
+        self.assertEqual(user_kit.final_value, Decimal('100.00'))
+
+    def test_manual_value_overrides_new_version_multiplier(self):
+        kit = self.create_kit_with_price('2026/2027')
+
+        response = self.client.post(
+            reverse('api-my-collection'),
+            self.create_payload(
+                kit,
+                shirt_version_code='PROTOTYPE',
+                manual_value='321.45',
+            ),
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        user_kit = UserKit.objects.get(pk=response.data['id'])
+        self.assertEqual(user_kit.shirt_version.code, 'PROTOTYPE')
+        self.assertEqual(user_kit.final_value, Decimal('321.45'))
+
+    def test_updating_version_recalculates_value_and_syncs_legacy_code(self):
+        kit = self.create_kit_with_price('2027/2028')
+        user_kit = UserKit.objects.create(
+            user=self.user,
+            kit=kit,
+            shirt_technology='REPLICA',
+            shirt_version=ShirtVersion.objects.get(code='REPLICA'),
+            condition='VERY_GOOD',
+            size='L',
+        )
+
+        response = self.client.patch(
+            reverse('api-my-collection-detail', args=[user_kit.id]),
+            {'shirt_version_code': 'PLAYER_ISSUE'},
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        user_kit.refresh_from_db()
+        self.assertEqual(user_kit.shirt_version.code, 'PLAYER_ISSUE')
+        self.assertEqual(user_kit.shirt_technology, 'PLAYER_ISSUE')
+        self.assertEqual(user_kit.final_value, Decimal('150.00'))
+
+    def test_updating_to_new_version_preserves_existing_legacy_code(self):
+        kit = self.create_kit_with_price('2028/2029')
+        user_kit = UserKit.objects.create(
+            user=self.user,
+            kit=kit,
+            shirt_technology='PLAYER_ISSUE',
+            shirt_version=ShirtVersion.objects.get(code='PLAYER_ISSUE'),
+            condition='VERY_GOOD',
+            size='L',
+        )
+
+        response = self.client.patch(
+            reverse('api-my-collection-detail', args=[user_kit.id]),
+            {'shirt_version_code': 'AUTHENTIC'},
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        user_kit.refresh_from_db()
+        self.assertEqual(user_kit.shirt_version.code, 'AUTHENTIC')
+        self.assertEqual(user_kit.shirt_technology, 'PLAYER_ISSUE')
+        self.assertEqual(user_kit.final_value, Decimal('100.00'))
+
+    def test_legacy_technology_only_request_still_works_and_sets_version(self):
+        kit = self.create_kit_with_price('2029/2030')
+
+        response = self.client.post(
+            reverse('api-my-collection'),
+            self.create_payload(kit, shirt_technology='MATCH_WORN'),
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        user_kit = UserKit.objects.get(pk=response.data['id'])
+        self.assertEqual(user_kit.shirt_technology, 'MATCH_WORN')
+        self.assertEqual(user_kit.shirt_version.code, 'MATCH_WORN')
+        self.assertEqual(user_kit.final_value, Decimal('500.00'))
+
+    def test_inactive_version_is_rejected(self):
+        kit = self.create_kit_with_price('2030/2031')
+        sample = ShirtVersion.objects.get(code='SAMPLE')
+        sample.is_active = False
+        sample.save(update_fields=['is_active'])
+
+        response = self.client.post(
+            reverse('api-my-collection'),
+            self.create_payload(kit, shirt_version_code='SAMPLE'),
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('shirt_version_code', response.data)
+
+
+class KitTypeWriteAPITests(APITestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(username='kit_type_writer', password='password123')
+        self.client.force_authenticate(user=self.user)
+        self.team = Team.objects.create(name='Dynamic Types FC', is_verified=True)
+
+    def payload(self, **overrides):
+        payload = {
+            'team_name': self.team.name,
+            'season': '2024/2025',
+            'size': 'L',
+            'condition': 'VERY_GOOD',
+            'shirt_version_code': 'REPLICA',
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_create_with_kit_type_id_sets_fk_and_legacy_display(self):
+        anniversary = KitType.objects.get(canonical_code='ANNIVERSARY')
+
+        response = self.client.post(
+            reverse('api-my-collection'),
+            self.payload(
+                kit_type='Outdated client label',
+                kit_type_id=anniversary.id,
+            ),
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        user_kit = UserKit.objects.select_related('kit__kit_type_ref').get(pk=response.data['id'])
+        self.assertEqual(user_kit.kit.kit_type_ref, anniversary)
+        self.assertEqual(user_kit.kit.kit_type, 'Anniversary')
+        self.assertEqual(response.data['kit']['kit_type_display'], 'Anniversary')
+
+    def test_create_with_kit_type_slug_sets_fk_and_legacy_display(self):
+        second_goalkeeper = KitType.objects.get(canonical_code='SECOND_GOALKEEPER')
+
+        response = self.client.post(
+            reverse('api-my-collection'),
+            self.payload(kit_type_slug='second-goalkeeper'),
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        user_kit = UserKit.objects.select_related('kit__kit_type_ref').get(pk=response.data['id'])
+        self.assertEqual(user_kit.kit.kit_type_ref, second_goalkeeper)
+        self.assertEqual(user_kit.kit.kit_type, 'Second Goalkeeper')
+
+    def test_legacy_kit_type_name_still_resolves(self):
+        home = KitType.objects.get(canonical_code='HOME')
+
+        response = self.client.post(
+            reverse('api-my-collection'),
+            self.payload(kit_type='Home'),
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        user_kit = UserKit.objects.select_related('kit__kit_type_ref').get(pk=response.data['id'])
+        self.assertEqual(user_kit.kit.kit_type_ref, home)
+        self.assertEqual(user_kit.kit.kit_type, 'Home')
+
+    def test_goalkeeper_alias_resolves_to_canonical_type(self):
+        response = self.client.post(
+            reverse('api-my-collection'),
+            self.payload(kit_type='GK'),
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        user_kit = UserKit.objects.select_related('kit__kit_type_ref').get(pk=response.data['id'])
+        self.assertEqual(user_kit.kit.kit_type_ref.canonical_code, 'GOALKEEPER')
+        self.assertEqual(user_kit.kit.kit_type, 'Goalkeeper')
+
+    def test_special_edition_alias_resolves_to_canonical_type(self):
+        response = self.client.post(
+            reverse('api-my-collection'),
+            self.payload(kit_type='Special Edition'),
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        user_kit = UserKit.objects.select_related('kit__kit_type_ref').get(pk=response.data['id'])
+        self.assertEqual(user_kit.kit.kit_type_ref.canonical_code, 'SPECIAL')
+        self.assertEqual(user_kit.kit.kit_type, 'Special')
+
+    def test_update_with_dynamic_type_changes_fk_and_legacy_display(self):
+        kit = Kit.objects.create(
+            team=self.team,
+            season='2024/2025',
+            kit_type='Home',
+            kit_type_ref=KitType.objects.get(canonical_code='HOME'),
+            estimated_price=Decimal('100.00'),
+        )
+        user_kit = UserKit.objects.create(
+            user=self.user,
+            kit=kit,
+            shirt_technology='REPLICA',
+            shirt_version=ShirtVersion.objects.get(code='REPLICA'),
+            condition='VERY_GOOD',
+            size='L',
+        )
+        pre_match = KitType.objects.get(canonical_code='PRE_MATCH')
+
+        response = self.client.patch(
+            reverse('api-my-collection-detail', args=[user_kit.id]),
+            {
+                'team_name': self.team.name,
+                'season': '2024/2025',
+                'kit_type': 'Pre-match',
+                'kit_type_id': pre_match.id,
+            },
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        user_kit.refresh_from_db()
+        self.assertEqual(user_kit.kit.kit_type_ref, pre_match)
+        self.assertEqual(user_kit.kit.kit_type, 'Pre-match')
 
 
 class UserKitPricingTests(APITestCase):

@@ -266,12 +266,201 @@ class Team(models.Model):
 
     def __str__(self):
         return self.name
-    
+
+
+class KitType(models.Model):
+    CATEGORY_OUTFIELD = 'outfield'
+    CATEGORY_GOALKEEPER = 'goalkeeper'
+    CATEGORY_TRAINING = 'training'
+    CATEGORY_SPECIAL = 'special'
+    CATEGORY_COMPETITION = 'competition'
+    CATEGORY_OTHER = 'other'
+    CATEGORY_CHOICES = [
+        (CATEGORY_OUTFIELD, 'Outfield'),
+        (CATEGORY_GOALKEEPER, 'Goalkeeper'),
+        (CATEGORY_TRAINING, 'Training'),
+        (CATEGORY_SPECIAL, 'Special'),
+        (CATEGORY_COMPETITION, 'Competition'),
+        (CATEGORY_OTHER, 'Other'),
+    ]
+
+    STATUS_APPROVED = 'approved'
+    STATUS_PENDING = 'pending'
+    STATUS_REJECTED = 'rejected'
+    STATUS_MERGED = 'merged'
+    STATUS_CHOICES = [
+        (STATUS_APPROVED, 'Approved'),
+        (STATUS_PENDING, 'Pending'),
+        (STATUS_REJECTED, 'Rejected'),
+        (STATUS_MERGED, 'Merged'),
+    ]
+
+    VISIBILITY_PRIMARY = 'primary'
+    VISIBILITY_EXPANDED = 'expanded'
+    VISIBILITY_NONE = 'none'
+    VISIBILITY_CHOICES = [
+        (VISIBILITY_PRIMARY, 'Primary'),
+        (VISIBILITY_EXPANDED, 'Expanded'),
+        (VISIBILITY_NONE, 'None'),
+    ]
+
+    name = models.CharField(max_length=100)
+    slug = models.SlugField(max_length=120, unique=True)
+    canonical_code = models.CharField(max_length=64, unique=True, null=True, blank=True)
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default=CATEGORY_OTHER)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    default_visibility = models.CharField(
+        max_length=20,
+        choices=VISIBILITY_CHOICES,
+        default=VISIBILITY_NONE,
+    )
+    sort_order = models.IntegerField(default=0)
+    created_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='created_kit_types',
+    )
+    approved_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='approved_kit_types',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    merged_into = models.ForeignKey(
+        'self',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='merged_types',
+    )
+
+    class Meta:
+        ordering = ['sort_order', 'name', 'id']
+
+    def __str__(self):
+        return self.name
+
+
+class KitTypeAlias(models.Model):
+    alias_normalized = models.CharField(max_length=120, unique=True)
+    kit_type = models.ForeignKey(KitType, on_delete=models.CASCADE, related_name='aliases')
+    display_alias = models.CharField(max_length=120, blank=True)
+    created_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='created_kit_type_aliases',
+    )
+    approved_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='approved_kit_type_aliases',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['alias_normalized', 'id']
+
+    def __str__(self):
+        return f'{self.alias_normalized} -> {self.kit_type.name}'
+
+
+class ShirtVersion(models.Model):
+    code = models.CharField(max_length=64, unique=True)
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    valuation_multiplier = models.DecimalField(
+        max_digits=6,
+        decimal_places=3,
+        default=Decimal('1.000'),
+    )
+    manual_value_recommended = models.BooleanField(default=False)
+    valuation_note = models.TextField(blank=True)
+    sort_order = models.IntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['sort_order', 'name', 'id']
+
+    def __str__(self):
+        return self.name
+
+
+class TeamSeasonKitType(models.Model):
+    STATUS_APPROVED = 'approved'
+    STATUS_PENDING = 'pending'
+    STATUS_REJECTED = 'rejected'
+    STATUS_CHOICES = [
+        (STATUS_APPROVED, 'Approved'),
+        (STATUS_PENDING, 'Pending'),
+        (STATUS_REJECTED, 'Rejected'),
+    ]
+
+    SOURCE_SYSTEM_DEFAULT = 'system_default'
+    SOURCE_UPLOAD = 'upload'
+    SOURCE_MODERATOR = 'moderator'
+    SOURCE_CHOICES = [
+        (SOURCE_SYSTEM_DEFAULT, 'System default'),
+        (SOURCE_UPLOAD, 'Upload'),
+        (SOURCE_MODERATOR, 'Moderator'),
+    ]
+
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name='season_kit_types')
+    season = models.CharField(max_length=20)
+    kit_type = models.ForeignKey(KitType, on_delete=models.CASCADE, related_name='team_seasons')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default=SOURCE_UPLOAD)
+    created_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='created_team_season_kit_types',
+    )
+    approved_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='approved_team_season_kit_types',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['team__name', '-season', 'kit_type__sort_order', 'id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['team', 'season', 'kit_type'],
+                name='unique_team_season_kit_type',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.team.name} {self.season} {self.kit_type.name}'
+
+
 # Football Kits (ex. Arsenal Home 2021/2022)
 class Kit(models.Model):
     team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name='kits')
     season = models.CharField(max_length=20, help_text="e.g., 2021/2022") # e.g., "2021/2022"
     kit_type = models.CharField(max_length=50, help_text="e.g., Home, Away, Third") # e.g., "Home", "Away", "Third"
+    kit_type_ref = models.ForeignKey(
+        KitType,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='kits',
+    )
 
     # Simple pricing
     estimated_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text="Estimated price in $ (Size L in Very Good condition)")
@@ -287,6 +476,13 @@ class UserKit(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='collection')
     kit = models.ForeignKey(Kit, on_delete=models.CASCADE, related_name='owned_by')
     shirt_technology = models.CharField(max_length=20, choices=SHIRT_TECHNOLOGIES)
+    shirt_version = models.ForeignKey(
+        ShirtVersion,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='user_kits',
+    )
     condition = models.CharField(max_length=20, choices=CONDITION_CHOICES)
     size = models.CharField(max_length=10, choices=SIZE_CHOICES)
     player_name = models.CharField(max_length=100, null=True, blank=True)
@@ -343,7 +539,13 @@ class UserKit(models.Model):
             if base_price is not None and base_price > 0:
                 size_multiplier = SIZE_MULTIPLIERS.get(self.size, Decimal('1.0'))
                 condition_multiplier = CONDITION_MULTIPLIERS.get(self.condition, Decimal('1.0'))
-                technology_multiplier = TECHNOLOGIE_MULTIPLIERS.get(self.shirt_technology, Decimal('1.0'))
+                if self.shirt_version_id:
+                    technology_multiplier = self.shirt_version.valuation_multiplier
+                else:
+                    technology_multiplier = TECHNOLOGIE_MULTIPLIERS.get(
+                        self.shirt_technology,
+                        Decimal('1.0'),
+                    )
 
                 calculated_value = base_price * size_multiplier * condition_multiplier * technology_multiplier
                 self.final_value = calculated_value.quantize(Decimal('0.01'))  # Round to 2 decimal places
@@ -432,6 +634,13 @@ class WishlistItem(models.Model):
     team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name='wishlist_items')
     season = models.CharField(max_length=20)
     kit_type = models.CharField(max_length=32)
+    kit_type_ref = models.ForeignKey(
+        KitType,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='wishlist_items',
+    )
     source_userkit = models.ForeignKey(
         UserKit,
         null=True,

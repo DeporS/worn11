@@ -20,6 +20,7 @@ const HistoryPage = ({ user }) => {
 	const [leagues, setLeagues] = useState([]);
 	const [teams, setTeams] = useState([]);
 	const [kits, setKits] = useState([]);
+	const [kitTypes, setKitTypes] = useState([]);
 
 	// --- STATE WITH SESSION STORAGE ---
 	const [step, setStep] = useState(() => {
@@ -56,9 +57,10 @@ const HistoryPage = ({ user }) => {
 	// 1. Fetch Leagues
 	useEffect(() => {
 		setLoading(true);
-		api.get("/leagues/")
-			.then((res) => {
-				setLeagues(res.data);
+		Promise.all([api.get("/leagues/"), api.get("/options/")])
+			.then(([leaguesResponse, optionsResponse]) => {
+				setLeagues(leaguesResponse.data);
+				setKitTypes(optionsResponse.data.kit_types || []);
 				setLoading(false);
 			})
 			.catch((err) => {
@@ -180,6 +182,7 @@ const HistoryPage = ({ user }) => {
 			{step === 3 && (
 				<KitsGrid
 					kits={kits}
+					kitTypes={kitTypes}
 					loading={loading}
 					selectedTeamName={selectedTeam?.name}
 					selectedTeamId={selectedTeam?.id}

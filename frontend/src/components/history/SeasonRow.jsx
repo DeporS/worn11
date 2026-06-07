@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import KitCardHistory from "./KitCardHistory";
@@ -6,31 +6,19 @@ import WishlistToggleButton from "../wishlist/WishlistToggleButton";
 
 import "../../styles/history.css";
 
-const normalizeHistoryKitType = (kitType) => {
-	const normalized = (kitType || "").trim().toLowerCase();
-	if (normalized === "gk" || normalized === "goalkeeper") {
-		return "Goalkeeper";
-	}
-	if (normalized.startsWith("special")) {
-		return "Special";
-	}
-	return kitType;
+const uniqueTypes = (types) => {
+	const seen = new Set();
+	return types.filter((type) => {
+		if (seen.has(type.key)) return false;
+		seen.add(type.key);
+		return true;
+	});
 };
-
-const SHIRT_TYPES = [
-	{ value: "Home", label: "Home" },
-	{ value: "Away", label: "Away" },
-	{ value: "Goalkeeper", label: "Goalkeeper" },
-	{ value: "Third", label: "Third" },
-	{ value: "Fourth", label: "Fourth" },
-	{ value: "Cup", label: "Cup" },
-	{ value: "Training", label: "Training" },
-	{ value: "Special", label: "Special" },
-];
 
 const SeasonRow = ({
 	season,
 	organizedKits,
+	kitTypes,
 	showEmpty,
 	selectedTeamName,
 	selectedTeamId,
@@ -40,61 +28,33 @@ const SeasonRow = ({
 }) => {
 	const { t } = useTranslation();
 	const [isExpanded, setIsExpanded] = useState(false);
-
-	// Default items per row
-	const [itemsPerRow, setItemsPerRow] = useState(5);
-
-	// Responsiveness
-	useEffect(() => {
-		const handleResize = () => {
-			const width = window.innerWidth;
-
-			if (width < 576) {
-				setItemsPerRow(2); // Mobile
-			} else if (width < 768) {
-				setItemsPerRow(2); // Small devices
-			} else if (width < 992) {
-				setItemsPerRow(3); // Tablet
-			} else if (width < 1200) {
-				setItemsPerRow(4); // Laptop
-			} else {
-				setItemsPerRow(5); // Desktop
-			}
-		};
-
-		// Run on load
-		handleResize();
-
-		// Listen for window resize
-		window.addEventListener("resize", handleResize);
-		return () => window.removeEventListener("resize", handleResize);
-	}, []);
-
-	// DISPLAY LOGIC
-	const hasAnyKit = SHIRT_TYPES.some(
-		(typeObj) => organizedKits[season]?.[normalizeHistoryKitType(typeObj.value)],
+	const seasonKits = organizedKits[season] || {};
+	const actualEntries = Object.values(seasonKits);
+	const primaryTypes = kitTypes.filter(
+		(type) => type.default_visibility === "primary",
 	);
-	if (!showEmpty && !hasAnyKit) return null;
+	const expandedTypes = kitTypes.filter(
+		(type) => type.default_visibility === "expanded",
+	);
+	const defaultKeys = new Set(
+		[...primaryTypes, ...expandedTypes].map((type) => type.key),
+	);
+	const uploadedExtraTypes = actualEntries
+		.map((entry) => entry.type)
+		.filter((type) => !defaultKeys.has(type.key));
 
-	// When missing kits are hidden, only render real uploads.
-	// Otherwise keep the current collapsed/expanded row behavior.
 	const visibleTypes = showEmpty
-		? (isExpanded ? SHIRT_TYPES : SHIRT_TYPES.slice(0, itemsPerRow))
-		: SHIRT_TYPES.filter(
-				(typeObj) =>
-					organizedKits[season]?.[normalizeHistoryKitType(typeObj.value)],
-			);
+		? uniqueTypes([
+			...primaryTypes,
+			...(isExpanded ? expandedTypes : []),
+			...uploadedExtraTypes,
+		])
+		: uniqueTypes(actualEntries.map((entry) => entry.type));
 
-	if (visibleTypes.length === 0) {
-		return null;
-	}
-
-	// Show the button only if there are more types than fit in one row
-	const hasMore = SHIRT_TYPES.length > itemsPerRow;
+	if (visibleTypes.length === 0) return null;
 
 	return (
 		<div className="mb-5">
-			{/* Season headline */}
 			<div className="d-flex align-items-center gap-3 mb-3">
 				<h3
 					className="m-0 fw-bold text-dark"
@@ -105,12 +65,10 @@ const SeasonRow = ({
 				<div className="flex-grow-1 border-bottom"></div>
 			</div>
 
-			{/* Kits Grid */}
-				<div className="row g-2 g-md-3 row-cols-2 row-cols-md-3 row-cols-lg-4 row-cols-xl-5">
-				{visibleTypes.map((typeObj) => {
-					const typeKey = normalizeHistoryKitType(typeObj.value);
-					const bestKit = organizedKits[season]?.[typeKey];
-					const wishlistKitType = typeKey;
+			<div className="row g-2 g-md-3 row-cols-2 row-cols-md-2 row-cols-lg-3 row-cols-xl-4 history-season-grid">
+				{visibleTypes.map((type) => {
+					const bestKit = seasonKits[type.key]?.kit;
+					const wishlistKitType = type.name;
 					const wishlistTeamId = bestKit?.kit?.team?.id || selectedTeamId;
 					const wishlistIsActive = isWishlistedForVariant?.(
 						wishlistTeamId,
@@ -118,93 +76,48 @@ const SeasonRow = ({
 						wishlistKitType,
 					);
 
-					// If we hide empty and this specific kit is missing -> skip slot
-					if (!showEmpty && !bestKit) return null;
-
 					return (
-						<div
-							key={`${season}-${typeObj.value}`}
-							className="col d-flex justify-content-center"
-						>
-							<div
-								key={`${season}-${typeObj.value}`}
-								className="d-flex flex-column h-100 w-100 history-slot-shell"
-								style={{ minHeight: "240px" }}
-							>
+						<div key={`${season}-${type.key}`} className="col d-flex justify-content-center">
+							<div className="d-flex flex-column h-100 w-100 history-slot-shell" style={{ minHeight: "240px" }}>
 								<div className="text-center mb-2">
 									{bestKit ? (
 										<Link
-											to={`/history/team/${bestKit.kit.team.slug || bestKit.kit.team.id}/variants?season=${encodeURIComponent(season)}&type=${encodeURIComponent(typeKey)}`}
+											to={`/history/team/${bestKit.kit.team.slug || bestKit.kit.team.id}/variants?season=${encodeURIComponent(season)}&type=${encodeURIComponent(type.name)}`}
 											className="text-decoration-none"
-											title={t("history.seeAllUploadsTitle", {
-												season,
-												type: typeObj.label,
-											})}
+											title={t("history.seeAllUploadsTitle", { season, type: type.name })}
 										>
-											<span
-												className="badge rounded-pill bg-primary"
-												style={{
-													cursor: "pointer",
-													transition: "opacity 0.2s",
-												}}
-												onMouseEnter={(e) =>
-													(e.target.style.opacity =
-														"0.8")
-												}
-												onMouseLeave={(e) =>
-													(e.target.style.opacity =
-														"1")
-												}
-											>
-												{typeObj.label}
-											</span>
+											<span className="badge rounded-pill bg-primary">{type.name}</span>
 										</Link>
 									) : (
-										<span className="badge rounded-pill bg-light text-muted border">
-											{typeObj.label}
-										</span>
+										<span className="badge rounded-pill bg-light text-muted border">{type.name}</span>
 									)}
 								</div>
 
 								{bestKit ? (
 									<div className="position-relative history-card-entry">
-									<WishlistToggleButton
-										currentUser={user}
-										teamId={bestKit.kit?.team?.id}
-										season={season}
-										kitType={wishlistKitType}
-										sourceUserKitId={bestKit.id}
-										initialIsWishlisted={wishlistIsActive}
-										className="btn btn-light btn-sm rounded-circle shadow-sm history-wishlist-button"
-										iconOnly
-										onToggle={onWishlistToggle}
-									/>
-										<KitCardHistory
-											item={bestKit}
-											user={user}
+										<WishlistToggleButton
+											currentUser={user}
+											teamId={bestKit.kit?.team?.id}
+											season={season}
+											kitType={wishlistKitType}
+											sourceUserKitId={bestKit.id}
+											initialIsWishlisted={wishlistIsActive}
+											className="btn btn-light btn-sm rounded-circle shadow-sm history-wishlist-button"
+											iconOnly
+											onToggle={onWishlistToggle}
 										/>
+										<KitCardHistory item={bestKit} user={user} />
 									</div>
 								) : (
 									<div className="d-flex flex-grow-1 align-items-center justify-content-center p-3 position-relative history-missing-slot">
 										<Link
 											to="/add-kit"
 											className="add-missing-card"
-											title={t("history.addMissingKitTitle", {
-												season,
-												type: typeObj.label,
-											})}
-											state={{
-												prefill: {
-													season,
-													type: typeKey,
-													team: selectedTeamName,
-												},
-											}}
+											title={t("history.addMissingKitTitle", { season, type: type.name })}
+											state={{ prefill: { season, type: type.name, team: selectedTeamName } }}
 											style={{ minHeight: "100%" }}
 										>
-											<span className="add-missing-text">
-												{t("history.addMissingKit")}
-											</span>
+											<span className="add-missing-text">{t("history.addMissingKit")}</span>
 										</Link>
 										<WishlistToggleButton
 											currentUser={user}
@@ -224,25 +137,15 @@ const SeasonRow = ({
 				})}
 			</div>
 
-			{/* Show More / Less */}
-			{hasMore && showEmpty && (
+			{showEmpty && expandedTypes.length > 0 && (
 				<div className="text-center mt-3">
 					<button
-						onClick={() => setIsExpanded(!isExpanded)}
+						type="button"
+						onClick={() => setIsExpanded((current) => !current)}
 						className="btn btn-sm btn-outline-secondary rounded-pill px-4"
 					>
-						{isExpanded ? (
-							<>
-								{t("history.hide")} <i className="bi bi-chevron-up ms-1"></i>
-							</>
-						) : (
-							<>
-								{t("history.showMore", {
-									count: SHIRT_TYPES.length - itemsPerRow,
-								})}{" "}
-								<i className="bi bi-chevron-down ms-1"></i>
-							</>
-						)}
+						{isExpanded ? t("history.hide") : t("history.showMore", { count: expandedTypes.length })}
+						<i className={`bi bi-chevron-${isExpanded ? "up" : "down"} ms-1`}></i>
 					</button>
 				</div>
 			)}

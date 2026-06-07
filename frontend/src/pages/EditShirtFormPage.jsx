@@ -8,6 +8,42 @@ import Swal from "sweetalert2";
 
 import "../styles/photos.css";
 
+const LEGACY_VERSION_CODES = new Set([
+	"REPLICA",
+	"PLAYER_ISSUE",
+	"MATCH_WORN",
+]);
+
+const getShirtVersionOptions = (options) => {
+	const shirtVersions = Array.isArray(options.shirt_versions)
+		? options.shirt_versions
+		: [];
+
+	if (shirtVersions.length > 0) {
+		return shirtVersions.map((version) => ({
+			value: version.code,
+			label: version.name,
+			manualValueRecommended: version.manual_value_recommended,
+			valuationNote: version.valuation_note,
+		}));
+	}
+
+	return options.technologies || [];
+};
+
+const getKitTypeOptions = (options) => {
+	if (Array.isArray(options.kit_types) && options.kit_types.length > 0) {
+		return options.kit_types.map((kitType) => ({
+			id: kitType.id,
+			slug: kitType.slug,
+			value: kitType.name,
+			label: kitType.name,
+		}));
+	}
+
+	return options.types || [];
+};
+
 const EditShirtFormPage = () => {
 	const { t } = useTranslation();
 	const navigate = useNavigate();
@@ -71,6 +107,12 @@ const EditShirtFormPage = () => {
 	// User
 	const [isPro, setIsPro] = useState(false);
 	const MAX_PHOTOS = isPro ? 20 : 5;
+	const selectedShirtVersion = technologyOptions.find(
+		(option) => option.value === technology,
+	);
+	const selectedKitType = typeOptions.find(
+		(option) => option.value === kitType,
+	);
 
 	// Refs for drag and drop
 	const dragItem = useRef(null);
@@ -81,12 +123,13 @@ const EditShirtFormPage = () => {
 		const fetchOptionsAndUser = async () => {
 			try {
 				const optionsRes = await api.get("/options/");
-				const { sizes, conditions, technologies, types } =
-					optionsRes.data;
+					const { sizes, conditions } = optionsRes.data;
 				setSizeOptions(sizes);
-				setConditionOptions(conditions);
-				setTechnologyOptions(technologies);
-				setTypeOptions(types);
+					setConditionOptions(conditions);
+					setTechnologyOptions(
+						getShirtVersionOptions(optionsRes.data),
+					);
+					setTypeOptions(getKitTypeOptions(optionsRes.data));
 
 				const userRes = await api.get("/auth/user/");
 				if (userRes.data.profile?.is_pro === true) {
@@ -107,10 +150,10 @@ const EditShirtFormPage = () => {
 
 				setTeamName(kit.team.name);
 				setSeason(kit.season);
-				setKitType(kit.kit_type);
+					setKitType(kit.kit_type_display || kit.kit_type);
 				setSize(data.size);
 				setCondition(data.condition);
-				setTechnology(data.shirt_technology);
+				setTechnology(data.shirt_version_code || data.shirt_technology);
 				setForSale(data.for_sale);
 				setManualValue(
 					data.manual_value ? data.manual_value.toString() : "",
@@ -328,9 +371,18 @@ const EditShirtFormPage = () => {
 		formData.append("team_name", teamName);
 		formData.append("season", season);
 		formData.append("kit_type", kitType);
+		if (selectedKitType?.id) {
+			formData.append("kit_type_id", selectedKitType.id);
+		}
+		if (selectedKitType?.slug) {
+			formData.append("kit_type_slug", selectedKitType.slug);
+		}
 		formData.append("size", size);
 		formData.append("condition", condition);
-		formData.append("shirt_technology", technology);
+		formData.append("shirt_version_code", technology);
+		if (LEGACY_VERSION_CODES.has(technology)) {
+			formData.append("shirt_technology", technology);
+		}
 		formData.append("for_sale", forSale);
 		formData.append("manual_value", manualValue);
 		formData.append("player_name", playerName);
@@ -1037,7 +1089,7 @@ const EditShirtFormPage = () => {
 											)}
 										</div>
 
-										{/* Technology */}
+										{/* Shirt version */}
 										<div className="col-6">
 											<div className="form-floating">
 												<select
@@ -1071,13 +1123,26 @@ const EditShirtFormPage = () => {
 															>
 																{opt.label}
 															</option>
-														),
-													)}
-												</select>
-												<label htmlFor="floatingTech">
-													Technology
-												</label>
-											</div>
+																),
+															)}
+														</select>
+														<label htmlFor="floatingTech">
+															{t("forms.technology")}
+														</label>
+													</div>
+											{/* <div className="form-text">
+												{t("forms.technologyHelp")}
+											</div> */}
+											{selectedShirtVersion?.manualValueRecommended && (
+												<div className="form-text text-warning-emphasis">
+													{t("forms.shirtVersionManualValueRecommended")}
+												</div>
+											)}
+											{selectedShirtVersion?.valuationNote && (
+												<div className="form-text">
+													{selectedShirtVersion.valuationNote}
+												</div>
+											)}
 											{/* Error */}
 											{technologyError && (
 												<div className="text-danger mt-2 small d-flex align-items-center">

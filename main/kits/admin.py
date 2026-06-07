@@ -6,7 +6,22 @@ from django.db.models import Count
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.models import User
 
-from .models import Team, Kit, UserKit, UserKitImage, Profile, Country, League, KitReport, Conversation, Message
+from .models import (
+    Conversation,
+    Country,
+    Kit,
+    KitReport,
+    KitType,
+    KitTypeAlias,
+    League,
+    Message,
+    Profile,
+    ShirtVersion,
+    Team,
+    TeamSeasonKitType,
+    UserKit,
+    UserKitImage,
+)
 from .forms import MergeTeamForm
 
 class UserKitImageInline(admin.TabularInline):
@@ -26,6 +41,36 @@ class KitAdmin(admin.ModelAdmin):
     list_display = ('team', 'season', 'kit_type', 'estimated_price')
     list_filter = ('season', 'kit_type', 'team__is_verified')
     search_fields = ('team__name', 'season', 'kit_type')
+
+
+class KitTypeAdmin(admin.ModelAdmin):
+    list_display = ('name', 'canonical_code', 'category', 'status', 'default_visibility', 'sort_order')
+    list_filter = ('category', 'status', 'default_visibility')
+    search_fields = ('name', 'slug', 'canonical_code')
+
+
+class KitTypeAliasAdmin(admin.ModelAdmin):
+    list_display = ('alias_normalized', 'kit_type', 'display_alias', 'created_at')
+    search_fields = ('alias_normalized', 'display_alias', 'kit_type__name')
+
+
+class TeamSeasonKitTypeAdmin(admin.ModelAdmin):
+    list_display = ('team', 'season', 'kit_type', 'status', 'source', 'created_at')
+    list_filter = ('status', 'source', 'season')
+    search_fields = ('team__name', 'season', 'kit_type__name')
+
+
+class ShirtVersionAdmin(admin.ModelAdmin):
+    list_display = (
+        'code',
+        'name',
+        'valuation_multiplier',
+        'manual_value_recommended',
+        'is_active',
+        'sort_order',
+    )
+    list_filter = ('manual_value_recommended', 'is_active')
+    search_fields = ('code', 'name', 'description')
 
 
 @admin.action(description='Merge selected teams into one')
@@ -164,6 +209,10 @@ class MessageAdmin(admin.ModelAdmin):
 admin.site.register(Team, TeamAdmin)
 admin.site.register(Kit, KitAdmin)
 admin.site.register(UserKit, UserKitAdmin)
+admin.site.register(KitType, KitTypeAdmin)
+admin.site.register(KitTypeAlias, KitTypeAliasAdmin)
+admin.site.register(TeamSeasonKitType, TeamSeasonKitTypeAdmin)
+admin.site.register(ShirtVersion, ShirtVersionAdmin)
 admin.site.register(KitReport, KitReportAdmin)
 admin.site.register(Conversation, ConversationAdmin)
 admin.site.register(Message, MessageAdmin)

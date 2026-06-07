@@ -1,9 +1,46 @@
 from rest_framework import serializers
-from .models import Country, League, Team, Kit, UserKit, UserKitImage, WishlistItem, User, Profile, KitComment, KitReport, Conversation, Message, Notification, CollectionValueSnapshot, CANONICAL_WISHLIST_KIT_TYPES, build_team_slug, normalize_wishlist_kit_type
+from .models import Country, League, Team, Kit, KitType, KitTypeAlias, UserKit, UserKitImage, WishlistItem, User, Profile, KitComment, KitReport, Conversation, Message, Notification, CollectionValueSnapshot, ShirtVersion, CANONICAL_WISHLIST_KIT_TYPES, build_team_slug, normalize_wishlist_kit_type
 from django.contrib.auth.models import User
 from dj_rest_auth.serializers import UserDetailsSerializer
 import json
 from urllib.parse import urlencode
+
+
+def normalize_catalog_name(value):
+    return ' '.join((value or '').strip().lower().split())
+
+
+def resolve_approved_kit_type(*, kit_type_id=None, kit_type_slug=None, legacy_name=None):
+    queryset = KitType.objects.filter(status=KitType.STATUS_APPROVED)
+
+    if kit_type_id not in (None, ''):
+        try:
+            resolved = queryset.filter(pk=int(kit_type_id)).first()
+        except (TypeError, ValueError):
+            resolved = None
+        if resolved is None:
+            raise serializers.ValidationError({'kit_type_id': 'Shirt type is invalid.'})
+        return resolved
+
+    if kit_type_slug not in (None, ''):
+        resolved = queryset.filter(slug=str(kit_type_slug).strip()).first()
+        if resolved is None:
+            raise serializers.ValidationError({'kit_type_slug': 'Shirt type is invalid.'})
+        return resolved
+
+    normalized_name = normalize_catalog_name(legacy_name)
+    if not normalized_name:
+        return None
+
+    resolved = queryset.filter(name__iexact=' '.join((legacy_name or '').strip().split())).first()
+    if resolved is not None:
+        return resolved
+
+    alias = KitTypeAlias.objects.select_related('kit_type').filter(
+        alias_normalized=normalized_name,
+        kit_type__status=KitType.STATUS_APPROVED,
+    ).first()
+    return alias.kit_type if alias else None
 
 
 class CommentAuthorSerializer(serializers.ModelSerializer):
@@ -345,10 +382,34 @@ class LeagueSerializer(serializers.ModelSerializer):
 # Kit Serializer
 class KitSerializer(serializers.ModelSerializer):
     team = TeamSerializer(read_only=True)
+    kit_type_id = serializers.IntegerField(source='kit_type_ref_id', read_only=True, allow_null=True)
+    kit_type_slug = serializers.SerializerMethodField()
+    kit_type_display = serializers.SerializerMethodField()
+    kit_type_canonical_code = serializers.SerializerMethodField()
 
     class Meta:
         model = Kit
-        fields = ['id', 'team', 'season', 'kit_type', 'estimated_price', 'main_image']
+        fields = [
+            'id',
+            'team',
+            'season',
+            'kit_type',
+            'kit_type_id',
+            'kit_type_slug',
+            'kit_type_display',
+            'kit_type_canonical_code',
+            'estimated_price',
+            'main_image',
+        ]
+
+    def get_kit_type_slug(self, obj):
+        return obj.kit_type_ref.slug if obj.kit_type_ref_id else None
+
+    def get_kit_type_display(self, obj):
+        return obj.kit_type_ref.name if obj.kit_type_ref_id else obj.kit_type
+
+    def get_kit_type_canonical_code(self, obj):
+        return obj.kit_type_ref.canonical_code if obj.kit_type_ref_id else None
 
 
 class KitSearchSuggestionSerializer(serializers.Serializer):
@@ -383,9 +444,10 @@ class WishlistToggleSerializer(serializers.Serializer):
 
     def validate_kit_type(self, value):
         normalized_type = normalize_wishlist_kit_type(value)
-        if normalized_type not in CANONICAL_WISHLIST_KIT_TYPES:
+        dynamic_type = resolve_approved_kit_type(legacy_name=normalized_type)
+        if normalized_type not in CANONICAL_WISHLIST_KIT_TYPES and dynamic_type is None:
             raise serializers.ValidationError('Kit type is invalid.')
-        return normalized_type
+        return dynamic_type.name if dynamic_type is not None else normalized_type
 
     def validate_source_userkit_id(self, value):
         if value is None:
@@ -427,6 +489,10 @@ class WishlistItemSerializer(serializers.ModelSerializer):
     has_uploads = serializers.SerializerMethodField()
     owner_username = serializers.CharField(source='user.username', read_only=True)
     url = serializers.SerializerMethodField()
+    kit_type_id = serializers.IntegerField(source='kit_type_ref_id', read_only=True, allow_null=True)
+    kit_type_slug = serializers.SerializerMethodField()
+    kit_type_display = serializers.SerializerMethodField()
+    kit_type_canonical_code = serializers.SerializerMethodField()
 
     class Meta:
         model = WishlistItem
@@ -437,6 +503,10 @@ class WishlistItemSerializer(serializers.ModelSerializer):
             'team_slug',
             'season',
             'kit_type',
+            'kit_type_id',
+            'kit_type_slug',
+            'kit_type_display',
+            'kit_type_canonical_code',
             'source_userkit_id',
             'preview_image',
             'has_uploads',
@@ -447,6 +517,15 @@ class WishlistItemSerializer(serializers.ModelSerializer):
 
     def get_team_slug(self, obj):
         return build_team_slug(obj.team.name)
+
+    def get_kit_type_slug(self, obj):
+        return obj.kit_type_ref.slug if obj.kit_type_ref_id else None
+
+    def get_kit_type_display(self, obj):
+        return obj.kit_type_ref.name if obj.kit_type_ref_id else obj.kit_type
+
+    def get_kit_type_canonical_code(self, obj):
+        return obj.kit_type_ref.canonical_code if obj.kit_type_ref_id else None
 
     def get_preview_image(self, obj):
         preview_map = self.context.get('wishlist_preview_map', {})
@@ -468,6 +547,7 @@ class UserKitImageSerializer(serializers.ModelSerializer):
 # UserKit Serializer
 class UserKitSerializer(serializers.ModelSerializer):
     PRIVATE_NOTE_MAX_LENGTH = 2000
+    LEGACY_VERSION_CODES = {'REPLICA', 'PLAYER_ISSUE', 'MATCH_WORN'}
 
     # Read-only nested serializers
     kit = KitSerializer(read_only=True)
@@ -476,6 +556,11 @@ class UserKitSerializer(serializers.ModelSerializer):
     size_display = serializers.CharField(source='get_size_display', read_only=True)
     condition_display = serializers.CharField(source='get_condition_display', read_only=True)
     technology_display = serializers.CharField(source='get_shirt_technology_display', read_only=True)
+    shirt_version_id = serializers.IntegerField(read_only=True, allow_null=True)
+    shirt_version_code = serializers.SerializerMethodField()
+    shirt_version_display = serializers.SerializerMethodField()
+    shirt_version_manual_value_recommended = serializers.SerializerMethodField()
+    shirt_version_valuation_note = serializers.SerializerMethodField()
 
     likes_count = serializers.IntegerField(read_only=True)
     comments_count = serializers.SerializerMethodField()
@@ -486,7 +571,9 @@ class UserKitSerializer(serializers.ModelSerializer):
     # Write-only fields for creating/updating UserKit
     team_name = serializers.CharField(write_only=True)
     season = serializers.CharField(write_only=True)
-    kit_type = serializers.CharField(write_only=True)
+    kit_type = serializers.CharField(write_only=True, required=False)
+    kit_type_id = serializers.IntegerField(write_only=True, required=False)
+    kit_type_slug = serializers.CharField(write_only=True, required=False)
     new_images = serializers.ListField(
         child=serializers.ImageField(), write_only=True, required=False
     )
@@ -507,13 +594,16 @@ class UserKitSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'user', 
             # Read-only fields
-            'kit', 'images', 'condition_display', 'technology_display', 'final_value', 'size_display', 'added_at', 'is_owner', 'owner_id', 'owner_username', 'owner_avatar',
+            'kit', 'images', 'condition_display', 'technology_display', 'shirt_version_id', 'shirt_version_code', 'shirt_version_display', 'shirt_version_manual_value_recommended', 'shirt_version_valuation_note', 'final_value', 'size_display', 'added_at', 'is_owner', 'owner_id', 'owner_username', 'owner_avatar',
             # Write-only fields
-            'team_name', 'season', 'kit_type', 'new_images', 'deleted_images', 'images_order',
+            'team_name', 'season', 'kit_type', 'kit_type_id', 'kit_type_slug', 'new_images', 'deleted_images', 'images_order',
             # Modifiable fields
             'condition', 'shirt_technology', 'size', 'for_sale', 'manual_value', 'likes_count', 'comments_count', 'is_liked', 'valuation_warning', 'player_name', 'player_number', 'private_note', 'offer_link', 'in_the_collection', 'has_private_note'
         ]
-        read_only_fields = ['user', 'final_value', 'kit', 'images', 'condition_display', 'technology_display', 'size_display', 'added_at', 'is_owner', 'owner_id', 'owner_username', 'owner_avatar', 'likes_count', 'comments_count', 'is_liked', 'valuation_warning', 'has_private_note']
+        read_only_fields = ['user', 'final_value', 'kit', 'images', 'condition_display', 'technology_display', 'shirt_version_id', 'shirt_version_code', 'shirt_version_display', 'shirt_version_manual_value_recommended', 'shirt_version_valuation_note', 'size_display', 'added_at', 'is_owner', 'owner_id', 'owner_username', 'owner_avatar', 'likes_count', 'comments_count', 'is_liked', 'valuation_warning', 'has_private_note']
+        extra_kwargs = {
+            'shirt_technology': {'required': False},
+        }
     
     # Getting is_owner field
     def get_is_owner(self, obj):
@@ -535,6 +625,18 @@ class UserKitSerializer(serializers.ModelSerializer):
     def get_valuation_warning(self, obj):
         return obj.get_valuation_warning()
 
+    def get_shirt_version_code(self, obj):
+        return obj.shirt_version.code if obj.shirt_version_id else obj.shirt_technology
+
+    def get_shirt_version_display(self, obj):
+        return obj.shirt_version.name if obj.shirt_version_id else obj.get_shirt_technology_display()
+
+    def get_shirt_version_manual_value_recommended(self, obj):
+        return obj.shirt_version.manual_value_recommended if obj.shirt_version_id else False
+
+    def get_shirt_version_valuation_note(self, obj):
+        return obj.shirt_version.valuation_note if obj.shirt_version_id else ''
+
     def get_has_private_note(self, obj):
         return bool((obj.private_note or '').strip()) if self.get_is_owner(obj) else False
 
@@ -545,6 +647,78 @@ class UserKitSerializer(serializers.ModelSerializer):
                 f'Private note cannot be longer than {self.PRIVATE_NOTE_MAX_LENGTH} characters.'
             )
         return cleaned
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        raw_type_id = attrs.pop('kit_type_id', None)
+        raw_type_slug = attrs.pop('kit_type_slug', None)
+        legacy_type = attrs.get('kit_type')
+        requested_kit_type = resolve_approved_kit_type(
+            kit_type_id=raw_type_id,
+            kit_type_slug=raw_type_slug,
+            legacy_name=legacy_type,
+        )
+
+        if requested_kit_type is not None:
+            attrs['resolved_kit_type'] = requested_kit_type
+            attrs['kit_type'] = requested_kit_type.name
+        elif self.instance is None and not legacy_type:
+            raise serializers.ValidationError({'kit_type': 'Shirt type is required.'})
+
+        raw_code = self.initial_data.get('shirt_version_code')
+        raw_id = self.initial_data.get('shirt_version_id')
+        requested_version = None
+
+        if raw_code not in (None, ''):
+            requested_version = ShirtVersion.objects.filter(
+                code=str(raw_code).strip(),
+                is_active=True,
+            ).first()
+            if requested_version is None:
+                raise serializers.ValidationError({
+                    'shirt_version_code': 'Shirt version is invalid or inactive.'
+                })
+
+        if raw_id not in (None, ''):
+            try:
+                requested_by_id = ShirtVersion.objects.filter(
+                    pk=int(raw_id),
+                    is_active=True,
+                ).first()
+            except (TypeError, ValueError):
+                requested_by_id = None
+
+            if requested_by_id is None:
+                raise serializers.ValidationError({
+                    'shirt_version_id': 'Shirt version is invalid or inactive.'
+                })
+            if requested_version is not None and requested_version.pk != requested_by_id.pk:
+                raise serializers.ValidationError({
+                    'shirt_version_id': 'Shirt version id and code do not match.'
+                })
+            requested_version = requested_by_id
+
+        legacy_code = attrs.get('shirt_technology')
+        if requested_version is None and legacy_code:
+            requested_version = ShirtVersion.objects.filter(
+                code=legacy_code,
+                is_active=True,
+            ).first()
+
+        if requested_version is not None:
+            attrs['shirt_version'] = requested_version
+            if requested_version.code in self.LEGACY_VERSION_CODES:
+                attrs['shirt_technology'] = requested_version.code
+            elif self.instance is None:
+                attrs['shirt_technology'] = 'REPLICA'
+            else:
+                attrs.pop('shirt_technology', None)
+        elif self.instance is None and not legacy_code:
+            raise serializers.ValidationError({
+                'shirt_version_code': 'Shirt version is required.'
+            })
+
+        return attrs
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
@@ -562,6 +736,7 @@ class UserKitSerializer(serializers.ModelSerializer):
         team_name = validated_data.pop('team_name')
         season = validated_data.pop('season')
         kit_type = validated_data.pop('kit_type')
+        kit_type_ref = validated_data.pop('resolved_kit_type', None)
         if 'in_the_collection' not in self.initial_data:
             validated_data['in_the_collection'] = True
 
@@ -574,7 +749,15 @@ class UserKitSerializer(serializers.ModelSerializer):
             team = Team.objects.create(name=clean_team_name)
 
         # Get or create the Kit
-        kit, _ = Kit.objects.get_or_create(team=team, season=season, kit_type=kit_type, defaults={'estimated_price': 0})
+        kit, _ = Kit.objects.get_or_create(
+            team=team,
+            season=season,
+            kit_type=kit_type,
+            defaults={'estimated_price': 0, 'kit_type_ref': kit_type_ref},
+        )
+        if kit_type_ref is not None and kit.kit_type_ref_id != kit_type_ref.id:
+            kit.kit_type_ref = kit_type_ref
+            kit.save(update_fields=['kit_type_ref'])
 
         # Create the UserKit
         user_kit = UserKit.objects.create(kit=kit, **validated_data)
@@ -594,6 +777,7 @@ class UserKitSerializer(serializers.ModelSerializer):
         team_name = validated_data.pop('team_name', None)
         season = validated_data.pop('season', None)
         kit_type = validated_data.pop('kit_type', None)
+        kit_type_ref = validated_data.pop('resolved_kit_type', None)
 
         if team_name and season and kit_type:
             
@@ -608,8 +792,11 @@ class UserKitSerializer(serializers.ModelSerializer):
                 team=team, 
                 season=season, 
                 kit_type=kit_type, 
-                defaults={'estimated_price': 0}
+                defaults={'estimated_price': 0, 'kit_type_ref': kit_type_ref}
             )
+            if kit_type_ref is not None and kit.kit_type_ref_id != kit_type_ref.id:
+                kit.kit_type_ref = kit_type_ref
+                kit.save(update_fields=['kit_type_ref'])
             
             instance.kit = kit
 

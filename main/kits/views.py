@@ -16,7 +16,7 @@ from django.utils import timezone
 from urllib.parse import urlencode
 import re
 
-from .models import League, UserKit, UserKitImage, WishlistItem, Kit, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country, Follow, KitComment, KitCommentLike, KitReport, Conversation, Message, Notification, CollectionValueSnapshot, calculate_collection_total_value, record_collection_value_snapshot, build_team_slug, normalize_wishlist_kit_type
+from .models import League, UserKit, UserKitImage, WishlistItem, Kit, KitType, ShirtVersion, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country, Follow, KitComment, KitCommentLike, KitReport, Conversation, Message, Notification, CollectionValueSnapshot, calculate_collection_total_value, record_collection_value_snapshot, build_team_slug, normalize_wishlist_kit_type
 from .serializers import LeagueSerializer, UserKitSerializer, WishlistItemSerializer, WishlistToggleSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer, CountrySerializer, KitCommentSerializer, KitCommentWriteSerializer, KitReportSerializer, ConversationListSerializer, ConversationDetailSerializer, ConversationStartSerializer, MessageSerializer, MessageWriteSerializer, KitSearchSuggestionSerializer, NotificationSerializer, CollectionValueSnapshotSerializer
 
 
@@ -612,6 +612,8 @@ def get_public_user_kits_queryset():
     ).select_related(
         'kit',
         'kit__team',
+        'kit__kit_type_ref',
+        'shirt_version',
         'user',
     ).prefetch_related(
         'images',
@@ -637,6 +639,8 @@ def get_following_feed_queryset(user):
     ).select_related(
         'kit',
         'kit__team',
+        'kit__kit_type_ref',
+        'shirt_version',
         'user',
         'user__profile',
     ).prefetch_related(
@@ -674,7 +678,7 @@ class MyCollectionAPI(generics.ListCreateAPIView):
     def get_queryset(self):
         # Return only kits of the logged-in user
         return UserKit.objects.filter(user=self.request.user)\
-            .select_related('kit', 'kit__team')\
+            .select_related('kit', 'kit__team', 'kit__kit_type_ref', 'shirt_version')\
             .annotate(likes_count=Count('likes', distinct=True), comments_count=Count('comments', distinct=True))\
             .order_by('-added_at')
     
@@ -732,7 +736,7 @@ class MyCollectionDetailAPI(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         return UserKit.objects.filter(user=self.request.user)\
-            .select_related('kit', 'kit__team')\
+            .select_related('kit', 'kit__team', 'kit__kit_type_ref', 'shirt_version')\
             .prefetch_related('images')\
             .annotate(likes_count=Count('likes', distinct=True), comments_count=Count('comments', distinct=True))\
             .order_by('-added_at')
@@ -746,6 +750,7 @@ class MyCollectionDetailAPI(generics.RetrieveUpdateDestroyAPIView):
             'size': instance.size,
             'condition': instance.condition,
             'shirt_technology': instance.shirt_technology,
+            'shirt_version_id': instance.shirt_version_id,
         }
 
         updated_instance = serializer.save()
@@ -760,6 +765,7 @@ class MyCollectionDetailAPI(generics.RetrieveUpdateDestroyAPIView):
             previous_state['size'] != updated_instance.size
             or previous_state['condition'] != updated_instance.condition
             or previous_state['shirt_technology'] != updated_instance.shirt_technology
+            or previous_state['shirt_version_id'] != updated_instance.shirt_version_id
         ):
             reason = CollectionValueSnapshot.REASON_VALUE_UPDATED
         else:
@@ -791,7 +797,7 @@ class UserCollectionAPI(generics.ListAPIView):
 
         # Return kits of the specified user
         return UserKit.objects.filter(user__username=username)\
-            .select_related('kit', 'kit__team')\
+            .select_related('kit', 'kit__team', 'kit__kit_type_ref', 'shirt_version')\
             .prefetch_related('images')\
             .annotate(likes_count=Count('likes', distinct=True), comments_count=Count('comments', distinct=True))\
             .order_by('-added_at')
@@ -902,17 +908,44 @@ class FollowingFeedAPI(APIView):
 
 # Endpoint: Catalog of all available kits (e.g., for selection when adding)
 class KitCatalogAPI(generics.ListAPIView):
-    queryset = Kit.objects.all()
+    queryset = Kit.objects.select_related('team', 'kit_type_ref').all()
     serializer_class = KitSerializer
 
 # Endpoint: Get options for kit attributes
 class KitOptionsView(APIView):
     def get(self, request):
+        kit_types = KitType.objects.filter(status=KitType.STATUS_APPROVED).order_by('sort_order', 'name', 'id')
+        shirt_versions = ShirtVersion.objects.filter(is_active=True).order_by('sort_order', 'name', 'id')
+
         return Response({
             "sizes": [{'value': key, 'label': label} for key, label in SIZE_CHOICES],
             "conditions": [{'value': key, 'label': label} for key, label in CONDITION_CHOICES],
             "technologies": [{'value': key, 'label': label} for key, label in SHIRT_TECHNOLOGIES],
             "types": [{'value': key, 'label': label} for key, label in SHIRT_TYPES],
+            "kit_types": [
+                {
+                    'id': kit_type.id,
+                    'name': kit_type.name,
+                    'slug': kit_type.slug,
+                    'canonical_code': kit_type.canonical_code,
+                    'category': kit_type.category,
+                    'default_visibility': kit_type.default_visibility,
+                    'sort_order': kit_type.sort_order,
+                }
+                for kit_type in kit_types
+            ],
+            "shirt_versions": [
+                {
+                    'id': version.id,
+                    'code': version.code,
+                    'name': version.name,
+                    'description': version.description,
+                    'manual_value_recommended': version.manual_value_recommended,
+                    'valuation_note': version.valuation_note,
+                    'sort_order': version.sort_order,
+                }
+                for version in shirt_versions
+            ],
         })
 
 
@@ -1035,7 +1068,9 @@ class MyWishlistAPI(WishlistListMixin, generics.ListAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return WishlistItem.objects.filter(user=self.request.user).select_related('team', 'user', 'source_userkit')
+        return WishlistItem.objects.filter(user=self.request.user).select_related(
+            'team', 'user', 'source_userkit', 'kit_type_ref'
+        )
 
 
 class UserWishlistAPI(WishlistListMixin, generics.ListAPIView):
@@ -1044,7 +1079,7 @@ class UserWishlistAPI(WishlistListMixin, generics.ListAPIView):
     def get_queryset(self):
         return WishlistItem.objects.filter(
             user__username=self.kwargs['username']
-        ).select_related('team', 'user', 'source_userkit')
+        ).select_related('team', 'user', 'source_userkit', 'kit_type_ref')
 
 
 class WishlistDetailAPI(generics.DestroyAPIView):
@@ -1052,7 +1087,9 @@ class WishlistDetailAPI(generics.DestroyAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return WishlistItem.objects.filter(user=self.request.user).select_related('team', 'user', 'source_userkit')
+        return WishlistItem.objects.filter(user=self.request.user).select_related(
+            'team', 'user', 'source_userkit', 'kit_type_ref'
+        )
 
 
 class WishlistToggleAPI(APIView):
@@ -1710,7 +1747,7 @@ class TopKitsByTeamAPI(generics.ListAPIView):
         team_id = self.kwargs['team_id']
         
         return UserKit.objects.filter(kit__team_id=team_id)\
-            .select_related('kit', 'kit__team', 'user')\
+            .select_related('kit', 'kit__team', 'kit__kit_type_ref', 'shirt_version', 'user')\
             .prefetch_related('images', 'likes')\
             .annotate(likes_count=Count('likes', distinct=True), comments_count=Count('comments', distinct=True))\
             .order_by('-likes_count', '-added_at')
@@ -1792,7 +1829,7 @@ class KitVariantsAPI(generics.ListAPIView):
             queryset = queryset.filter(get_history_type_filter(kit_type))
 
         return queryset\
-            .select_related('kit', 'kit__team', 'user')\
+            .select_related('kit', 'kit__team', 'kit__kit_type_ref', 'shirt_version', 'user')\
             .prefetch_related('images', 'likes')\
             .annotate(likes_count=Count('likes', distinct=True), comments_count=Count('comments', distinct=True))\
             .order_by('-likes_count', '-added_at')

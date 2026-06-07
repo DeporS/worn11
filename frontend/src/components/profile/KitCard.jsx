@@ -378,14 +378,14 @@ const KitCard = ({
 							</span>
 						</div>
 
-						{/* Technology & Size */}
+						{/* Shirt version & Size */}
 						<div className="justify-content-between text-muted small">
 							<span
 								title={t("kitCard.technology")}
 								className="d-flex align-items-center"
 							>
 								<i className="bi-layers me-2"></i>
-								{item.technology_display}
+								{item.shirt_version_display || item.technology_display}
 							</span>
 							<span
 								title={t("kitCard.size")}

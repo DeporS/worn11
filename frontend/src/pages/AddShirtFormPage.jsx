@@ -9,6 +9,42 @@ import Swal from "sweetalert2";
 
 import "../styles/photos.css";
 
+const LEGACY_VERSION_CODES = new Set([
+	"REPLICA",
+	"PLAYER_ISSUE",
+	"MATCH_WORN",
+]);
+
+const getShirtVersionOptions = (options) => {
+	const shirtVersions = Array.isArray(options.shirt_versions)
+		? options.shirt_versions
+		: [];
+
+	if (shirtVersions.length > 0) {
+		return shirtVersions.map((version) => ({
+			value: version.code,
+			label: version.name,
+			manualValueRecommended: version.manual_value_recommended,
+			valuationNote: version.valuation_note,
+		}));
+	}
+
+	return options.technologies || [];
+};
+
+const getKitTypeOptions = (options) => {
+	if (Array.isArray(options.kit_types) && options.kit_types.length > 0) {
+		return options.kit_types.map((kitType) => ({
+			id: kitType.id,
+			slug: kitType.slug,
+			value: kitType.name,
+			label: kitType.name,
+		}));
+	}
+
+	return options.types || [];
+};
+
 const AddShirtFormPage = () => {
 	const { t } = useTranslation();
 	const navigate = useNavigate();
@@ -65,6 +101,12 @@ const AddShirtFormPage = () => {
 	// User
 	const [isPro, setIsPro] = useState(false);
 	const MAX_PHOTOS = isPro ? 20 : 5;
+	const selectedShirtVersion = technologyOptions.find(
+		(option) => option.value === technology,
+	);
+	const selectedKitType = typeOptions.find(
+		(option) => option.value === kitType,
+	);
 
 	// Current year for season options
 	const currentYear = new Date().getFullYear();
@@ -158,13 +200,14 @@ const AddShirtFormPage = () => {
 	useEffect(() => {
 		api.get("/options/")
 			.then((response) => {
-				const { sizes, conditions, technologies, types } =
-					response.data;
+				const { sizes, conditions } = response.data;
 
 				setSizeOptions(sizes);
 				setConditionOptions(conditions);
-				setTechnologyOptions(technologies);
-				setTypeOptions(types);
+				setTechnologyOptions(
+					getShirtVersionOptions(response.data),
+				);
+				setTypeOptions(getKitTypeOptions(response.data));
 			})
 			.catch((err) => console.error("Failed to fetch options", err));
 
@@ -331,9 +374,18 @@ const AddShirtFormPage = () => {
 		formData.append("team_name", teamName);
 		formData.append("season", season);
 		formData.append("kit_type", kitType);
+		if (selectedKitType?.id) {
+			formData.append("kit_type_id", selectedKitType.id);
+		}
+		if (selectedKitType?.slug) {
+			formData.append("kit_type_slug", selectedKitType.slug);
+		}
 		formData.append("size", size);
 		formData.append("condition", condition);
-		formData.append("shirt_technology", technology);
+		formData.append("shirt_version_code", technology);
+		if (LEGACY_VERSION_CODES.has(technology)) {
+			formData.append("shirt_technology", technology);
+		}
 		formData.append("for_sale", forSale);
 		formData.append("manual_value", manualValue);
 		formData.append("player_name", playerName);
@@ -952,7 +1004,7 @@ const AddShirtFormPage = () => {
 											)}
 										</div>
 
-										{/* Technology */}
+										{/* Shirt version */}
 										<div className="col-6">
 											<div className="form-floating">
 												<select
@@ -986,13 +1038,26 @@ const AddShirtFormPage = () => {
 															>
 																{opt.label}
 															</option>
-														),
-													)}
-												</select>
-												<label htmlFor="floatingTech">
-													{t("forms.technology")}
-												</label>
-											</div>
+																),
+															)}
+														</select>
+														<label htmlFor="floatingTech">
+															{t("forms.technology")}
+														</label>
+													</div>
+											{/* <div className="form-text">
+												{t("forms.technologyHelp")}
+											</div> */}
+											{selectedShirtVersion?.manualValueRecommended && (
+												<div className="form-text text-warning-emphasis">
+													{t("forms.shirtVersionManualValueRecommended")}
+												</div>
+											)}
+											{selectedShirtVersion?.valuationNote && (
+												<div className="form-text">
+													{selectedShirtVersion.valuationNote}
+												</div>
+											)}
 											{/* Error */}
 											{technologyError && (
 												<div className="text-danger mt-2 small d-flex align-items-center">
