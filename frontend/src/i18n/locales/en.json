@@ -409,6 +409,42 @@
 		"mergeConfirm": "This will merge the suggested type into the selected approved KitType.",
 		"selectMergeTarget": "Select an approved shirt type"
 	},
+	"moderation": {
+		"title": "Moderation",
+		"notAuthorized": "You are not allowed to access this page.",
+		"navigation": {
+			"kitTypes": "Kit types",
+			"teams": "Teams",
+			"reports": "Kit reports"
+		},
+		"kitTypes": {
+			"title": "Kit type suggestions"
+		},
+		"teams": {
+			"title": "Team verification",
+			"description": "Review user-created teams and decide whether they should be approved or merged."
+		},
+		"reports": {
+			"title": "Kit reports",
+			"description": "Review reports submitted for user-uploaded kits."
+		},
+		"comingSoon": "Coming soon",
+		"recentActions": "Recent moderation actions",
+		"noRecentActions": "No recent moderation actions.",
+		"active": "Active",
+		"undo": "Undo",
+		"undoConfirmTitle": "Undo moderation action?",
+		"undoConfirmText": "This will restore the suggestion to its previous state.",
+		"undoSuccess": "Moderation action undone.",
+		"undoError": "Could not undo this action.",
+		"undoConflict": "This action can no longer be safely undone because newer changes exist.",
+		"undone": "Undone",
+		"notReversible": "Cannot be undone",
+		"approvedSummary": "Approved {{type}} for {{team}} {{season}}",
+		"rejectedSummary": "Rejected {{type}} for {{team}} {{season}}",
+		"mergedSummary": "Merged {{source}} into {{target}}",
+		"mergeManualUndo": "Merge undo requires manual review."
+	},
 	"groups": {
 		"title": "Groups Page",
 		"description": "This is the Groups page."

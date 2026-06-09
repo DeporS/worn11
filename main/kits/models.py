@@ -449,6 +449,124 @@ class TeamSeasonKitType(models.Model):
         return f'{self.team.name} {self.season} {self.kit_type.name}'
 
 
+class KitTypeModerationAction(models.Model):
+    ACTION_APPROVE = 'approve'
+    ACTION_REJECT = 'reject'
+    ACTION_MERGE = 'merge'
+    ACTION_CHOICES = [
+        (ACTION_APPROVE, 'Approve'),
+        (ACTION_REJECT, 'Reject'),
+        (ACTION_MERGE, 'Merge'),
+    ]
+
+    actor = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='kit_type_moderation_actions',
+    )
+    action_type = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    team_season_kit_type = models.ForeignKey(
+        TeamSeasonKitType,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='moderation_actions',
+    )
+    source_kit_type = models.ForeignKey(
+        KitType,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='source_moderation_actions',
+    )
+    target_kit_type = models.ForeignKey(
+        KitType,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='target_moderation_actions',
+    )
+    team_name = models.CharField(max_length=100, blank=True, default='')
+    season = models.CharField(max_length=20, blank=True, default='')
+    source_kit_type_name = models.CharField(max_length=120, blank=True, default='')
+    target_kit_type_name = models.CharField(max_length=120, blank=True, default='')
+    previous_state = models.JSONField(default=dict, blank=True)
+    resulting_state = models.JSONField(default=dict, blank=True)
+    is_reversible = models.BooleanField(default=True)
+    undo_block_reason = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    undone_at = models.DateTimeField(null=True, blank=True)
+    undone_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='undone_kit_type_moderation_actions',
+    )
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [
+            models.Index(fields=['created_at', 'id']),
+            models.Index(fields=['action_type', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f'{self.get_action_type_display()} by {self.actor.username} at {self.created_at}'
+
+
+class TeamModerationAction(models.Model):
+    ACTION_APPROVE = 'approve'
+    ACTION_MERGE = 'merge'
+    ACTION_REJECT = 'reject'
+    ACTION_CHOICES = [
+        (ACTION_APPROVE, 'Approve'),
+        (ACTION_MERGE, 'Merge'),
+        (ACTION_REJECT, 'Reject'),
+    ]
+
+    actor = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='team_moderation_actions',
+    )
+    action_type = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    source_team_id_snapshot = models.IntegerField(null=True, blank=True)
+    source_team_name = models.CharField(max_length=100, blank=True, default='')
+    target_team = models.ForeignKey(
+        Team,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='team_moderation_actions',
+    )
+    target_team_name = models.CharField(max_length=100, blank=True, default='')
+    previous_state = models.JSONField(default=dict, blank=True)
+    resulting_state = models.JSONField(default=dict, blank=True)
+    summary = models.JSONField(default=dict, blank=True)
+    is_reversible = models.BooleanField(default=False)
+    undo_block_reason = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    undone_at = models.DateTimeField(null=True, blank=True)
+    undone_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='undone_team_moderation_actions',
+    )
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [
+            models.Index(fields=['created_at', 'id']),
+            models.Index(fields=['action_type', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f'{self.get_action_type_display()} team action by {self.actor.username} at {self.created_at}'
+
+
 # Football Kits (ex. Arsenal Home 2021/2022)
 class Kit(models.Model):
     team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name='kits')

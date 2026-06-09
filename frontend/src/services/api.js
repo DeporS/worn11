@@ -303,6 +303,13 @@ export const getAdminKitTypeSuggestions = async () => {
 	return response.data;
 };
 
+export const getAdminKitTypeModerationActions = async (limit = 20) => {
+	const response = await api.get("/admin/kit-type-moderation-actions/", {
+		params: { limit },
+	});
+	return response.data;
+};
+
 export const approveAdminTeamSeasonKitType = async (id) => {
 	const response = await api.post(`/admin/team-season-kit-types/${id}/approve/`);
 	return response.data;
@@ -317,6 +324,11 @@ export const mergeAdminTeamSeasonKitType = async (id, targetKitTypeId) => {
 	const response = await api.post(`/admin/team-season-kit-types/${id}/merge/`, {
 		target_kit_type_id: targetKitTypeId,
 	});
+	return response.data;
+};
+
+export const undoAdminKitTypeModerationAction = async (id) => {
+	const response = await api.post(`/admin/kit-type-moderation-actions/${id}/undo/`);
 	return response.data;
 };
 

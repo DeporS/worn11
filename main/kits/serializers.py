@@ -1,11 +1,11 @@
 from rest_framework import serializers
-from .models import Country, League, Team, Kit, KitType, KitTypeAlias, TeamSeasonKitType, UserKit, UserKitImage, WishlistItem, User, Profile, KitComment, KitReport, Conversation, Message, Notification, CollectionValueSnapshot, ShirtVersion, CANONICAL_WISHLIST_KIT_TYPES, build_team_slug, normalize_wishlist_kit_type
+from .models import Country, League, Team, Kit, KitType, KitTypeAlias, TeamSeasonKitType, KitTypeModerationAction, TeamModerationAction, UserKit, UserKitImage, WishlistItem, User, Profile, KitComment, KitReport, Conversation, Message, Notification, CollectionValueSnapshot, ShirtVersion, CANONICAL_WISHLIST_KIT_TYPES, build_team_slug, normalize_wishlist_kit_type
 from django.contrib.auth.models import User
 from dj_rest_auth.serializers import UserDetailsSerializer
 from django.utils.text import slugify
 import json
 from urllib.parse import urlencode
-from .permissions import is_staff_or_moderator
+from .permissions import can_undo_moderation_action, moderation_action_is_currently_undoable, is_staff_or_moderator
 
 
 def normalize_catalog_name(value):
@@ -543,6 +543,160 @@ class AdminKitTypeMergeSerializer(serializers.Serializer):
             raise serializers.ValidationError('Target shirt type must be an approved KitType.')
         self.context['target_kit_type'] = target
         return value
+
+
+class SimilarVerifiedTeamSerializer(serializers.ModelSerializer):
+    slug = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Team
+        fields = ['id', 'name', 'slug', 'logo']
+
+    def get_slug(self, obj):
+        return build_team_slug(obj.name)
+
+
+class TeamModerationListSerializer(serializers.ModelSerializer):
+    slug = serializers.SerializerMethodField()
+    league = serializers.SerializerMethodField()
+    preview_image = serializers.SerializerMethodField()
+    similar_verified_teams = serializers.SerializerMethodField()
+    seasons = serializers.SerializerMethodField()
+    kits_count = serializers.IntegerField(read_only=True)
+    userkits_count = serializers.IntegerField(read_only=True)
+    unique_users_count = serializers.IntegerField(read_only=True)
+    wishlist_count = serializers.IntegerField(read_only=True)
+    favorite_team_count = serializers.IntegerField(read_only=True)
+    can_reject = serializers.BooleanField(read_only=True)
+    reject_block_reason = serializers.CharField(read_only=True)
+
+    class Meta:
+        model = Team
+        fields = [
+            'id',
+            'name',
+            'slug',
+            'logo',
+            'league',
+            'is_verified',
+            'kits_count',
+            'userkits_count',
+            'unique_users_count',
+            'wishlist_count',
+            'favorite_team_count',
+            'seasons',
+            'preview_image',
+            'can_reject',
+            'reject_block_reason',
+            'similar_verified_teams',
+        ]
+
+    def get_slug(self, obj):
+        return build_team_slug(obj.name)
+
+    def get_league(self, obj):
+        if obj.league_id is None:
+            return None
+        return {
+            'id': obj.league_id,
+            'name': obj.league.name,
+        }
+
+    def get_preview_image(self, obj):
+        request = self.context.get('request')
+        preview_image = getattr(obj, 'preview_image', None)
+        if not preview_image:
+            return None
+        return request.build_absolute_uri(preview_image) if request else preview_image
+
+    def get_similar_verified_teams(self, obj):
+        serializer = SimilarVerifiedTeamSerializer(
+            getattr(obj, 'similar_verified_teams', []),
+            many=True,
+            context=self.context,
+        )
+        return serializer.data
+
+    def get_seasons(self, obj):
+        return getattr(obj, 'seasons', [])
+
+
+class TeamModerationMergeSerializer(serializers.Serializer):
+    target_team_id = serializers.IntegerField()
+
+
+class TeamModerationActionSerializer(serializers.ModelSerializer):
+    actor_username = serializers.CharField(source='actor.username', read_only=True)
+    undone_by_username = serializers.CharField(source='undone_by.username', read_only=True)
+
+    class Meta:
+        model = TeamModerationAction
+        fields = [
+            'id',
+            'action_type',
+            'actor_username',
+            'source_team_id_snapshot',
+            'source_team_name',
+            'target_team_name',
+            'summary',
+            'is_reversible',
+            'undo_block_reason',
+            'created_at',
+            'undone_at',
+            'undone_by_username',
+        ]
+
+
+class KitTypeModerationActionSerializer(serializers.ModelSerializer):
+    actor_username = serializers.CharField(source='actor.username', read_only=True)
+    undone_by_username = serializers.CharField(source='undone_by.username', read_only=True)
+    summary = serializers.SerializerMethodField()
+    can_undo = serializers.SerializerMethodField()
+
+    class Meta:
+        model = KitTypeModerationAction
+        fields = [
+            'id',
+            'action_type',
+            'actor_username',
+            'created_at',
+            'undone_at',
+            'undone_by_username',
+            'is_reversible',
+            'undo_block_reason',
+            'team_name',
+            'season',
+            'source_kit_type_name',
+            'target_kit_type_name',
+            'summary',
+            'can_undo',
+        ]
+
+    def get_summary(self, obj):
+        if obj.action_type == KitTypeModerationAction.ACTION_APPROVE:
+            return f'Approved {obj.source_kit_type_name} for {obj.team_name} {obj.season}'.strip()
+        if obj.action_type == KitTypeModerationAction.ACTION_REJECT:
+            return f'Rejected {obj.source_kit_type_name} for {obj.team_name} {obj.season}'.strip()
+        if obj.action_type == KitTypeModerationAction.ACTION_MERGE:
+            return f'Merged {obj.source_kit_type_name} into {obj.target_kit_type_name}'.strip()
+        return obj.action_type
+
+    def get_can_undo(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+
+        permission_check = self.context.get('can_undo_moderation_action', can_undo_moderation_action)
+        state_check = self.context.get(
+            'moderation_action_is_currently_undoable',
+            moderation_action_is_currently_undoable,
+        )
+
+        if not permission_check(request.user, obj):
+            return False
+
+        can_undo, _reason = state_check(obj)
+        return bool(can_undo)
 
 
 class ApprovedTeamSeasonKitTypeSerializer(serializers.ModelSerializer):

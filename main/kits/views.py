@@ -14,12 +14,14 @@ from django.db import transaction
 from django.db.models import Sum, Count, Exists, OuterRef, Value, BooleanField, Prefetch, Q, Subquery
 from django.contrib.auth.models import User
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from urllib.parse import urlencode
 import re
 
-from .models import League, UserKit, UserKitImage, WishlistItem, Kit, KitType, KitTypeAlias, TeamSeasonKitType, ShirtVersion, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country, Follow, KitComment, KitCommentLike, KitReport, Conversation, Message, Notification, CollectionValueSnapshot, calculate_collection_total_value, record_collection_value_snapshot, build_team_slug, normalize_wishlist_kit_type
-from .permissions import IsStaffOrModerator, is_staff_or_moderator
-from .serializers import LeagueSerializer, UserKitSerializer, WishlistItemSerializer, WishlistToggleSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer, CountrySerializer, KitCommentSerializer, KitCommentWriteSerializer, KitReportSerializer, ConversationListSerializer, ConversationDetailSerializer, ConversationStartSerializer, MessageSerializer, MessageWriteSerializer, KitSearchSuggestionSerializer, NotificationSerializer, CollectionValueSnapshotSerializer, AdminKitTypeSuggestionSerializer, AdminKitTypeMergeSerializer, ApprovedTeamSeasonKitTypeSerializer, normalize_catalog_name
+from .models import League, UserKit, UserKitImage, WishlistItem, Kit, KitType, KitTypeAlias, TeamSeasonKitType, KitTypeModerationAction, TeamModerationAction, ShirtVersion, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country, Follow, KitComment, KitCommentLike, KitReport, Conversation, Message, Notification, CollectionValueSnapshot, calculate_collection_total_value, record_collection_value_snapshot, build_team_slug, normalize_wishlist_kit_type
+from .permissions import IsStaffOrModerator, can_undo_moderation_action, moderation_action_is_currently_undoable, is_staff_or_moderator
+from .serializers import LeagueSerializer, UserKitSerializer, WishlistItemSerializer, WishlistToggleSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer, CountrySerializer, KitCommentSerializer, KitCommentWriteSerializer, KitReportSerializer, ConversationListSerializer, ConversationDetailSerializer, ConversationStartSerializer, MessageSerializer, MessageWriteSerializer, KitSearchSuggestionSerializer, NotificationSerializer, CollectionValueSnapshotSerializer, AdminKitTypeSuggestionSerializer, AdminKitTypeMergeSerializer, TeamModerationListSerializer, TeamModerationMergeSerializer, TeamModerationActionSerializer, KitTypeModerationActionSerializer, ApprovedTeamSeasonKitTypeSerializer, normalize_catalog_name
+from .team_moderation import TeamModerationConflict, TEAM_MERGE_UNDO_BLOCK_REASON, TEAM_REJECT_UNDO_BLOCK_REASON, approve_team, get_team_usage, merge_teams_safely, normalize_team_name_for_matching, reject_unused_team, team_name_tokens
 
 
 SUPPORTED_KIT_TYPES = [
@@ -319,6 +321,78 @@ def season_matches_year_fragment(season, year_fragment):
         return False
 
     return any(str(year).startswith(year_fragment) for year in parse_season_years(season))
+
+
+MERGE_UNDO_BLOCK_REASON = 'Merge undo requires manual review.'
+
+
+def serialize_datetime(value):
+    return value.isoformat() if value is not None else None
+
+
+def deserialize_datetime(value):
+    if not value:
+        return None
+    return parse_datetime(value)
+
+
+def snapshot_team_season_kit_type(row):
+    return {
+        'id': row.id,
+        'status': row.status,
+        'approved_by_id': row.approved_by_id,
+        'approved_at': serialize_datetime(row.approved_at),
+    }
+
+
+def snapshot_kit_type(kit_type):
+    return {
+        'id': kit_type.id,
+        'status': kit_type.status,
+        'approved_by_id': kit_type.approved_by_id,
+        'approved_at': serialize_datetime(kit_type.approved_at),
+        'merged_into_id': kit_type.merged_into_id,
+    }
+
+
+def apply_team_season_kit_type_snapshot(row, snapshot):
+    row.status = snapshot['status']
+    row.approved_by_id = snapshot['approved_by_id']
+    row.approved_at = deserialize_datetime(snapshot['approved_at'])
+    row.save(update_fields=['status', 'approved_by', 'approved_at'])
+
+
+def apply_kit_type_snapshot(kit_type, snapshot):
+    kit_type.status = snapshot['status']
+    kit_type.approved_by_id = snapshot['approved_by_id']
+    kit_type.approved_at = deserialize_datetime(snapshot['approved_at'])
+    kit_type.merged_into_id = snapshot.get('merged_into_id')
+    kit_type.save(update_fields=['status', 'approved_by', 'approved_at', 'merged_into'])
+
+
+def build_moderation_action_record(*, actor, action_type, suggestion=None, source_kit_type=None, target_kit_type=None, team_name=None, season=None, previous_state=None, resulting_state=None, is_reversible=True, undo_block_reason=''):
+    return KitTypeModerationAction.objects.create(
+        actor=actor,
+        action_type=action_type,
+        team_season_kit_type=suggestion,
+        source_kit_type=source_kit_type,
+        target_kit_type=target_kit_type,
+        team_name=team_name if team_name is not None else (suggestion.team.name if suggestion is not None else ''),
+        season=season if season is not None else (suggestion.season if suggestion is not None else ''),
+        source_kit_type_name=(source_kit_type.name if source_kit_type is not None else ''),
+        target_kit_type_name=(target_kit_type.name if target_kit_type is not None else ''),
+        previous_state=previous_state or {},
+        resulting_state=resulting_state or {},
+        is_reversible=is_reversible,
+        undo_block_reason=undo_block_reason,
+    )
+
+
+def moderation_action_conflict_response():
+    return Response(
+        {'detail': 'This action can no longer be safely undone because newer changes exist.'},
+        status=status.HTTP_409_CONFLICT,
+    )
 
 
 def get_season_sort_year(season):
@@ -982,6 +1056,249 @@ class TeamResolveAPI(APIView):
         return Response(serializer.data)
 
 
+def get_similar_verified_teams_for_source(source_team, verified_teams, limit=5):
+    source_normalized = normalize_team_name_for_matching(source_team.name)
+    source_tokens = team_name_tokens(source_team.name)
+    scored = []
+
+    for candidate in verified_teams:
+        if candidate.id == source_team.id:
+            continue
+
+        candidate_normalized = normalize_team_name_for_matching(candidate.name)
+        candidate_tokens = team_name_tokens(candidate.name)
+        shared_tokens = source_tokens & candidate_tokens
+        contains_match = (
+            source_normalized in candidate_normalized
+            or candidate_normalized in source_normalized
+        ) if source_normalized and candidate_normalized else False
+
+        if not shared_tokens and not contains_match:
+            continue
+
+        scored.append((
+            0 if source_normalized == candidate_normalized else 1,
+            -len(shared_tokens),
+            0 if contains_match else 1,
+            candidate.name.lower(),
+            candidate.id,
+            candidate,
+        ))
+
+    scored.sort()
+    return [item[-1] for item in scored[:limit]]
+
+
+def get_unverified_team_preview_map(teams):
+    team_ids = [team.id for team in teams]
+    if not team_ids:
+        return {}
+
+    preview_images = UserKitImage.objects.filter(
+        user_kit__kit__team_id__in=team_ids,
+    ).select_related(
+        'user_kit__kit',
+    ).order_by(
+        'user_kit__kit__team_id',
+        'order',
+        'created_at',
+        'id',
+    )
+
+    preview_map = {}
+    for image in preview_images:
+        team_id = image.user_kit.kit.team_id
+        if team_id in preview_map:
+            continue
+        preview_map[team_id] = image.image.url
+
+    return preview_map
+
+
+class AdminUnverifiedTeamsAPI(APIView):
+    permission_classes = [IsAuthenticated, IsStaffOrModerator]
+    DEFAULT_LIMIT = 20
+    MAX_LIMIT = 50
+
+    def get(self, request):
+        raw_limit = request.query_params.get('limit', self.DEFAULT_LIMIT)
+        try:
+            limit = int(raw_limit)
+        except (TypeError, ValueError):
+            limit = self.DEFAULT_LIMIT
+
+        limit = max(1, min(limit, self.MAX_LIMIT))
+        queryset = Team.objects.filter(
+            is_verified=False,
+        ).select_related(
+            'league',
+        ).annotate(
+            kits_count=Count('kits', distinct=True),
+            userkits_count=Count('kits__owned_by', distinct=True),
+            unique_users_count=Count('kits__owned_by__user', distinct=True),
+            wishlist_count=Count('wishlist_items', distinct=True),
+            favorite_team_count=Count('fans', distinct=True),
+            team_season_type_count=Count('season_kit_types', distinct=True),
+        ).prefetch_related(
+            'kits',
+            'season_kit_types',
+        ).order_by(
+            '-userkits_count',
+            'name',
+            'id',
+        )
+
+        teams = list(queryset[: limit + 1])
+        has_more = len(teams) > limit
+        teams = teams[:limit]
+        preview_map = get_unverified_team_preview_map(teams)
+        verified_teams = list(
+            Team.objects.filter(is_verified=True).select_related('league').order_by('name', 'id')
+        )
+
+        for team in teams:
+            seasons = {
+                kit.season
+                for kit in team.kits.all()
+                if (kit.season or '').strip()
+            }
+            seasons.update(
+                row.season
+                for row in team.season_kit_types.all()
+                if (row.season or '').strip()
+            )
+            team.seasons = sorted(seasons, key=get_season_sort_year, reverse=True)
+            team.preview_image = preview_map.get(team.id)
+            team.can_reject = not any([
+                team.kits_count,
+                team.userkits_count,
+                team.wishlist_count,
+                team.favorite_team_count,
+                team.team_season_type_count,
+            ])
+            team.reject_block_reason = '' if team.can_reject else 'This team is in use and cannot be rejected. Merge it into an existing team instead.'
+            team.similar_verified_teams = get_similar_verified_teams_for_source(team, verified_teams)
+
+        serializer = TeamModerationListSerializer(
+            teams,
+            many=True,
+            context={'request': request},
+        )
+        return Response({
+            'results': serializer.data,
+            'has_more': has_more,
+        })
+
+
+class AdminTeamApproveAPI(APIView):
+    permission_classes = [IsAuthenticated, IsStaffOrModerator]
+
+    def post(self, request, team_id):
+        team = get_object_or_404(Team, pk=team_id)
+
+        try:
+            updated_team, action = approve_team(team_id=team.id, actor=request.user)
+        except TeamModerationConflict as exc:
+            detail = exc.raw_detail if isinstance(exc.raw_detail, dict) else {'detail': exc.raw_detail}
+            return Response(detail, status=exc.status_code)
+
+        usage = get_team_usage(updated_team)
+        updated_team.kits_count = usage.kits
+        updated_team.userkits_count = usage.userkits
+        updated_team.unique_users_count = UserKit.objects.filter(
+            kit__team=updated_team,
+        ).values('user_id').distinct().count()
+        updated_team.wishlist_count = usage.wishlist_items
+        updated_team.favorite_team_count = usage.favorite_profiles
+        updated_team.seasons = sorted({
+            *updated_team.kits.values_list('season', flat=True),
+            *updated_team.season_kit_types.values_list('season', flat=True),
+        }, key=get_season_sort_year, reverse=True)
+        updated_team.preview_image = get_unverified_team_preview_map([updated_team]).get(updated_team.id)
+        updated_team.can_reject = usage.is_unused()
+        updated_team.reject_block_reason = '' if updated_team.can_reject else 'This team is in use and cannot be rejected. Merge it into an existing team instead.'
+        updated_team.similar_verified_teams = []
+
+        serializer = TeamModerationListSerializer(
+            updated_team,
+            context={'request': request},
+        )
+        return Response({
+            'team': serializer.data,
+            'moderation_action_id': action.id,
+        })
+
+
+class AdminTeamMergeAPI(APIView):
+    permission_classes = [IsAuthenticated, IsStaffOrModerator]
+
+    def post(self, request, team_id):
+        serializer = TeamModerationMergeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        target_team_id = serializer.validated_data['target_team_id']
+
+        source_team = get_object_or_404(Team, pk=team_id)
+        target_team = Team.objects.filter(pk=target_team_id).first()
+        if target_team is None:
+            raise ValidationError({'target_team_id': 'Target team not found.'})
+
+        try:
+            merged_target_team, action, summary = merge_teams_safely(
+                source_team_id=source_team.id,
+                target_team_id=target_team.id,
+                actor=request.user,
+            )
+        except TeamModerationConflict as exc:
+            detail = exc.raw_detail if isinstance(exc.raw_detail, dict) else {'detail': exc.raw_detail}
+            return Response(detail, status=exc.status_code)
+
+        merged_target_team.kits_count = Kit.objects.filter(team=merged_target_team).count()
+        merged_target_team.userkits_count = UserKit.objects.filter(kit__team=merged_target_team).count()
+        merged_target_team.unique_users_count = UserKit.objects.filter(
+            kit__team=merged_target_team,
+        ).values('user_id').distinct().count()
+        merged_target_team.wishlist_count = WishlistItem.objects.filter(team=merged_target_team).count()
+        merged_target_team.favorite_team_count = Profile.objects.filter(favorite_team=merged_target_team).count()
+        merged_target_team.seasons = sorted({
+            *merged_target_team.kits.values_list('season', flat=True),
+            *merged_target_team.season_kit_types.values_list('season', flat=True),
+        }, key=get_season_sort_year, reverse=True)
+        merged_target_team.preview_image = get_unverified_team_preview_map([merged_target_team]).get(merged_target_team.id)
+        merged_target_team.can_reject = False
+        merged_target_team.reject_block_reason = 'Verified teams cannot be rejected through this moderation flow.'
+        merged_target_team.similar_verified_teams = []
+
+        target_serializer = TeamModerationListSerializer(
+            merged_target_team,
+            context={'request': request},
+        )
+        return Response({
+            **summary,
+            'target_team': target_serializer.data,
+            'moderation_action_id': action.id,
+        })
+
+
+class AdminTeamRejectAPI(APIView):
+    permission_classes = [IsAuthenticated, IsStaffOrModerator]
+
+    def post(self, request, team_id):
+        team = get_object_or_404(Team, pk=team_id)
+
+        try:
+            deleted_team, action = reject_unused_team(team_id=team.id, actor=request.user)
+        except TeamModerationConflict as exc:
+            detail = exc.raw_detail if isinstance(exc.raw_detail, dict) else {'detail': exc.raw_detail}
+            return Response(detail, status=exc.status_code)
+
+        return Response({
+            'deleted': True,
+            'team_id': deleted_team['id'],
+            'team_name': deleted_team['name'],
+            'moderation_action_id': action.id,
+        })
+
+
 class AdminKitTypeSuggestionsAPI(APIView):
     permission_classes = [IsAuthenticated, IsStaffOrModerator]
 
@@ -1046,30 +1363,48 @@ class AdminTeamSeasonKitTypeApproveAPI(APIView):
     permission_classes = [IsAuthenticated, IsStaffOrModerator]
 
     def post(self, request, pk):
-        suggestion = get_object_or_404(
-            TeamSeasonKitType.objects.select_related('kit_type'),
-            pk=pk,
-        )
-        now = timezone.now()
-
         with transaction.atomic():
+            suggestion = get_object_or_404(
+                TeamSeasonKitType.objects.select_for_update().select_related('kit_type'),
+                pk=pk,
+            )
+            source_kit_type = KitType.objects.select_for_update().get(pk=suggestion.kit_type_id)
+            previous_state = {
+                'team_season_kit_type': snapshot_team_season_kit_type(suggestion),
+                'source_kit_type': snapshot_kit_type(source_kit_type),
+            }
+            now = timezone.now()
+
             suggestion.status = TeamSeasonKitType.STATUS_APPROVED
             suggestion.approved_by = request.user
             suggestion.approved_at = now
             suggestion.save(update_fields=['status', 'approved_by', 'approved_at'])
 
-            if suggestion.kit_type.status == KitType.STATUS_PENDING:
-                suggestion.kit_type.status = KitType.STATUS_APPROVED
-                suggestion.kit_type.approved_by = request.user
-                suggestion.kit_type.approved_at = now
-                suggestion.kit_type.save(
+            if source_kit_type.status == KitType.STATUS_PENDING:
+                source_kit_type.status = KitType.STATUS_APPROVED
+                source_kit_type.approved_by = request.user
+                source_kit_type.approved_at = now
+                source_kit_type.save(
                     update_fields=['status', 'approved_by', 'approved_at']
                 )
+
+            action = build_moderation_action_record(
+                actor=request.user,
+                action_type=KitTypeModerationAction.ACTION_APPROVE,
+                suggestion=suggestion,
+                source_kit_type=source_kit_type,
+                previous_state=previous_state,
+                resulting_state={
+                    'team_season_kit_type': snapshot_team_season_kit_type(suggestion),
+                    'source_kit_type': snapshot_kit_type(source_kit_type),
+                },
+            )
 
         return Response({
             'id': suggestion.id,
             'status': suggestion.status,
-            'kit_type_status': suggestion.kit_type.status,
+            'kit_type_status': source_kit_type.status,
+            'moderation_action_id': action.id,
         })
 
 
@@ -1077,12 +1412,39 @@ class AdminTeamSeasonKitTypeRejectAPI(APIView):
     permission_classes = [IsAuthenticated, IsStaffOrModerator]
 
     def post(self, request, pk):
-        suggestion = get_object_or_404(TeamSeasonKitType, pk=pk)
-        suggestion.status = TeamSeasonKitType.STATUS_REJECTED
-        suggestion.approved_by = None
-        suggestion.approved_at = None
-        suggestion.save(update_fields=['status', 'approved_by', 'approved_at'])
-        return Response({'id': suggestion.id, 'status': suggestion.status})
+        with transaction.atomic():
+            suggestion = get_object_or_404(
+                TeamSeasonKitType.objects.select_for_update().select_related('kit_type'),
+                pk=pk,
+            )
+            source_kit_type = KitType.objects.select_for_update().get(pk=suggestion.kit_type_id)
+            previous_state = {
+                'team_season_kit_type': snapshot_team_season_kit_type(suggestion),
+                'source_kit_type': snapshot_kit_type(source_kit_type),
+            }
+
+            suggestion.status = TeamSeasonKitType.STATUS_REJECTED
+            suggestion.approved_by = None
+            suggestion.approved_at = None
+            suggestion.save(update_fields=['status', 'approved_by', 'approved_at'])
+
+            action = build_moderation_action_record(
+                actor=request.user,
+                action_type=KitTypeModerationAction.ACTION_REJECT,
+                suggestion=suggestion,
+                source_kit_type=source_kit_type,
+                previous_state=previous_state,
+                resulting_state={
+                    'team_season_kit_type': snapshot_team_season_kit_type(suggestion),
+                    'source_kit_type': snapshot_kit_type(source_kit_type),
+                },
+            )
+
+        return Response({
+            'id': suggestion.id,
+            'status': suggestion.status,
+            'moderation_action_id': action.id,
+        })
 
 
 class AdminTeamSeasonKitTypeMergeAPI(APIView):
@@ -1109,6 +1471,14 @@ class AdminTeamSeasonKitTypeMergeAPI(APIView):
         deleted_team_season_rows = 0
 
         with transaction.atomic():
+            suggestion = TeamSeasonKitType.objects.select_for_update().select_related('kit_type', 'team').get(pk=suggestion.pk)
+            source_kit_type = KitType.objects.select_for_update().get(pk=source_kit_type.pk)
+            target_kit_type = KitType.objects.select_for_update().get(pk=target_kit_type.pk)
+            previous_state = {
+                'team_season_kit_type': snapshot_team_season_kit_type(suggestion),
+                'source_kit_type': snapshot_kit_type(source_kit_type),
+                'target_kit_type': snapshot_kit_type(target_kit_type),
+            }
             Kit.objects.filter(kit_type_ref=source_kit_type).update(
                 kit_type_ref=target_kit_type,
                 kit_type=target_kit_type.name,
@@ -1176,11 +1546,108 @@ class AdminTeamSeasonKitTypeMergeAPI(APIView):
                 update_fields=['status', 'merged_into', 'approved_by', 'approved_at']
             )
 
+            action = build_moderation_action_record(
+                actor=request.user,
+                action_type=KitTypeModerationAction.ACTION_MERGE,
+                suggestion=None,
+                source_kit_type=source_kit_type,
+                target_kit_type=target_kit_type,
+                team_name=suggestion.team.name,
+                season=suggestion.season,
+                previous_state=previous_state,
+                resulting_state={
+                    'source_kit_type': snapshot_kit_type(source_kit_type),
+                    'target_kit_type': snapshot_kit_type(target_kit_type),
+                },
+                is_reversible=False,
+                undo_block_reason=MERGE_UNDO_BLOCK_REASON,
+            )
+
         return Response({
             'merged_kit_type_id': source_kit_type.id,
             'target_kit_type_id': target_kit_type.id,
             'team_season_rows_updated': affected_team_season_rows,
             'team_season_rows_deleted': deleted_team_season_rows,
+            'moderation_action_id': action.id,
+        })
+
+
+class AdminKitTypeModerationActionsAPI(APIView):
+    permission_classes = [IsAuthenticated, IsStaffOrModerator]
+    DEFAULT_LIMIT = 20
+    MAX_LIMIT = 50
+
+    def get(self, request):
+        raw_limit = request.query_params.get('limit', self.DEFAULT_LIMIT)
+        try:
+            limit = int(raw_limit)
+        except (TypeError, ValueError):
+            limit = self.DEFAULT_LIMIT
+
+        limit = max(1, min(limit, self.MAX_LIMIT))
+        queryset = KitTypeModerationAction.objects.select_related(
+            'actor',
+            'undone_by',
+            'team_season_kit_type__team',
+            'source_kit_type',
+            'target_kit_type',
+        )[:limit]
+        serializer = KitTypeModerationActionSerializer(
+            queryset,
+            many=True,
+            context={
+                'request': request,
+                'can_undo_moderation_action': can_undo_moderation_action,
+                'moderation_action_is_currently_undoable': moderation_action_is_currently_undoable,
+            },
+        )
+        return Response(serializer.data)
+
+
+class AdminKitTypeModerationActionUndoAPI(APIView):
+    permission_classes = [IsAuthenticated, IsStaffOrModerator]
+
+    def post(self, request, pk):
+        with transaction.atomic():
+            action = get_object_or_404(
+                KitTypeModerationAction.objects.select_for_update(),
+                pk=pk,
+            )
+            if not can_undo_moderation_action(request.user, action):
+                return Response(status=status.HTTP_403_FORBIDDEN)
+
+            can_undo, reason = moderation_action_is_currently_undoable(action)
+            if not can_undo:
+                return moderation_action_conflict_response()
+
+            try:
+                suggestion = TeamSeasonKitType.objects.select_for_update().get(pk=action.team_season_kit_type_id)
+                source_kit_type = KitType.objects.select_for_update().get(pk=action.source_kit_type_id)
+            except (TeamSeasonKitType.DoesNotExist, KitType.DoesNotExist):
+                return moderation_action_conflict_response()
+
+            expected_suggestion = action.resulting_state.get('team_season_kit_type')
+            expected_source_type = action.resulting_state.get('source_kit_type')
+            if expected_suggestion and snapshot_team_season_kit_type(suggestion) != expected_suggestion:
+                return moderation_action_conflict_response()
+            if expected_source_type and snapshot_kit_type(source_kit_type) != expected_source_type:
+                return moderation_action_conflict_response()
+
+            previous_suggestion = action.previous_state.get('team_season_kit_type')
+            previous_source_type = action.previous_state.get('source_kit_type')
+            if previous_suggestion:
+                apply_team_season_kit_type_snapshot(suggestion, previous_suggestion)
+            if previous_source_type:
+                apply_kit_type_snapshot(source_kit_type, previous_source_type)
+
+            action.undone_at = timezone.now()
+            action.undone_by = request.user
+            action.save(update_fields=['undone_at', 'undone_by'])
+
+        return Response({
+            'id': action.id,
+            'undone_at': action.undone_at,
+            'undone_by_username': request.user.username,
         })
 
 # Endpoint: User collection statistics

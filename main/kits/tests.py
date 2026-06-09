@@ -2,6 +2,7 @@ from decimal import Decimal
 from datetime import timedelta
 from importlib import import_module
 from urllib.parse import urlencode
+from unittest.mock import patch
 
 from django.apps import apps as django_apps
 from django.contrib.auth.models import User
@@ -12,7 +13,7 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient, APITestCase
 
-from .models import Kit, KitType, KitTypeAlias, TeamSeasonKitType, ShirtVersion, Team, UserKit, UserKitImage, WishlistItem, KitComment, KitReport, Conversation, Message, Follow, Notification, CollectionValueSnapshot, AUTOMATED_VALUATION_UNAVAILABLE_MESSAGE, TECHNOLOGIE_MULTIPLIERS, calculate_collection_total_value
+from .models import Kit, KitType, KitTypeAlias, TeamSeasonKitType, KitTypeModerationAction, TeamModerationAction, ShirtVersion, Team, UserKit, UserKitImage, WishlistItem, KitComment, KitReport, Conversation, Message, Follow, Notification, CollectionValueSnapshot, AUTOMATED_VALUATION_UNAVAILABLE_MESSAGE, TECHNOLOGIE_MULTIPLIERS, calculate_collection_total_value
 from .serializers import KitSerializer, UserKitSerializer, WishlistItemSerializer
 
 
@@ -745,6 +746,12 @@ class AdminKitTypeModerationAPITests(APITestCase):
         )
         self.moderator_user.profile.is_moderator = True
         self.moderator_user.profile.save(update_fields=['is_moderator'])
+        self.other_moderator_user = User.objects.create_user(
+            username='second_moderator',
+            password='password123',
+        )
+        self.other_moderator_user.profile.is_moderator = True
+        self.other_moderator_user.profile.save(update_fields=['is_moderator'])
         self.regular_user = User.objects.create_user(
             username='regular_user',
             password='password123',
@@ -791,6 +798,32 @@ class AdminKitTypeModerationAPITests(APITestCase):
             order=0,
         )
         self.home_type = KitType.objects.get(canonical_code='HOME')
+
+    def approve(self, user=None):
+        self.client.force_authenticate(user=user or self.staff_user)
+        return self.client.post(
+            reverse('admin-team-season-kit-type-approve', args=[self.pending_suggestion.id])
+        )
+
+    def reject(self, user=None):
+        self.client.force_authenticate(user=user or self.staff_user)
+        return self.client.post(
+            reverse('admin-team-season-kit-type-reject', args=[self.pending_suggestion.id])
+        )
+
+    def merge(self, user=None, target_id=None):
+        self.client.force_authenticate(user=user or self.staff_user)
+        return self.client.post(
+            reverse('admin-team-season-kit-type-merge', args=[self.pending_suggestion.id]),
+            {'target_kit_type_id': target_id or self.home_type.id},
+            format='json',
+        )
+
+    def undo_action(self, action_id, user=None):
+        self.client.force_authenticate(user=user or self.staff_user)
+        return self.client.post(
+            reverse('admin-kit-type-moderation-action-undo', args=[action_id])
+        )
 
     def test_anonymous_user_cannot_access_admin_suggestions(self):
         response = self.client.get(reverse('admin-kit-type-suggestions'))
@@ -1123,6 +1156,403 @@ class AdminKitTypeModerationAPITests(APITestCase):
         self.assertFalse(response.data['is_staff'])
         self.assertTrue(response.data['profile']['is_moderator'])
 
+    def test_anonymous_user_cannot_list_moderation_actions(self):
+        response = self.client.get(reverse('admin-kit-type-moderation-actions'))
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_anonymous_user_cannot_undo_moderation_action(self):
+        action = KitTypeModerationAction.objects.create(
+            actor=self.staff_user,
+            action_type=KitTypeModerationAction.ACTION_REJECT,
+            team_season_kit_type=self.pending_suggestion,
+            source_kit_type=self.pending_type,
+        )
+
+        response = self.client.post(
+            reverse('admin-kit-type-moderation-action-undo', args=[action.id])
+        )
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_normal_user_gets_403_for_moderation_actions_list(self):
+        self.client.force_authenticate(user=self.regular_user)
+
+        response = self.client.get(reverse('admin-kit-type-moderation-actions'))
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_normal_user_gets_403_for_moderation_action_undo(self):
+        approve_response = self.approve()
+        action_id = approve_response.data['moderation_action_id']
+        self.client.force_authenticate(user=self.regular_user)
+
+        response = self.client.post(
+            reverse('admin-kit-type-moderation-action-undo', args=[action_id])
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_moderator_can_list_moderation_actions(self):
+        self.approve(user=self.moderator_user)
+        self.client.force_authenticate(user=self.moderator_user)
+
+        response = self.client.get(reverse('admin-kit-type-moderation-actions'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['action_type'], KitTypeModerationAction.ACTION_APPROVE)
+        self.assertTrue(response.data[0]['can_undo'])
+
+    def test_moderator_can_see_other_moderators_actions_but_cannot_undo_them(self):
+        response = self.approve(user=self.other_moderator_user)
+        action_id = response.data['moderation_action_id']
+        self.client.force_authenticate(user=self.moderator_user)
+
+        list_response = self.client.get(reverse('admin-kit-type-moderation-actions'))
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(list_response.data[0]['id'], action_id)
+        self.assertFalse(list_response.data[0]['can_undo'])
+
+    def test_moderator_can_undo_their_own_approve_action(self):
+        response = self.approve(user=self.moderator_user)
+        action_id = response.data['moderation_action_id']
+
+        undo_response = self.undo_action(action_id, user=self.moderator_user)
+
+        self.assertEqual(undo_response.status_code, 200)
+        self.pending_suggestion.refresh_from_db()
+        self.pending_type.refresh_from_db()
+        self.assertEqual(self.pending_suggestion.status, TeamSeasonKitType.STATUS_PENDING)
+        self.assertEqual(self.pending_type.status, KitType.STATUS_PENDING)
+
+    def test_moderator_can_undo_their_own_reject_action(self):
+        response = self.reject(user=self.moderator_user)
+        action_id = response.data['moderation_action_id']
+
+        undo_response = self.undo_action(action_id, user=self.moderator_user)
+
+        self.assertEqual(undo_response.status_code, 200)
+        self.pending_suggestion.refresh_from_db()
+        self.assertEqual(self.pending_suggestion.status, TeamSeasonKitType.STATUS_PENDING)
+
+    def test_moderator_cannot_undo_another_moderators_approve_action(self):
+        response = self.approve(user=self.moderator_user)
+        action_id = response.data['moderation_action_id']
+        self.client.force_authenticate(user=self.other_moderator_user)
+
+        undo_response = self.client.post(
+            reverse('admin-kit-type-moderation-action-undo', args=[action_id])
+        )
+
+        self.assertEqual(undo_response.status_code, 403)
+        action = KitTypeModerationAction.objects.get(pk=action_id)
+        self.assertIsNone(action.undone_at)
+        self.assertIsNone(action.undone_by)
+        self.pending_suggestion.refresh_from_db()
+        self.pending_type.refresh_from_db()
+        self.assertEqual(self.pending_suggestion.status, TeamSeasonKitType.STATUS_APPROVED)
+        self.assertEqual(self.pending_type.status, KitType.STATUS_APPROVED)
+
+    def test_moderator_cannot_undo_another_moderators_reject_action(self):
+        response = self.reject(user=self.moderator_user)
+        action_id = response.data['moderation_action_id']
+        self.client.force_authenticate(user=self.other_moderator_user)
+
+        undo_response = self.client.post(
+            reverse('admin-kit-type-moderation-action-undo', args=[action_id])
+        )
+
+        self.assertEqual(undo_response.status_code, 403)
+        action = KitTypeModerationAction.objects.get(pk=action_id)
+        self.assertIsNone(action.undone_at)
+        self.assertIsNone(action.undone_by)
+        self.pending_suggestion.refresh_from_db()
+        self.assertEqual(self.pending_suggestion.status, TeamSeasonKitType.STATUS_REJECTED)
+
+    def test_staff_can_see_and_undo_another_moderators_action(self):
+        response = self.approve(user=self.moderator_user)
+        action_id = response.data['moderation_action_id']
+        self.client.force_authenticate(user=self.staff_user)
+
+        list_response = self.client.get(reverse('admin-kit-type-moderation-actions'))
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(list_response.data[0]['id'], action_id)
+        self.assertTrue(list_response.data[0]['can_undo'])
+
+        undo_response = self.undo_action(action_id, user=self.staff_user)
+        self.assertEqual(undo_response.status_code, 200)
+
+    def test_superuser_can_see_and_undo_another_moderators_action(self):
+        response = self.approve(user=self.moderator_user)
+        action_id = response.data['moderation_action_id']
+        self.client.force_authenticate(user=self.superuser)
+
+        list_response = self.client.get(reverse('admin-kit-type-moderation-actions'))
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(list_response.data[0]['id'], action_id)
+        self.assertTrue(list_response.data[0]['can_undo'])
+
+        undo_response = self.undo_action(action_id, user=self.superuser)
+        self.assertEqual(undo_response.status_code, 200)
+
+    def test_serializer_can_undo_true_for_own_reversible_action(self):
+        response = self.approve(user=self.moderator_user)
+        action_id = response.data['moderation_action_id']
+        self.client.force_authenticate(user=self.moderator_user)
+
+        list_response = self.client.get(reverse('admin-kit-type-moderation-actions'))
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(list_response.data[0]['id'], action_id)
+        self.assertTrue(list_response.data[0]['can_undo'])
+
+    def test_serializer_can_undo_false_for_other_moderators_action(self):
+        response = self.approve(user=self.other_moderator_user)
+        action_id = response.data['moderation_action_id']
+        self.client.force_authenticate(user=self.moderator_user)
+
+        list_response = self.client.get(reverse('admin-kit-type-moderation-actions'))
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(list_response.data[0]['id'], action_id)
+        self.assertFalse(list_response.data[0]['can_undo'])
+
+    def test_serializer_can_undo_true_for_staff_on_other_users_action(self):
+        response = self.reject(user=self.moderator_user)
+        action_id = response.data['moderation_action_id']
+        self.client.force_authenticate(user=self.staff_user)
+
+        list_response = self.client.get(reverse('admin-kit-type-moderation-actions'))
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(list_response.data[0]['id'], action_id)
+        self.assertTrue(list_response.data[0]['can_undo'])
+
+    def test_failed_foreign_moderator_undo_does_not_modify_audit_state(self):
+        response = self.approve(user=self.moderator_user)
+        action_id = response.data['moderation_action_id']
+        self.pending_suggestion.refresh_from_db()
+        self.pending_type.refresh_from_db()
+        original_suggestion_status = self.pending_suggestion.status
+        original_type_status = self.pending_type.status
+        self.client.force_authenticate(user=self.other_moderator_user)
+
+        undo_response = self.client.post(
+            reverse('admin-kit-type-moderation-action-undo', args=[action_id])
+        )
+
+        self.assertEqual(undo_response.status_code, 403)
+        action = KitTypeModerationAction.objects.get(pk=action_id)
+        self.assertIsNone(action.undone_at)
+        self.assertIsNone(action.undone_by)
+        self.pending_suggestion.refresh_from_db()
+        self.pending_type.refresh_from_db()
+        self.assertEqual(self.pending_suggestion.status, original_suggestion_status)
+        self.assertEqual(self.pending_type.status, original_type_status)
+
+    def test_staff_and_superuser_can_undo_moderation_actions(self):
+        approve_response = self.approve(user=self.staff_user)
+        action_id = approve_response.data['moderation_action_id']
+
+        staff_undo_response = self.undo_action(action_id, user=self.staff_user)
+        self.assertEqual(staff_undo_response.status_code, 200)
+
+        second_approve_response = self.approve(user=self.staff_user)
+        second_action_id = second_approve_response.data['moderation_action_id']
+        superuser_undo_response = self.undo_action(second_action_id, user=self.superuser)
+        self.assertEqual(superuser_undo_response.status_code, 200)
+
+    def test_approve_creates_moderation_action(self):
+        response = self.approve()
+
+        self.assertEqual(response.status_code, 200)
+        action = KitTypeModerationAction.objects.get(pk=response.data['moderation_action_id'])
+        self.assertEqual(action.action_type, KitTypeModerationAction.ACTION_APPROVE)
+        self.assertTrue(action.is_reversible)
+        self.assertEqual(action.team_name, self.team.name)
+        self.assertEqual(action.season, '2024/2025')
+        self.assertEqual(action.source_kit_type_name, self.pending_type.name)
+
+    def test_undo_approve_restores_team_season_status(self):
+        response = self.approve()
+        action_id = response.data['moderation_action_id']
+
+        undo_response = self.undo_action(action_id)
+
+        self.assertEqual(undo_response.status_code, 200)
+        self.pending_suggestion.refresh_from_db()
+        self.assertEqual(self.pending_suggestion.status, TeamSeasonKitType.STATUS_PENDING)
+
+    def test_undo_approve_restores_kit_type_status_if_approval_changed_it(self):
+        response = self.approve()
+        action_id = response.data['moderation_action_id']
+
+        undo_response = self.undo_action(action_id)
+
+        self.assertEqual(undo_response.status_code, 200)
+        self.pending_type.refresh_from_db()
+        self.assertEqual(self.pending_type.status, KitType.STATUS_PENDING)
+
+    def test_undo_approve_restores_approved_by_and_approved_at_correctly(self):
+        response = self.approve()
+        action_id = response.data['moderation_action_id']
+
+        self.assertIsNotNone(TeamSeasonKitType.objects.get(pk=self.pending_suggestion.id).approved_at)
+        self.assertIsNotNone(KitType.objects.get(pk=self.pending_type.id).approved_at)
+
+        undo_response = self.undo_action(action_id)
+
+        self.assertEqual(undo_response.status_code, 200)
+        self.pending_suggestion.refresh_from_db()
+        self.pending_type.refresh_from_db()
+        self.assertIsNone(self.pending_suggestion.approved_by)
+        self.assertIsNone(self.pending_suggestion.approved_at)
+        self.assertIsNone(self.pending_type.approved_by)
+        self.assertIsNone(self.pending_type.approved_at)
+
+    def test_undo_approve_returns_suggestion_to_pending_queue(self):
+        response = self.approve()
+        action_id = response.data['moderation_action_id']
+
+        undo_response = self.undo_action(action_id)
+        self.assertEqual(undo_response.status_code, 200)
+
+        queue_response = self.client.get(reverse('admin-kit-type-suggestions'))
+        self.assertEqual(queue_response.status_code, 200)
+        self.assertEqual(len(queue_response.data), 1)
+        self.assertEqual(queue_response.data[0]['id'], self.pending_suggestion.id)
+
+    def test_undo_approve_removes_approved_museum_slot(self):
+        response = self.approve()
+        action_id = response.data['moderation_action_id']
+
+        approved_response = self.client.get(
+            reverse('approved-team-season-kit-types', args=[self.team.id])
+        )
+        self.assertEqual(len(approved_response.data), 1)
+
+        undo_response = self.undo_action(action_id)
+        self.assertEqual(undo_response.status_code, 200)
+
+        approved_response = self.client.get(
+            reverse('approved-team-season-kit-types', args=[self.team.id])
+        )
+        self.assertEqual(approved_response.data, [])
+
+    def test_reject_creates_moderation_action(self):
+        response = self.reject()
+
+        self.assertEqual(response.status_code, 200)
+        action = KitTypeModerationAction.objects.get(pk=response.data['moderation_action_id'])
+        self.assertEqual(action.action_type, KitTypeModerationAction.ACTION_REJECT)
+        self.assertTrue(action.is_reversible)
+
+    def test_undo_reject_restores_previous_pending_status(self):
+        response = self.reject()
+        action_id = response.data['moderation_action_id']
+
+        undo_response = self.undo_action(action_id)
+
+        self.assertEqual(undo_response.status_code, 200)
+        self.pending_suggestion.refresh_from_db()
+        self.assertEqual(self.pending_suggestion.status, TeamSeasonKitType.STATUS_PENDING)
+
+    def test_undo_reject_keeps_user_uploads_untouched(self):
+        response = self.reject()
+        action_id = response.data['moderation_action_id']
+
+        undo_response = self.undo_action(action_id)
+
+        self.assertEqual(undo_response.status_code, 200)
+        self.assertTrue(UserKit.objects.filter(pk=self.pending_userkit.id).exists())
+
+    def test_undo_reject_returns_suggestion_to_moderation_queue(self):
+        response = self.reject()
+        action_id = response.data['moderation_action_id']
+
+        undo_response = self.undo_action(action_id)
+        self.assertEqual(undo_response.status_code, 200)
+
+        queue_response = self.client.get(reverse('admin-kit-type-suggestions'))
+        self.assertEqual(queue_response.status_code, 200)
+        self.assertEqual(len(queue_response.data), 1)
+
+    def test_action_cannot_be_undone_twice(self):
+        response = self.approve()
+        action_id = response.data['moderation_action_id']
+
+        first_undo = self.undo_action(action_id)
+        second_undo = self.undo_action(action_id)
+
+        self.assertEqual(first_undo.status_code, 200)
+        self.assertEqual(second_undo.status_code, 409)
+
+    def test_undone_action_records_undone_at_and_undone_by(self):
+        response = self.approve(user=self.moderator_user)
+        action_id = response.data['moderation_action_id']
+
+        undo_response = self.undo_action(action_id, user=self.moderator_user)
+
+        self.assertEqual(undo_response.status_code, 200)
+        action = KitTypeModerationAction.objects.get(pk=action_id)
+        self.assertIsNotNone(action.undone_at)
+        self.assertEqual(action.undone_by, self.moderator_user)
+
+    def test_undo_returns_409_when_object_state_changed_after_action(self):
+        response = self.approve()
+        action_id = response.data['moderation_action_id']
+        self.pending_suggestion.refresh_from_db()
+        self.pending_suggestion.status = TeamSeasonKitType.STATUS_REJECTED
+        self.pending_suggestion.approved_by = None
+        self.pending_suggestion.approved_at = None
+        self.pending_suggestion.save(update_fields=['status', 'approved_by', 'approved_at'])
+
+        undo_response = self.undo_action(action_id)
+
+        self.assertEqual(undo_response.status_code, 409)
+        self.pending_suggestion.refresh_from_db()
+        self.assertEqual(self.pending_suggestion.status, TeamSeasonKitType.STATUS_REJECTED)
+
+    def test_undo_conflict_does_not_partially_restore_data(self):
+        response = self.approve()
+        action_id = response.data['moderation_action_id']
+        self.pending_type.refresh_from_db()
+        self.pending_type.approved_by = self.superuser
+        self.pending_type.save(update_fields=['approved_by'])
+
+        undo_response = self.undo_action(action_id)
+
+        self.assertEqual(undo_response.status_code, 409)
+        self.pending_suggestion.refresh_from_db()
+        self.pending_type.refresh_from_db()
+        self.assertEqual(self.pending_suggestion.status, TeamSeasonKitType.STATUS_APPROVED)
+        self.assertEqual(self.pending_type.status, KitType.STATUS_APPROVED)
+        self.assertEqual(self.pending_type.approved_by, self.superuser)
+
+    def test_merge_creates_non_reversible_audit_action(self):
+        response = self.merge()
+
+        self.assertEqual(response.status_code, 200)
+        action = KitTypeModerationAction.objects.get(pk=response.data['moderation_action_id'])
+        self.assertEqual(action.action_type, KitTypeModerationAction.ACTION_MERGE)
+        self.assertFalse(action.is_reversible)
+        self.assertEqual(action.undo_block_reason, 'Merge undo requires manual review.')
+
+    def test_merge_action_list_reports_manual_review_reason(self):
+        self.merge()
+        self.client.force_authenticate(user=self.staff_user)
+
+        response = self.client.get(reverse('admin-kit-type-moderation-actions'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data[0]['action_type'], KitTypeModerationAction.ACTION_MERGE)
+        self.assertFalse(response.data[0]['can_undo'])
+        self.assertEqual(response.data[0]['undo_block_reason'], 'Merge undo requires manual review.')
+
     def test_pending_suggestion_is_not_returned_by_approved_slots_endpoint(self):
         response = self.client.get(
             reverse('approved-team-season-kit-types', args=[self.team.id])
@@ -1262,6 +1692,370 @@ class AdminKitTypeModerationAPITests(APITestCase):
         self.assertEqual(response.data[0]['season'], '2024/2025')
         self.assertEqual(response.data[0]['kit_type_id'], self.pending_type.id)
         self.assertEqual(response.data[0]['kit_type_name'], self.pending_type.name)
+
+
+class AdminTeamModerationAPITests(APITestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.staff_user = User.objects.create_user(
+            username='staff_team_moderator',
+            password='password123',
+            is_staff=True,
+        )
+        self.superuser = User.objects.create_superuser(
+            username='team_super_admin',
+            email='teamsuper@example.com',
+            password='password123',
+        )
+        self.moderator_user = User.objects.create_user(
+            username='team_moderator',
+            password='password123',
+        )
+        self.moderator_user.profile.is_moderator = True
+        self.moderator_user.profile.save(update_fields=['is_moderator'])
+        self.regular_user = User.objects.create_user(
+            username='regular_team_user',
+            password='password123',
+        )
+        self.owner = User.objects.create_user(username='team_owner', password='password123')
+        self.other_owner = User.objects.create_user(username='team_other_owner', password='password123')
+        self.reporter = User.objects.create_user(username='team_reporter', password='password123')
+        self.liker = User.objects.create_user(username='team_liker', password='password123')
+        self.favorite_user = User.objects.create_user(username='favorite_fan', password='password123')
+        self.wishlist_owner = User.objects.create_user(username='wishlist_owner', password='password123')
+        self.wishlist_duplicate_owner = User.objects.create_user(username='wishlist_duplicate_owner', password='password123')
+
+        self.target_team = Team.objects.create(name='Arsenal F.C.', is_verified=True)
+        self.similar_verified_team = Team.objects.create(name='Arsenal FC Women', is_verified=True)
+        self.other_verified_team = Team.objects.create(name='Barcelona', is_verified=True)
+        self.source_team = Team.objects.create(name='Arsenal Legends', is_verified=False)
+        self.unused_team = Team.objects.create(name='Unused Typo FC', is_verified=False)
+
+        self.home_type = KitType.objects.get(canonical_code='HOME')
+        self.away_type = KitType.objects.get(canonical_code='AWAY')
+
+        self.target_duplicate_kit = Kit.objects.create(
+            team=self.target_team,
+            season='2024/2025',
+            kit_type='Home',
+            kit_type_ref=self.home_type,
+            estimated_price=Decimal('0.00'),
+        )
+        self.source_duplicate_kit = Kit.objects.create(
+            team=self.source_team,
+            season='2024/2025',
+            kit_type='Home',
+            kit_type_ref=self.home_type,
+            estimated_price=Decimal('120.00'),
+        )
+        self.source_unique_kit = Kit.objects.create(
+            team=self.source_team,
+            season='2023/2024',
+            kit_type='Away',
+            kit_type_ref=self.away_type,
+            estimated_price=Decimal('85.00'),
+        )
+
+        self.duplicate_userkit = UserKit.objects.create(
+            user=self.owner,
+            kit=self.source_duplicate_kit,
+            shirt_technology='REPLICA',
+            shirt_version=ShirtVersion.objects.get(code='REPLICA'),
+            condition='VERY_GOOD',
+            size='L',
+            private_note='Keep this note',
+            manual_value=Decimal('333.00'),
+        )
+        self.unique_userkit = UserKit.objects.create(
+            user=self.other_owner,
+            kit=self.source_unique_kit,
+            shirt_technology='PLAYER_ISSUE',
+            shirt_version=ShirtVersion.objects.get(code='PLAYER_ISSUE'),
+            condition='VERY_GOOD',
+            size='M',
+        )
+        UserKitImage.objects.create(
+            user_kit=self.duplicate_userkit,
+            image=SimpleUploadedFile('team-preview.jpg', b'preview', content_type='image/jpeg'),
+            order=0,
+        )
+        self.duplicate_userkit.likes.add(self.liker)
+        self.comment = KitComment.objects.create(
+            kit=self.duplicate_userkit,
+            user=self.liker,
+            body='Needs a review.',
+        )
+        self.report = KitReport.objects.create(
+            kit=self.duplicate_userkit,
+            reporter=self.reporter,
+            reason='wrong_team',
+            description='This should belong to Arsenal.',
+        )
+
+        self.target_duplicate_wishlist = WishlistItem.objects.create(
+            user=self.wishlist_duplicate_owner,
+            team=self.target_team,
+            season='2024/2025',
+            kit_type='Home',
+            kit_type_ref=self.home_type,
+        )
+        self.source_unique_wishlist = WishlistItem.objects.create(
+            user=self.wishlist_owner,
+            team=self.source_team,
+            season='2023/2024',
+            kit_type='Away',
+            kit_type_ref=self.away_type,
+            source_userkit=self.unique_userkit,
+        )
+        self.source_duplicate_wishlist = WishlistItem.objects.create(
+            user=self.wishlist_duplicate_owner,
+            team=self.source_team,
+            season='2024/2025',
+            kit_type='Home',
+            kit_type_ref=self.home_type,
+            source_userkit=self.duplicate_userkit,
+        )
+
+        self.favorite_user.profile.favorite_team = self.source_team
+        self.favorite_user.profile.save(update_fields=['favorite_team'])
+
+        self.target_team_season = TeamSeasonKitType.objects.create(
+            team=self.target_team,
+            season='2024/2025',
+            kit_type=self.home_type,
+            status=TeamSeasonKitType.STATUS_PENDING,
+            source=TeamSeasonKitType.SOURCE_UPLOAD,
+            created_by=self.owner,
+        )
+        self.source_duplicate_team_season = TeamSeasonKitType.objects.create(
+            team=self.source_team,
+            season='2024/2025',
+            kit_type=self.home_type,
+            status=TeamSeasonKitType.STATUS_APPROVED,
+            source=TeamSeasonKitType.SOURCE_MODERATOR,
+            created_by=self.owner,
+            approved_by=self.staff_user,
+            approved_at=timezone.now(),
+        )
+        self.source_unique_team_season = TeamSeasonKitType.objects.create(
+            team=self.source_team,
+            season='2023/2024',
+            kit_type=self.away_type,
+            status=TeamSeasonKitType.STATUS_PENDING,
+            source=TeamSeasonKitType.SOURCE_UPLOAD,
+            created_by=self.other_owner,
+        )
+
+    def list_unverified(self, user=None, **params):
+        self.client.force_authenticate(user=user) if user else self.client.force_authenticate(user=None)
+        return self.client.get(reverse('admin-unverified-teams'), params)
+
+    def approve_team(self, team_id, user=None):
+        self.client.force_authenticate(user=user or self.staff_user)
+        return self.client.post(reverse('admin-team-approve', args=[team_id]))
+
+    def merge_team(self, source_team_id, target_team_id, user=None):
+        self.client.force_authenticate(user=user or self.staff_user)
+        return self.client.post(
+            reverse('admin-team-merge', args=[source_team_id]),
+            {'target_team_id': target_team_id},
+            format='json',
+        )
+
+    def reject_team(self, team_id, user=None):
+        self.client.force_authenticate(user=user or self.staff_user)
+        return self.client.post(reverse('admin-team-reject', args=[team_id]))
+
+    def test_anonymous_user_cannot_list_unverified_teams(self):
+        response = self.client.get(reverse('admin-unverified-teams'))
+        self.assertEqual(response.status_code, 401)
+
+    def test_normal_user_cannot_list_unverified_teams(self):
+        self.client.force_authenticate(user=self.regular_user)
+        response = self.client.get(reverse('admin-unverified-teams'))
+        self.assertEqual(response.status_code, 403)
+
+    def test_anonymous_and_normal_user_cannot_run_team_actions(self):
+        anonymous_response = self.client.post(reverse('admin-team-approve', args=[self.source_team.id]))
+        self.assertEqual(anonymous_response.status_code, 401)
+
+        self.client.force_authenticate(user=self.regular_user)
+        for route_name in ('admin-team-approve', 'admin-team-reject', 'admin-team-merge'):
+            if route_name == 'admin-team-merge':
+                response = self.client.post(
+                    reverse(route_name, args=[self.source_team.id]),
+                    {'target_team_id': self.target_team.id},
+                    format='json',
+                )
+            else:
+                response = self.client.post(reverse(route_name, args=[self.source_team.id]))
+            self.assertEqual(response.status_code, 403)
+
+    def test_moderator_staff_and_superuser_can_list_unverified_teams(self):
+        for user in (self.moderator_user, self.staff_user, self.superuser):
+            self.client.force_authenticate(user=user)
+            response = self.client.get(reverse('admin-unverified-teams'))
+            self.assertEqual(response.status_code, 200)
+
+    def test_unverified_teams_list_returns_only_unverified_rows_with_counts_preview_and_similarity(self):
+        self.client.force_authenticate(user=self.moderator_user)
+
+        response = self.client.get(reverse('admin-unverified-teams'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('results', response.data)
+        self.assertFalse(response.data['has_more'])
+        returned_ids = [team['id'] for team in response.data['results']]
+        self.assertIn(self.source_team.id, returned_ids)
+        self.assertIn(self.unused_team.id, returned_ids)
+        self.assertNotIn(self.target_team.id, returned_ids)
+
+        source_payload = next(team for team in response.data['results'] if team['id'] == self.source_team.id)
+        unused_payload = next(team for team in response.data['results'] if team['id'] == self.unused_team.id)
+
+        self.assertEqual(source_payload['slug'], 'arsenal-legends')
+        self.assertEqual(source_payload['kits_count'], 2)
+        self.assertEqual(source_payload['userkits_count'], 2)
+        self.assertEqual(source_payload['unique_users_count'], 2)
+        self.assertEqual(source_payload['wishlist_count'], 2)
+        self.assertEqual(source_payload['favorite_team_count'], 1)
+        self.assertEqual(source_payload['seasons'], ['2024/2025', '2023/2024'])
+        self.assertIsNotNone(source_payload['preview_image'])
+        self.assertFalse(source_payload['can_reject'])
+        self.assertTrue(source_payload['reject_block_reason'])
+        self.assertTrue(any(team['id'] == self.target_team.id for team in source_payload['similar_verified_teams']))
+        self.assertTrue(all(team['id'] != self.source_team.id for team in source_payload['similar_verified_teams']))
+
+        self.assertIsNone(unused_payload['preview_image'])
+        self.assertTrue(unused_payload['can_reject'])
+        self.assertEqual(unused_payload['reject_block_reason'], '')
+
+    def test_approve_marks_team_verified_and_preserves_references_and_audit(self):
+        response = self.approve_team(self.source_team.id, user=self.moderator_user)
+
+        self.assertEqual(response.status_code, 200)
+        self.source_team.refresh_from_db()
+        self.assertTrue(self.source_team.is_verified)
+        self.assertEqual(Kit.objects.get(pk=self.source_duplicate_kit.id).team_id, self.source_team.id)
+        self.assertEqual(UserKit.objects.get(pk=self.duplicate_userkit.id).kit_id, self.source_duplicate_kit.id)
+
+        action = TeamModerationAction.objects.get(pk=response.data['moderation_action_id'])
+        self.assertEqual(action.action_type, TeamModerationAction.ACTION_APPROVE)
+        self.assertTrue(action.is_reversible)
+        self.assertEqual(action.source_team_id_snapshot, self.source_team.id)
+        self.assertEqual(response.data['team']['id'], self.source_team.id)
+        self.assertTrue(response.data['team']['is_verified'])
+
+    def test_repeated_approval_returns_409(self):
+        first = self.approve_team(self.source_team.id)
+        second = self.approve_team(self.source_team.id)
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 409)
+
+    def test_merge_rejects_self_merge_unverified_target_and_verified_source(self):
+        self.assertEqual(
+            self.merge_team(self.source_team.id, self.source_team.id).status_code,
+            400,
+        )
+
+        another_unverified = Team.objects.create(name='Arsenal Juniors', is_verified=False)
+        self.assertEqual(
+            self.merge_team(self.source_team.id, another_unverified.id).status_code,
+            400,
+        )
+
+        verified_source = Team.objects.create(name='Verified Source FC', is_verified=True)
+        self.assertEqual(
+            self.merge_team(verified_source.id, self.target_team.id).status_code,
+            409,
+        )
+
+    def test_merge_moves_non_conflicting_rows_reconciles_duplicates_and_preserves_user_content(self):
+        snapshots_before = CollectionValueSnapshot.objects.count()
+        duplicate_userkit_value = UserKit.objects.get(pk=self.duplicate_userkit.id).final_value
+
+        response = self.merge_team(self.source_team.id, self.target_team.id, user=self.moderator_user)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Team.objects.filter(pk=self.source_team.id).exists())
+
+        self.duplicate_userkit.refresh_from_db()
+        self.unique_userkit.refresh_from_db()
+        self.target_duplicate_kit.refresh_from_db()
+        self.target_team_season.refresh_from_db()
+
+        self.assertEqual(self.duplicate_userkit.kit_id, self.target_duplicate_kit.id)
+        self.assertEqual(self.unique_userkit.kit.team_id, self.target_team.id)
+        self.assertFalse(Kit.objects.filter(pk=self.source_duplicate_kit.id).exists())
+        self.assertEqual(self.target_duplicate_kit.estimated_price, Decimal('120.00'))
+        self.assertTrue(UserKitImage.objects.filter(user_kit=self.duplicate_userkit).exists())
+        self.assertTrue(KitComment.objects.filter(pk=self.comment.id, kit=self.duplicate_userkit).exists())
+        self.assertTrue(KitReport.objects.filter(pk=self.report.id, kit=self.duplicate_userkit).exists())
+        self.assertEqual(self.duplicate_userkit.likes.count(), 1)
+        self.assertEqual(self.duplicate_userkit.private_note, 'Keep this note')
+        self.assertEqual(self.duplicate_userkit.final_value, duplicate_userkit_value)
+        self.assertEqual(CollectionValueSnapshot.objects.count(), snapshots_before)
+
+        self.assertEqual(WishlistItem.objects.filter(team=self.target_team).count(), 2)
+        self.assertFalse(WishlistItem.objects.filter(pk=self.source_duplicate_wishlist.id).exists())
+        kept_wishlist = WishlistItem.objects.get(pk=self.target_duplicate_wishlist.id)
+        self.assertEqual(kept_wishlist.source_userkit_id, self.duplicate_userkit.id)
+        moved_wishlist = WishlistItem.objects.get(pk=self.source_unique_wishlist.id)
+        self.assertEqual(moved_wishlist.team_id, self.target_team.id)
+
+        self.favorite_user.profile.refresh_from_db()
+        self.assertEqual(self.favorite_user.profile.favorite_team_id, self.target_team.id)
+
+        self.assertEqual(self.target_team_season.status, TeamSeasonKitType.STATUS_APPROVED)
+        self.assertEqual(self.target_team_season.approved_by_id, self.staff_user.id)
+        self.assertFalse(TeamSeasonKitType.objects.filter(pk=self.source_duplicate_team_season.id).exists())
+        self.source_unique_team_season.refresh_from_db()
+        self.assertEqual(self.source_unique_team_season.team_id, self.target_team.id)
+
+        action = TeamModerationAction.objects.get(pk=response.data['moderation_action_id'])
+        self.assertEqual(action.action_type, TeamModerationAction.ACTION_MERGE)
+        self.assertFalse(action.is_reversible)
+        self.assertEqual(action.undo_block_reason, 'Team merge undo requires manual review.')
+        self.assertEqual(response.data['merged_duplicate_kits'], 1)
+        self.assertEqual(response.data['moved_userkits'], 1)
+        self.assertEqual(response.data['deduplicated_wishlist_items'], 1)
+
+    def test_team_merge_is_atomic_when_a_later_step_fails(self):
+        with patch('kits.team_moderation.reconcile_wishlist_items', side_effect=RuntimeError('boom')):
+            with self.assertRaises(RuntimeError):
+                self.merge_team(self.source_team.id, self.target_team.id)
+
+        self.assertTrue(Team.objects.filter(pk=self.source_team.id).exists())
+        self.source_duplicate_kit.refresh_from_db()
+        self.source_unique_kit.refresh_from_db()
+        self.duplicate_userkit.refresh_from_db()
+        self.assertEqual(self.source_duplicate_kit.team_id, self.source_team.id)
+        self.assertEqual(self.source_unique_kit.team_id, self.source_team.id)
+        self.assertEqual(self.duplicate_userkit.kit_id, self.source_duplicate_kit.id)
+        self.assertFalse(TeamModerationAction.objects.filter(action_type=TeamModerationAction.ACTION_MERGE).exists())
+
+    def test_reject_deletes_unused_team_and_creates_audit_action(self):
+        response = self.reject_team(self.unused_team.id, user=self.moderator_user)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Team.objects.filter(pk=self.unused_team.id).exists())
+        action = TeamModerationAction.objects.get(pk=response.data['moderation_action_id'])
+        self.assertEqual(action.action_type, TeamModerationAction.ACTION_REJECT)
+        self.assertFalse(action.is_reversible)
+
+    def test_reject_blocks_used_team_with_usage_counts_and_preserves_content(self):
+        response = self.reject_team(self.source_team.id)
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.data['code'], 'team_in_use')
+        self.assertEqual(response.data['usage']['kits'], 2)
+        self.assertEqual(response.data['usage']['userkits'], 2)
+        self.assertEqual(response.data['usage']['wishlist_items'], 2)
+        self.assertEqual(response.data['usage']['favorite_profiles'], 1)
+        self.assertTrue(Team.objects.filter(pk=self.source_team.id).exists())
+        self.assertTrue(UserKit.objects.filter(pk=self.duplicate_userkit.id).exists())
+        self.assertFalse(TeamModerationAction.objects.filter(action_type=TeamModerationAction.ACTION_REJECT, source_team_id_snapshot=self.source_team.id).exists())
 
 
 class UserKitPricingTests(APITestCase):

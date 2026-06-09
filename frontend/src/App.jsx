@@ -18,12 +18,14 @@ import KitDetailPage from "./pages/KitDetailPage";
 import MessagesPage from "./pages/MessagesPage";
 import FeedPage from "./pages/FeedPage";
 import AdminKitTypesPage from "./pages/AdminKitTypesPage";
+import ModerationLayout from "./pages/admin/ModerationLayout";
+import AdminTeamsPage from "./pages/admin/AdminTeamsPage";
+import AdminReportsPage from "./pages/admin/AdminReportsPage";
 import NavBar from "./components/NavBar";
 import api, {
 	getUnreadMessagesCount,
 	getNotificationsUnreadCount,
 } from "./services/api";
-import { canAccessModeration } from "./utils/permissions";
 
 import ScrollToTop from "./components/utils/ScrollTop";
 import "./index.css";
@@ -270,22 +272,21 @@ function App() {
 						path="/admin"
 						element={
 							<AuthGate authLoading={authLoading} user={user}>
-								{canAccessModeration(user) ? (
-									<Navigate to="/admin/kit-types" replace />
-								) : (
-									<Navigate to="/" replace />
-								)}
+								<ModerationLayout user={user} />
 							</AuthGate>
 						}
-					/>
-					<Route
-						path="/admin/kit-types"
-						element={
-							<AuthGate authLoading={authLoading} user={user}>
-								<AdminKitTypesPage user={user} />
-							</AuthGate>
-						}
-					/>
+					>
+						<Route
+							index
+							element={<Navigate to="kit-types" replace />}
+						/>
+						<Route
+							path="kit-types"
+							element={<AdminKitTypesPage user={user} />}
+						/>
+						<Route path="teams" element={<AdminTeamsPage />} />
+						<Route path="reports" element={<AdminReportsPage />} />
+					</Route>
 				</Routes>
 			</div>
 		</Router>

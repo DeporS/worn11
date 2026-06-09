@@ -409,6 +409,42 @@
 		"mergeConfirm": "To scali sugerowany typ z wybranym zatwierdzonym KitType.",
 		"selectMergeTarget": "Wybierz zatwierdzony typ koszulki"
 	},
+	"moderation": {
+		"title": "Moderacja",
+		"notAuthorized": "Nie masz dostępu do tej strony.",
+		"navigation": {
+			"kitTypes": "Typy koszulek",
+			"teams": "Zespoły",
+			"reports": "Zgłoszenia koszulek"
+		},
+		"kitTypes": {
+			"title": "Sugestie typów koszulek"
+		},
+		"teams": {
+			"title": "Weryfikacja zespołów",
+			"description": "Przeglądaj zespoły dodane przez użytkowników i decyduj, czy należy je zatwierdzić lub scalić."
+		},
+		"reports": {
+			"title": "Zgłoszenia koszulek",
+			"description": "Przeglądaj zgłoszenia dotyczące koszulek dodanych przez użytkowników."
+		},
+		"comingSoon": "Wkrótce",
+		"recentActions": "Ostatnie działania moderacyjne",
+		"noRecentActions": "Brak ostatnich działań moderacyjnych.",
+		"active": "Aktywne",
+		"undo": "Cofnij",
+		"undoConfirmTitle": "Cofnąć działanie moderacyjne?",
+		"undoConfirmText": "Sugestia zostanie przywrócona do poprzedniego stanu.",
+		"undoSuccess": "Cofnięto działanie moderacyjne.",
+		"undoError": "Nie udało się cofnąć działania.",
+		"undoConflict": "Tego działania nie można już bezpiecznie cofnąć, ponieważ pojawiły się nowsze zmiany.",
+		"undone": "Cofnięto",
+		"notReversible": "Nie można cofnąć",
+		"approvedSummary": "Zatwierdzono {{type}} dla {{team}} {{season}}",
+		"rejectedSummary": "Odrzucono {{type}} dla {{team}} {{season}}",
+		"mergedSummary": "Scalono {{source}} z {{target}}",
+		"mergeManualUndo": "Cofnięcie scalenia wymaga ręcznej weryfikacji."
+	},
 	"groups": {
 		"title": "Strona grup",
 		"description": "To jest strona grup."
