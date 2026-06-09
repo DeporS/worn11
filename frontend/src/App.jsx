@@ -23,6 +23,7 @@ import api, {
 	getUnreadMessagesCount,
 	getNotificationsUnreadCount,
 } from "./services/api";
+import { canAccessModeration } from "./utils/permissions";
 
 import ScrollToTop from "./components/utils/ScrollTop";
 import "./index.css";
@@ -269,7 +270,11 @@ function App() {
 						path="/admin"
 						element={
 							<AuthGate authLoading={authLoading} user={user}>
-								<Navigate to="/admin/kit-types" replace />
+								{canAccessModeration(user) ? (
+									<Navigate to="/admin/kit-types" replace />
+								) : (
+									<Navigate to="/" replace />
+								)}
 							</AuthGate>
 						}
 					/>

@@ -18,6 +18,7 @@ from urllib.parse import urlencode
 import re
 
 from .models import League, UserKit, UserKitImage, WishlistItem, Kit, KitType, KitTypeAlias, TeamSeasonKitType, ShirtVersion, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country, Follow, KitComment, KitCommentLike, KitReport, Conversation, Message, Notification, CollectionValueSnapshot, calculate_collection_total_value, record_collection_value_snapshot, build_team_slug, normalize_wishlist_kit_type
+from .permissions import IsStaffOrModerator, is_staff_or_moderator
 from .serializers import LeagueSerializer, UserKitSerializer, WishlistItemSerializer, WishlistToggleSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer, CountrySerializer, KitCommentSerializer, KitCommentWriteSerializer, KitReportSerializer, ConversationListSerializer, ConversationDetailSerializer, ConversationStartSerializer, MessageSerializer, MessageWriteSerializer, KitSearchSuggestionSerializer, NotificationSerializer, CollectionValueSnapshotSerializer, AdminKitTypeSuggestionSerializer, AdminKitTypeMergeSerializer, ApprovedTeamSeasonKitTypeSerializer, normalize_catalog_name
 
 
@@ -663,13 +664,6 @@ class CurrentUserAPI(generics.RetrieveAPIView):
     def get_object(self):
         return self.request.user
 
-
-class IsStaffUser(permissions.BasePermission):
-    message = 'You do not have permission to access this resource.'
-
-    def has_permission(self, request, view):
-        return bool(request.user and request.user.is_authenticated and request.user.is_staff)
-
 # Pagination configuration
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 12
@@ -989,7 +983,7 @@ class TeamResolveAPI(APIView):
 
 
 class AdminKitTypeSuggestionsAPI(APIView):
-    permission_classes = [IsAuthenticated, IsStaffUser]
+    permission_classes = [IsAuthenticated, IsStaffOrModerator]
 
     def get(self, request):
         suggestions = list(
@@ -1049,7 +1043,7 @@ class AdminKitTypeSuggestionsAPI(APIView):
 
 
 class AdminTeamSeasonKitTypeApproveAPI(APIView):
-    permission_classes = [IsAuthenticated, IsStaffUser]
+    permission_classes = [IsAuthenticated, IsStaffOrModerator]
 
     def post(self, request, pk):
         suggestion = get_object_or_404(
@@ -1080,7 +1074,7 @@ class AdminTeamSeasonKitTypeApproveAPI(APIView):
 
 
 class AdminTeamSeasonKitTypeRejectAPI(APIView):
-    permission_classes = [IsAuthenticated, IsStaffUser]
+    permission_classes = [IsAuthenticated, IsStaffOrModerator]
 
     def post(self, request, pk):
         suggestion = get_object_or_404(TeamSeasonKitType, pk=pk)
@@ -1092,7 +1086,7 @@ class AdminTeamSeasonKitTypeRejectAPI(APIView):
 
 
 class AdminTeamSeasonKitTypeMergeAPI(APIView):
-    permission_classes = [IsAuthenticated, IsStaffUser]
+    permission_classes = [IsAuthenticated, IsStaffOrModerator]
 
     def post(self, request, pk):
         serializer = AdminKitTypeMergeSerializer(
@@ -1894,12 +1888,7 @@ class DeleteCommentAPI(APIView):
 
     def delete(self, request, comment_id):
         comment = get_object_or_404(KitComment, pk=comment_id)
-        profile = getattr(request.user, 'profile', None)
-        can_delete = (
-            comment.user_id == request.user.id
-            or request.user.is_staff
-            or bool(profile and profile.is_moderator)
-        )
+        can_delete = comment.user_id == request.user.id or is_staff_or_moderator(request.user)
 
         if not can_delete:
             return Response(

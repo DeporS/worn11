@@ -6,6 +6,7 @@ import NotificationsDropdown from "./notifications/NotificationsDropdown";
 import { Link, NavLink } from "react-router-dom";
 
 import logo from "../assets/logo-worn11.svg";
+import { canAccessModeration } from "../utils/permissions";
 
 import "../styles/navbar.css";
 
@@ -103,7 +104,7 @@ const NavBar = ({
 										{t("nav.feed")}
 									</NavLink>
 								</li>
-								{user.is_staff ? (
+								{canAccessModeration(user) ? (
 									<>
 										<hr className="d-lg-none text-muted w-100 my-3" />
 										<li className="nav-item">

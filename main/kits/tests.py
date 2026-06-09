@@ -734,6 +734,17 @@ class AdminKitTypeModerationAPITests(APITestCase):
             password='password123',
             is_staff=True,
         )
+        self.superuser = User.objects.create_superuser(
+            username='super_admin',
+            email='super@example.com',
+            password='password123',
+        )
+        self.moderator_user = User.objects.create_user(
+            username='community_moderator',
+            password='password123',
+        )
+        self.moderator_user.profile.is_moderator = True
+        self.moderator_user.profile.save(update_fields=['is_moderator'])
         self.regular_user = User.objects.create_user(
             username='regular_user',
             password='password123',
@@ -786,12 +797,35 @@ class AdminKitTypeModerationAPITests(APITestCase):
 
         self.assertEqual(response.status_code, 401)
 
-    def test_non_staff_user_gets_403_for_admin_suggestions(self):
+    def test_normal_authenticated_user_gets_403_for_admin_suggestions(self):
         self.client.force_authenticate(user=self.regular_user)
 
         response = self.client.get(reverse('admin-kit-type-suggestions'))
 
         self.assertEqual(response.status_code, 403)
+
+    def test_moderator_can_list_pending_suggestions_with_context(self):
+        self.client.force_authenticate(user=self.moderator_user)
+
+        response = self.client.get(reverse('admin-kit-type-suggestions'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        suggestion = response.data[0]
+        self.assertEqual(suggestion['id'], self.pending_suggestion.id)
+        self.assertEqual(suggestion['team_id'], self.team.id)
+        self.assertEqual(suggestion['team_name'], self.team.name)
+        self.assertEqual(suggestion['season'], '2024/2025')
+        self.assertEqual(suggestion['kit_type_id'], self.pending_type.id)
+        self.assertEqual(suggestion['kit_type_name'], 'Player Spec Tribute')
+        self.assertEqual(suggestion['kit_type_slug'], 'player-spec-tribute')
+        self.assertEqual(suggestion['kit_type_status'], KitType.STATUS_PENDING)
+        self.assertEqual(suggestion['team_season_status'], TeamSeasonKitType.STATUS_PENDING)
+        self.assertEqual(suggestion['created_by_username'], self.creator.username)
+        self.assertEqual(suggestion['upload_count'], 1)
+        self.assertIsNotNone(suggestion['preview_image'])
+        self.assertEqual(suggestion['example_source_userkit_id'], self.pending_userkit.id)
+        self.assertIn('/history/team/moderation-fc/variants?', suggestion['museum_url'])
 
     def test_staff_user_can_list_pending_suggestions_with_context(self):
         self.client.force_authenticate(user=self.staff_user)
@@ -816,6 +850,31 @@ class AdminKitTypeModerationAPITests(APITestCase):
         self.assertEqual(suggestion['example_source_userkit_id'], self.pending_userkit.id)
         self.assertIn('/history/team/moderation-fc/variants?', suggestion['museum_url'])
 
+    def test_superuser_can_list_pending_suggestions_with_context(self):
+        self.client.force_authenticate(user=self.superuser)
+
+        response = self.client.get(reverse('admin-kit-type-suggestions'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+
+    def test_moderator_can_approve_pending_suggestion_and_pending_type(self):
+        self.client.force_authenticate(user=self.moderator_user)
+
+        response = self.client.post(
+            reverse('admin-team-season-kit-type-approve', args=[self.pending_suggestion.id])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.pending_suggestion.refresh_from_db()
+        self.pending_type.refresh_from_db()
+        self.assertEqual(self.pending_suggestion.status, TeamSeasonKitType.STATUS_APPROVED)
+        self.assertEqual(self.pending_suggestion.approved_by, self.moderator_user)
+        self.assertIsNotNone(self.pending_suggestion.approved_at)
+        self.assertEqual(self.pending_type.status, KitType.STATUS_APPROVED)
+        self.assertEqual(self.pending_type.approved_by, self.moderator_user)
+        self.assertIsNotNone(self.pending_type.approved_at)
+
     def test_staff_can_approve_pending_suggestion_and_pending_type(self):
         self.client.force_authenticate(user=self.staff_user)
 
@@ -833,7 +892,22 @@ class AdminKitTypeModerationAPITests(APITestCase):
         self.assertEqual(self.pending_type.approved_by, self.staff_user)
         self.assertIsNotNone(self.pending_type.approved_at)
 
-    def test_non_staff_cannot_approve_pending_suggestion(self):
+    def test_superuser_can_approve_pending_suggestion_and_pending_type(self):
+        self.client.force_authenticate(user=self.superuser)
+
+        response = self.client.post(
+            reverse('admin-team-season-kit-type-approve', args=[self.pending_suggestion.id])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.pending_suggestion.refresh_from_db()
+        self.pending_type.refresh_from_db()
+        self.assertEqual(self.pending_suggestion.status, TeamSeasonKitType.STATUS_APPROVED)
+        self.assertEqual(self.pending_suggestion.approved_by, self.superuser)
+        self.assertEqual(self.pending_type.status, KitType.STATUS_APPROVED)
+        self.assertEqual(self.pending_type.approved_by, self.superuser)
+
+    def test_normal_user_cannot_approve_pending_suggestion(self):
         self.client.force_authenticate(user=self.regular_user)
 
         response = self.client.post(
@@ -841,6 +915,18 @@ class AdminKitTypeModerationAPITests(APITestCase):
         )
 
         self.assertEqual(response.status_code, 403)
+
+    def test_moderator_can_reject_pending_suggestion_without_deleting_uploads(self):
+        self.client.force_authenticate(user=self.moderator_user)
+
+        response = self.client.post(
+            reverse('admin-team-season-kit-type-reject', args=[self.pending_suggestion.id])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.pending_suggestion.refresh_from_db()
+        self.assertEqual(self.pending_suggestion.status, TeamSeasonKitType.STATUS_REJECTED)
+        self.assertTrue(UserKit.objects.filter(pk=self.pending_userkit.id).exists())
 
     def test_staff_can_reject_pending_suggestion_without_deleting_uploads(self):
         self.client.force_authenticate(user=self.staff_user)
@@ -853,6 +939,27 @@ class AdminKitTypeModerationAPITests(APITestCase):
         self.pending_suggestion.refresh_from_db()
         self.assertEqual(self.pending_suggestion.status, TeamSeasonKitType.STATUS_REJECTED)
         self.assertTrue(UserKit.objects.filter(pk=self.pending_userkit.id).exists())
+
+    def test_superuser_can_reject_pending_suggestion_without_deleting_uploads(self):
+        self.client.force_authenticate(user=self.superuser)
+
+        response = self.client.post(
+            reverse('admin-team-season-kit-type-reject', args=[self.pending_suggestion.id])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.pending_suggestion.refresh_from_db()
+        self.assertEqual(self.pending_suggestion.status, TeamSeasonKitType.STATUS_REJECTED)
+        self.assertTrue(UserKit.objects.filter(pk=self.pending_userkit.id).exists())
+
+    def test_normal_user_cannot_reject_pending_suggestion(self):
+        self.client.force_authenticate(user=self.regular_user)
+
+        response = self.client.post(
+            reverse('admin-team-season-kit-type-reject', args=[self.pending_suggestion.id])
+        )
+
+        self.assertEqual(response.status_code, 403)
 
     def test_staff_can_merge_pending_type_into_approved_type(self):
         existing_target = TeamSeasonKitType.objects.create(
@@ -918,6 +1025,87 @@ class AdminKitTypeModerationAPITests(APITestCase):
             ).exists()
         )
 
+    def test_moderator_can_merge_pending_type_into_approved_type(self):
+        existing_target = TeamSeasonKitType.objects.create(
+            team=self.team,
+            season='2024/2025',
+            kit_type=self.home_type,
+            status=TeamSeasonKitType.STATUS_PENDING,
+            source=TeamSeasonKitType.SOURCE_UPLOAD,
+            created_by=self.creator,
+        )
+        other_team = Team.objects.create(name='Merge Moderator FC', is_verified=True)
+        other_suggestion = TeamSeasonKitType.objects.create(
+            team=other_team,
+            season='2025/2026',
+            kit_type=self.pending_type,
+            status=TeamSeasonKitType.STATUS_PENDING,
+            source=TeamSeasonKitType.SOURCE_UPLOAD,
+            created_by=self.creator,
+        )
+        other_kit = Kit.objects.create(
+            team=other_team,
+            season='2025/2026',
+            kit_type='Player Spec Tribute',
+            kit_type_ref=self.pending_type,
+            estimated_price=Decimal('90.00'),
+        )
+        UserKit.objects.create(
+            user=self.creator,
+            kit=other_kit,
+            shirt_technology='REPLICA',
+            shirt_version=ShirtVersion.objects.get(code='REPLICA'),
+            condition='VERY_GOOD',
+            size='L',
+        )
+        self.client.force_authenticate(user=self.moderator_user)
+
+        response = self.client.post(
+            reverse('admin-team-season-kit-type-merge', args=[self.pending_suggestion.id]),
+            {'target_kit_type_id': self.home_type.id},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.pending_type.refresh_from_db()
+        self.pending_kit.refresh_from_db()
+        other_kit.refresh_from_db()
+        existing_target.refresh_from_db()
+        other_suggestion.refresh_from_db()
+
+        self.assertEqual(self.pending_kit.kit_type_ref, self.home_type)
+        self.assertEqual(other_kit.kit_type_ref, self.home_type)
+        self.assertEqual(self.pending_type.status, KitType.STATUS_MERGED)
+        self.assertEqual(self.pending_type.merged_into, self.home_type)
+        self.assertFalse(TeamSeasonKitType.objects.filter(pk=self.pending_suggestion.id).exists())
+        self.assertEqual(existing_target.status, TeamSeasonKitType.STATUS_APPROVED)
+        self.assertEqual(other_suggestion.kit_type, self.home_type)
+
+    def test_superuser_can_merge_pending_type_into_approved_type(self):
+        self.client.force_authenticate(user=self.superuser)
+
+        response = self.client.post(
+            reverse('admin-team-season-kit-type-merge', args=[self.pending_suggestion.id]),
+            {'target_kit_type_id': self.home_type.id},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.pending_type.refresh_from_db()
+        self.assertEqual(self.pending_type.status, KitType.STATUS_MERGED)
+        self.assertEqual(self.pending_type.merged_into, self.home_type)
+
+    def test_normal_user_cannot_merge_pending_type_into_approved_type(self):
+        self.client.force_authenticate(user=self.regular_user)
+
+        response = self.client.post(
+            reverse('admin-team-season-kit-type-merge', args=[self.pending_suggestion.id]),
+            {'target_kit_type_id': self.home_type.id},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 403)
+
     def test_current_user_includes_is_staff_flag(self):
         self.client.force_authenticate(user=self.staff_user)
 
@@ -925,6 +1113,135 @@ class AdminKitTypeModerationAPITests(APITestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.data['is_staff'])
+
+    def test_current_user_includes_moderator_profile_flag(self):
+        self.client.force_authenticate(user=self.moderator_user)
+
+        response = self.client.get(reverse('current-user'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data['is_staff'])
+        self.assertTrue(response.data['profile']['is_moderator'])
+
+    def test_pending_suggestion_is_not_returned_by_approved_slots_endpoint(self):
+        response = self.client.get(
+            reverse('approved-team-season-kit-types', args=[self.team.id])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [])
+
+    def test_rejected_suggestion_is_not_returned_by_approved_slots_endpoint(self):
+        self.pending_suggestion.status = TeamSeasonKitType.STATUS_REJECTED
+        self.pending_suggestion.save(update_fields=['status'])
+
+        response = self.client.get(
+            reverse('approved-team-season-kit-types', args=[self.team.id])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [])
+
+    def test_approved_suggestion_is_returned_only_for_exact_team_and_season(self):
+        self.pending_suggestion.status = TeamSeasonKitType.STATUS_APPROVED
+        self.pending_suggestion.approved_by = self.staff_user
+        self.pending_suggestion.approved_at = timezone.now()
+        self.pending_suggestion.save(update_fields=['status', 'approved_by', 'approved_at'])
+        self.pending_type.status = KitType.STATUS_APPROVED
+        self.pending_type.approved_by = self.staff_user
+        self.pending_type.approved_at = timezone.now()
+        self.pending_type.save(update_fields=['status', 'approved_by', 'approved_at'])
+
+        same_team_other_season = TeamSeasonKitType.objects.create(
+            team=self.team,
+            season='2025/2026',
+            kit_type=self.pending_type,
+            status=TeamSeasonKitType.STATUS_PENDING,
+            source=TeamSeasonKitType.SOURCE_UPLOAD,
+            created_by=self.creator,
+        )
+        other_team = Team.objects.create(name='Other Moderation FC', is_verified=True)
+        other_team_same_type = TeamSeasonKitType.objects.create(
+            team=other_team,
+            season='2024/2025',
+            kit_type=self.pending_type,
+            status=TeamSeasonKitType.STATUS_PENDING,
+            source=TeamSeasonKitType.SOURCE_UPLOAD,
+            created_by=self.creator,
+        )
+
+        response = self.client.get(
+            reverse('approved-team-season-kit-types', args=[self.team.id])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['season'], '2024/2025')
+        self.assertEqual(response.data[0]['kit_type_id'], self.pending_type.id)
+        self.assertNotIn(
+            same_team_other_season.id,
+            [row['id'] for row in response.data],
+        )
+        self.assertNotIn(
+            other_team_same_type.id,
+            [row['id'] for row in response.data],
+        )
+
+    def test_approving_one_team_season_slot_does_not_approve_other_seasons(self):
+        self.pending_suggestion.status = TeamSeasonKitType.STATUS_APPROVED
+        self.pending_suggestion.approved_by = self.staff_user
+        self.pending_suggestion.approved_at = timezone.now()
+        self.pending_suggestion.save(update_fields=['status', 'approved_by', 'approved_at'])
+        self.pending_type.status = KitType.STATUS_APPROVED
+        self.pending_type.approved_by = self.staff_user
+        self.pending_type.approved_at = timezone.now()
+        self.pending_type.save(update_fields=['status', 'approved_by', 'approved_at'])
+
+        TeamSeasonKitType.objects.create(
+            team=self.team,
+            season='2025/2026',
+            kit_type=self.pending_type,
+            status=TeamSeasonKitType.STATUS_PENDING,
+            source=TeamSeasonKitType.SOURCE_UPLOAD,
+            created_by=self.creator,
+        )
+
+        response = self.client.get(
+            reverse('approved-team-season-kit-types', args=[self.team.id])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [row['season'] for row in response.data],
+            ['2024/2025'],
+        )
+
+    def test_approval_does_not_affect_another_team(self):
+        self.pending_suggestion.status = TeamSeasonKitType.STATUS_APPROVED
+        self.pending_suggestion.approved_by = self.staff_user
+        self.pending_suggestion.approved_at = timezone.now()
+        self.pending_suggestion.save(update_fields=['status', 'approved_by', 'approved_at'])
+        self.pending_type.status = KitType.STATUS_APPROVED
+        self.pending_type.approved_by = self.staff_user
+        self.pending_type.approved_at = timezone.now()
+        self.pending_type.save(update_fields=['status', 'approved_by', 'approved_at'])
+
+        other_team = Team.objects.create(name='No Leakage FC', is_verified=True)
+        TeamSeasonKitType.objects.create(
+            team=other_team,
+            season='2024/2025',
+            kit_type=self.pending_type,
+            status=TeamSeasonKitType.STATUS_PENDING,
+            source=TeamSeasonKitType.SOURCE_UPLOAD,
+            created_by=self.creator,
+        )
+
+        response = self.client.get(
+            reverse('approved-team-season-kit-types', args=[other_team.id])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [])
 
     def test_public_approved_team_season_slots_endpoint_returns_approved_rows(self):
         self.pending_suggestion.status = TeamSeasonKitType.STATUS_APPROVED

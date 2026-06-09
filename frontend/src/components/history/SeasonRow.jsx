@@ -15,6 +15,22 @@ const uniqueTypes = (types) => {
 	});
 };
 
+const getTypeSortOrder = (type) =>
+	Number.isFinite(Number(type?.sort_order))
+		? Number(type.sort_order)
+		: Number.POSITIVE_INFINITY;
+
+const compareApprovedExtraTypes = (left, right) => {
+	const leftSortOrder = getTypeSortOrder(left);
+	const rightSortOrder = getTypeSortOrder(right);
+
+	if (leftSortOrder !== rightSortOrder) {
+		return leftSortOrder - rightSortOrder;
+	}
+
+	return (left.name || "").localeCompare(right.name || "");
+};
+
 const SeasonRow = ({
 	season,
 	organizedKits,
@@ -40,21 +56,32 @@ const SeasonRow = ({
 	const defaultKeys = new Set(
 		[...primaryTypes, ...expandedTypes].map((type) => type.key),
 	);
-	const approvedExtraTypes = (approvedTypes || []).filter(
-		(type) => !defaultKeys.has(type.key),
+	const approvedTypeKeys = new Set(
+		(approvedTypes || []).map((type) => type.key),
 	);
-	const uploadedExtraTypes = actualEntries
-		.map((entry) => entry.type)
-		.filter((type) => !defaultKeys.has(type.key));
+	const approvedExtraTypes = (approvedTypes || [])
+		.filter((type) => !defaultKeys.has(type.key))
+		.sort(compareApprovedExtraTypes);
+	const museumVisibleActualEntries = actualEntries.filter(
+		(entry) =>
+			defaultKeys.has(entry.type.key) ||
+			approvedTypeKeys.has(entry.type.key),
+	);
+	const visibleActualTypes = uniqueTypes(
+		museumVisibleActualEntries.map((entry) => entry.type),
+	);
+	const primaryAndExpandedTypes = uniqueTypes([
+		...primaryTypes,
+		...(isExpanded ? expandedTypes : []),
+	]);
+	const hiddenApprovedTypes = uniqueTypes(approvedExtraTypes);
 
 	const visibleTypes = showEmpty
 		? uniqueTypes([
-			...primaryTypes,
-			...(isExpanded ? expandedTypes : []),
-			...approvedExtraTypes,
-			...uploadedExtraTypes,
+			...primaryAndExpandedTypes,
+			...(isExpanded ? hiddenApprovedTypes : []),
 		])
-		: uniqueTypes(actualEntries.map((entry) => entry.type));
+		: visibleActualTypes;
 
 	if (visibleTypes.length === 0) return null;
 
@@ -142,14 +169,18 @@ const SeasonRow = ({
 				})}
 			</div>
 
-			{showEmpty && expandedTypes.length > 0 && (
+			{showEmpty && (expandedTypes.length > 0 || approvedExtraTypes.length > 0) && (
 				<div className="text-center mt-3">
 					<button
 						type="button"
 						onClick={() => setIsExpanded((current) => !current)}
 						className="btn btn-sm btn-outline-secondary rounded-pill px-4"
 					>
-						{isExpanded ? t("history.hide") : t("history.showMore", { count: expandedTypes.length })}
+						{isExpanded
+							? t("history.hide")
+							: t("history.showMore", {
+								count: expandedTypes.length + approvedExtraTypes.length,
+							})}
 						<i className={`bi bi-chevron-${isExpanded ? "up" : "down"} ms-1`}></i>
 					</button>
 				</div>

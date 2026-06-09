@@ -2,7 +2,7 @@
 	"nav": {
 		"kitMuseum": "Muzeum koszulek",
 		"feed": "Feed",
-		"admin": "Admin",
+		"admin": "Moderacja",
 		"messages": "Wiadomości",
 		"viewProfile": "Zobacz profil",
 		"logout": "Wyloguj",
@@ -388,7 +388,7 @@
 		"noPhoto": "Brak zdjęcia"
 	},
 	"admin": {
-		"title": "Admin",
+		"title": "Moderacja",
 		"kitTypesTitle": "Sugestie typów koszulek",
 		"noSuggestions": "Brak oczekujących sugestii typów.",
 		"approve": "Zatwierdź",
@@ -397,7 +397,7 @@
 		"mergeInto": "Scal z",
 		"uploads": "{{count}} uploadów",
 		"notAuthorized": "Nie masz dostępu do tej strony.",
-		"loadError": "Nie udało się załadować danych admina.",
+		"loadError": "Nie udało się załadować danych moderacji.",
 		"actionError": "Nie udało się wykonać akcji.",
 		"seasonLabel": "Sezon: {{season}}",
 		"createdByLabel": "Utworzone przez:",

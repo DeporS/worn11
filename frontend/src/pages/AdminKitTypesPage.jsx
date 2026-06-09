@@ -8,6 +8,7 @@ import api, {
 	mergeAdminTeamSeasonKitType,
 	rejectAdminTeamSeasonKitType,
 } from "../services/api";
+import { canAccessModeration } from "../utils/permissions";
 
 import "../styles/admin.css";
 
@@ -45,9 +46,10 @@ const AdminKitTypesPage = ({ user }) => {
 			})),
 		[approvedKitTypes],
 	);
+	const hasModerationAccess = canAccessModeration(user);
 
 	useEffect(() => {
-		if (!user?.is_staff) {
+		if (!hasModerationAccess) {
 			setLoading(false);
 			return undefined;
 		}
@@ -83,7 +85,7 @@ const AdminKitTypesPage = ({ user }) => {
 		return () => {
 			cancelled = true;
 		};
-	}, [t, user]);
+	}, [hasModerationAccess, t, user]);
 
 	const removeItem = (itemId) => {
 		setItems((current) => current.filter((item) => item.id !== itemId));
@@ -159,7 +161,7 @@ const AdminKitTypesPage = ({ user }) => {
 		}
 	};
 
-	if (!user?.is_staff) {
+	if (!hasModerationAccess) {
 		return (
 			<div className="container py-5 admin-kit-types-page">
 				<div className="admin-kit-types-empty">{t("admin.notAuthorized")}</div>

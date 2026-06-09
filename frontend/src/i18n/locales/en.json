@@ -2,7 +2,7 @@
 	"nav": {
 		"kitMuseum": "Kit Museum",
 		"feed": "Feed",
-		"admin": "Admin",
+		"admin": "Moderation",
 		"messages": "Messages",
 		"viewProfile": "View profile",
 		"logout": "Logout",
@@ -388,7 +388,7 @@
 		"noPhoto": "No photo"
 	},
 	"admin": {
-		"title": "Admin",
+		"title": "Moderation",
 		"kitTypesTitle": "Kit type suggestions",
 		"noSuggestions": "No pending kit type suggestions.",
 		"approve": "Approve",
@@ -397,7 +397,7 @@
 		"mergeInto": "Merge into",
 		"uploads": "{{count}} uploads",
 		"notAuthorized": "You are not allowed to access this page.",
-		"loadError": "Could not load admin data.",
+		"loadError": "Could not load moderation data.",
 		"actionError": "Could not complete this action.",
 		"seasonLabel": "Season: {{season}}",
 		"createdByLabel": "Created by:",

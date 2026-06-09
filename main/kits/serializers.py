@@ -5,6 +5,7 @@ from dj_rest_auth.serializers import UserDetailsSerializer
 from django.utils.text import slugify
 import json
 from urllib.parse import urlencode
+from .permissions import is_staff_or_moderator
 
 
 def normalize_catalog_name(value):
@@ -144,12 +145,7 @@ class KitCommentSerializer(serializers.ModelSerializer):
         if not request or not request.user.is_authenticated:
             return False
 
-        profile = getattr(request.user, 'profile', None)
-        return (
-            obj.user_id == request.user.id
-            or request.user.is_staff
-            or bool(profile and profile.is_moderator)
-        )
+        return obj.user_id == request.user.id or is_staff_or_moderator(request.user)
 
     def get_likes_count(self, obj):
         return getattr(obj, 'likes_count', obj.comment_likes.count())
