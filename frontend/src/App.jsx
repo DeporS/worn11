@@ -17,6 +17,7 @@ import KitVariantsPage from "./pages/KitVariantsPage";
 import KitDetailPage from "./pages/KitDetailPage";
 import MessagesPage from "./pages/MessagesPage";
 import FeedPage from "./pages/FeedPage";
+import AdminKitTypesPage from "./pages/AdminKitTypesPage";
 import NavBar from "./components/NavBar";
 import api, {
 	getUnreadMessagesCount,
@@ -263,6 +264,22 @@ function App() {
 					<Route
 						path="/history/team/:teamIdentifier/variants"
 						element={<KitVariantsPage user={user} />}
+					/>
+					<Route
+						path="/admin"
+						element={
+							<AuthGate authLoading={authLoading} user={user}>
+								<Navigate to="/admin/kit-types" replace />
+							</AuthGate>
+						}
+					/>
+					<Route
+						path="/admin/kit-types"
+						element={
+							<AuthGate authLoading={authLoading} user={user}>
+								<AdminKitTypesPage user={user} />
+							</AuthGate>
+						}
 					/>
 				</Routes>
 			</div>

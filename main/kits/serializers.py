@@ -1,7 +1,8 @@
 from rest_framework import serializers
-from .models import Country, League, Team, Kit, KitType, KitTypeAlias, UserKit, UserKitImage, WishlistItem, User, Profile, KitComment, KitReport, Conversation, Message, Notification, CollectionValueSnapshot, ShirtVersion, CANONICAL_WISHLIST_KIT_TYPES, build_team_slug, normalize_wishlist_kit_type
+from .models import Country, League, Team, Kit, KitType, KitTypeAlias, TeamSeasonKitType, UserKit, UserKitImage, WishlistItem, User, Profile, KitComment, KitReport, Conversation, Message, Notification, CollectionValueSnapshot, ShirtVersion, CANONICAL_WISHLIST_KIT_TYPES, build_team_slug, normalize_wishlist_kit_type
 from django.contrib.auth.models import User
 from dj_rest_auth.serializers import UserDetailsSerializer
+from django.utils.text import slugify
 import json
 from urllib.parse import urlencode
 
@@ -41,6 +42,64 @@ def resolve_approved_kit_type(*, kit_type_id=None, kit_type_slug=None, legacy_na
         kit_type__status=KitType.STATUS_APPROVED,
     ).first()
     return alias.kit_type if alias else None
+
+
+def build_unique_kit_type_slug(name):
+    base_slug = slugify(name or '')[:110] or 'kit-type'
+    candidate = base_slug
+    suffix = 2
+
+    while KitType.objects.filter(slug=candidate).exists():
+        suffix_text = f'-{suffix}'
+        candidate = f'{base_slug[:120 - len(suffix_text)]}{suffix_text}'
+        suffix += 1
+
+    return candidate
+
+
+def get_or_create_pending_kit_type(*, legacy_name, created_by=None):
+    cleaned_name = ' '.join((legacy_name or '').strip().split())
+    if not cleaned_name:
+        return None
+
+    existing = KitType.objects.filter(name__iexact=cleaned_name).exclude(
+        status=KitType.STATUS_MERGED,
+    ).order_by('id').first()
+    if existing is not None:
+        return existing
+
+    return KitType.objects.create(
+        name=cleaned_name,
+        slug=build_unique_kit_type_slug(cleaned_name),
+        category=KitType.CATEGORY_OTHER,
+        status=KitType.STATUS_PENDING,
+        default_visibility=KitType.VISIBILITY_NONE,
+        created_by=created_by,
+    )
+
+
+def ensure_team_season_suggestion(*, team, season, kit_type, created_by=None):
+    if kit_type is None:
+        return None
+
+    should_track = (
+        kit_type.status == KitType.STATUS_PENDING
+        or kit_type.default_visibility == KitType.VISIBILITY_NONE
+    )
+    if not should_track:
+        return None
+
+    suggestion, _ = TeamSeasonKitType.objects.get_or_create(
+        team=team,
+        season=season,
+        kit_type=kit_type,
+        defaults={
+            'status': TeamSeasonKitType.STATUS_PENDING,
+            'source': TeamSeasonKitType.SOURCE_UPLOAD,
+            'created_by': created_by,
+        },
+    )
+    return suggestion
 
 
 class CommentAuthorSerializer(serializers.ModelSerializer):
@@ -424,6 +483,94 @@ class KitSearchSuggestionSerializer(serializers.Serializer):
     has_uploads = serializers.BooleanField(read_only=True)
 
 
+class AdminKitTypeSuggestionSerializer(serializers.ModelSerializer):
+    team_id = serializers.IntegerField(source='team.id', read_only=True)
+    team_name = serializers.CharField(source='team.name', read_only=True)
+    team_slug = serializers.SerializerMethodField()
+    kit_type_id = serializers.IntegerField(source='kit_type.id', read_only=True)
+    kit_type_name = serializers.CharField(source='kit_type.name', read_only=True)
+    kit_type_slug = serializers.CharField(source='kit_type.slug', read_only=True)
+    kit_type_status = serializers.CharField(source='kit_type.status', read_only=True)
+    team_season_status = serializers.CharField(source='status', read_only=True)
+    created_by_username = serializers.CharField(source='created_by.username', read_only=True, allow_null=True)
+    upload_count = serializers.IntegerField(read_only=True)
+    preview_image = serializers.SerializerMethodField()
+    museum_url = serializers.SerializerMethodField()
+    example_source_userkit_id = serializers.IntegerField(read_only=True, allow_null=True)
+
+    class Meta:
+        model = TeamSeasonKitType
+        fields = [
+            'id',
+            'team_id',
+            'team_name',
+            'team_slug',
+            'season',
+            'kit_type_id',
+            'kit_type_name',
+            'kit_type_slug',
+            'kit_type_status',
+            'team_season_status',
+            'source',
+            'created_by_username',
+            'created_at',
+            'upload_count',
+            'preview_image',
+            'museum_url',
+            'example_source_userkit_id',
+        ]
+
+    def get_team_slug(self, obj):
+        return build_team_slug(obj.team.name)
+
+    def get_preview_image(self, obj):
+        request = self.context.get('request')
+        preview_image = getattr(obj, 'preview_image', None)
+        if not preview_image:
+            return None
+        return request.build_absolute_uri(preview_image) if request else preview_image
+
+    def get_museum_url(self, obj):
+        query_string = urlencode({'season': obj.season, 'type': obj.kit_type.name})
+        return f"/history/team/{build_team_slug(obj.team.name)}/variants?{query_string}"
+
+
+class AdminKitTypeMergeSerializer(serializers.Serializer):
+    target_kit_type_id = serializers.IntegerField()
+
+    def validate_target_kit_type_id(self, value):
+        target = KitType.objects.filter(
+            pk=value,
+            status=KitType.STATUS_APPROVED,
+        ).first()
+        if target is None:
+            raise serializers.ValidationError('Target shirt type must be an approved KitType.')
+        self.context['target_kit_type'] = target
+        return value
+
+
+class ApprovedTeamSeasonKitTypeSerializer(serializers.ModelSerializer):
+    team_id = serializers.IntegerField(source='team.id', read_only=True)
+    kit_type_id = serializers.IntegerField(source='kit_type.id', read_only=True)
+    kit_type_name = serializers.CharField(source='kit_type.name', read_only=True)
+    kit_type_slug = serializers.CharField(source='kit_type.slug', read_only=True)
+    default_visibility = serializers.CharField(source='kit_type.default_visibility', read_only=True)
+    sort_order = serializers.IntegerField(source='kit_type.sort_order', read_only=True)
+
+    class Meta:
+        model = TeamSeasonKitType
+        fields = [
+            'id',
+            'team_id',
+            'season',
+            'kit_type_id',
+            'kit_type_name',
+            'kit_type_slug',
+            'default_visibility',
+            'sort_order',
+        ]
+
+
 class WishlistToggleSerializer(serializers.Serializer):
     team_id = serializers.IntegerField()
     season = serializers.CharField()
@@ -748,6 +895,14 @@ class UserKitSerializer(serializers.ModelSerializer):
         if not team:
             team = Team.objects.create(name=clean_team_name)
 
+        if kit_type_ref is None:
+            kit_type_ref = get_or_create_pending_kit_type(
+                legacy_name=kit_type,
+                created_by=validated_data.get('user'),
+            )
+            if kit_type_ref is not None:
+                kit_type = kit_type_ref.name
+
         # Get or create the Kit
         kit, _ = Kit.objects.get_or_create(
             team=team,
@@ -761,6 +916,12 @@ class UserKitSerializer(serializers.ModelSerializer):
 
         # Create the UserKit
         user_kit = UserKit.objects.create(kit=kit, **validated_data)
+        ensure_team_season_suggestion(
+            team=team,
+            season=season,
+            kit_type=kit_type_ref,
+            created_by=user_kit.user,
+        )
 
         # Images handling
         request = self.context.get('request')
@@ -788,6 +949,14 @@ class UserKitSerializer(serializers.ModelSerializer):
             if not team:
                 team = Team.objects.create(name=clean_name)
 
+            if kit_type_ref is None:
+                kit_type_ref = get_or_create_pending_kit_type(
+                    legacy_name=kit_type,
+                    created_by=instance.user,
+                )
+                if kit_type_ref is not None:
+                    kit_type = kit_type_ref.name
+
             kit, _ = Kit.objects.get_or_create(
                 team=team, 
                 season=season, 
@@ -799,6 +968,12 @@ class UserKitSerializer(serializers.ModelSerializer):
                 kit.save(update_fields=['kit_type_ref'])
             
             instance.kit = kit
+            ensure_team_season_suggestion(
+                team=team,
+                season=season,
+                kit_type=kit_type_ref,
+                created_by=instance.user,
+            )
 
         images_order_json = validated_data.pop('images_order', None)
         # photos data
@@ -939,10 +1114,11 @@ class ProfileSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     # Nested profile serializer
     profile = ProfileSerializer(read_only=True)
+    is_staff = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'profile']
+        fields = ['id', 'username', 'email', 'is_staff', 'profile']
 
 # Custom User Details Serializer to include is_pro field
 class CustomUserDetailsSerializer(UserDetailsSerializer):

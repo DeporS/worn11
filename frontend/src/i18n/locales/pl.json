@@ -2,6 +2,7 @@
 	"nav": {
 		"kitMuseum": "Muzeum koszulek",
 		"feed": "Feed",
+		"admin": "Admin",
 		"messages": "Wiadomości",
 		"viewProfile": "Zobacz profil",
 		"logout": "Wyloguj",
@@ -385,6 +386,28 @@
 		"unknownTeam": "Nieznany zespół",
 		"forSale": "Na sprzedaż",
 		"noPhoto": "Brak zdjęcia"
+	},
+	"admin": {
+		"title": "Admin",
+		"kitTypesTitle": "Sugestie typów koszulek",
+		"noSuggestions": "Brak oczekujących sugestii typów.",
+		"approve": "Zatwierdź",
+		"reject": "Odrzuć",
+		"merge": "Scal",
+		"mergeInto": "Scal z",
+		"uploads": "{{count}} uploadów",
+		"notAuthorized": "Nie masz dostępu do tej strony.",
+		"loadError": "Nie udało się załadować danych admina.",
+		"actionError": "Nie udało się wykonać akcji.",
+		"seasonLabel": "Sezon: {{season}}",
+		"createdByLabel": "Utworzone przez:",
+		"createdAtLabel": "Utworzono:",
+		"sourceLabel": "Źródło:",
+		"viewMuseum": "Otwórz w Kit Museum",
+		"noPreview": "Brak podglądu",
+		"rejectConfirm": "To odrzuci sugestię slotu muzeum, ale nie usunie uploadów użytkowników.",
+		"mergeConfirm": "To scali sugerowany typ z wybranym zatwierdzonym KitType.",
+		"selectMergeTarget": "Wybierz zatwierdzony typ koszulki"
 	},
 	"groups": {
 		"title": "Strona grup",

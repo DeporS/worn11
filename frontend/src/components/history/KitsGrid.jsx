@@ -21,6 +21,17 @@ const prepareKitTypes = (kitTypes) =>
 		key: getCatalogTypeKey(kitType),
 	}));
 
+const prepareApprovedTeamSeasonTypes = (approvedTeamSeasonTypes) =>
+	(Array.isArray(approvedTeamSeasonTypes) ? approvedTeamSeasonTypes : []).map((kitType) => ({
+		id: kitType.kit_type_id,
+		slug: kitType.kit_type_slug,
+		name: kitType.kit_type_name,
+		default_visibility: kitType.default_visibility,
+		sort_order: kitType.sort_order,
+		season: kitType.season,
+		key: getCatalogTypeKey({ id: kitType.kit_type_id }),
+	}));
+
 const resolveUploadedType = (kit, catalogTypes) => {
 	if (kit.kit_type_id) {
 		const matchedById = catalogTypes.find((type) => type.id === kit.kit_type_id);
@@ -47,11 +58,23 @@ const resolveUploadedType = (kit, catalogTypes) => {
 const buildWishlistKey = (teamId, season, kitType) =>
 	`${teamId || ""}::${(season || "").trim()}::${normalizeHistoryKitType(kitType)}`;
 
-const KitsGrid = ({ kits, kitTypes, loading, selectedTeamName, selectedTeamId, user }) => {
+const KitsGrid = ({
+	kits,
+	kitTypes,
+	approvedTeamSeasonTypes,
+	loading,
+	selectedTeamName,
+	selectedTeamId,
+	user,
+}) => {
 	const { t } = useTranslation();
 	const [showEmpty, setShowEmpty] = useState(true);
 	const [wishlistItems, setWishlistItems] = useState([]);
 	const catalogTypes = useMemo(() => prepareKitTypes(kitTypes), [kitTypes]);
+	const approvedTypes = useMemo(
+		() => prepareApprovedTeamSeasonTypes(approvedTeamSeasonTypes),
+		[approvedTeamSeasonTypes],
+	);
 
 	const seasons = useMemo(() => {
 		const years = [];
@@ -82,6 +105,17 @@ const KitsGrid = ({ kits, kitTypes, loading, selectedTeamName, selectedTeamId, u
 		});
 		return map;
 	}, [catalogTypes, kits]);
+
+	const approvedTypesBySeason = useMemo(() => {
+		const seasonMap = {};
+		approvedTypes.forEach((kitType) => {
+			if (!seasonMap[kitType.season]) {
+				seasonMap[kitType.season] = [];
+			}
+			seasonMap[kitType.season].push(kitType);
+		});
+		return seasonMap;
+	}, [approvedTypes]);
 
 	const wishlistKeySet = useMemo(
 		() => new Set(
@@ -157,6 +191,7 @@ const KitsGrid = ({ kits, kitTypes, loading, selectedTeamName, selectedTeamId, u
 					season={season}
 					organizedKits={organizedKits}
 					kitTypes={catalogTypes}
+					approvedTypes={approvedTypesBySeason[season] || []}
 					showEmpty={showEmpty}
 					selectedTeamName={selectedTeamName}
 					selectedTeamId={selectedTeamId}

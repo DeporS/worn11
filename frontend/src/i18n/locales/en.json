@@ -2,6 +2,7 @@
 	"nav": {
 		"kitMuseum": "Kit Museum",
 		"feed": "Feed",
+		"admin": "Admin",
 		"messages": "Messages",
 		"viewProfile": "View profile",
 		"logout": "Logout",
@@ -385,6 +386,28 @@
 		"unknownTeam": "Unknown team",
 		"forSale": "For sale",
 		"noPhoto": "No photo"
+	},
+	"admin": {
+		"title": "Admin",
+		"kitTypesTitle": "Kit type suggestions",
+		"noSuggestions": "No pending kit type suggestions.",
+		"approve": "Approve",
+		"reject": "Reject",
+		"merge": "Merge",
+		"mergeInto": "Merge into",
+		"uploads": "{{count}} uploads",
+		"notAuthorized": "You are not allowed to access this page.",
+		"loadError": "Could not load admin data.",
+		"actionError": "Could not complete this action.",
+		"seasonLabel": "Season: {{season}}",
+		"createdByLabel": "Created by:",
+		"createdAtLabel": "Created at:",
+		"sourceLabel": "Source:",
+		"viewMuseum": "Open in Kit Museum",
+		"noPreview": "No preview image",
+		"rejectConfirm": "This will reject the museum slot suggestion but keep user uploads.",
+		"mergeConfirm": "This will merge the suggested type into the selected approved KitType.",
+		"selectMergeTarget": "Select an approved shirt type"
 	},
 	"groups": {
 		"title": "Groups Page",

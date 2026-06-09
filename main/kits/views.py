@@ -10,14 +10,15 @@ from rest_framework.throttling import ScopedRateThrottle
 from .throttles import KitCreationThrottle
 
 from django.shortcuts import get_object_or_404
+from django.db import transaction
 from django.db.models import Sum, Count, Exists, OuterRef, Value, BooleanField, Prefetch, Q, Subquery
 from django.contrib.auth.models import User
 from django.utils import timezone
 from urllib.parse import urlencode
 import re
 
-from .models import League, UserKit, UserKitImage, WishlistItem, Kit, KitType, ShirtVersion, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country, Follow, KitComment, KitCommentLike, KitReport, Conversation, Message, Notification, CollectionValueSnapshot, calculate_collection_total_value, record_collection_value_snapshot, build_team_slug, normalize_wishlist_kit_type
-from .serializers import LeagueSerializer, UserKitSerializer, WishlistItemSerializer, WishlistToggleSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer, CountrySerializer, KitCommentSerializer, KitCommentWriteSerializer, KitReportSerializer, ConversationListSerializer, ConversationDetailSerializer, ConversationStartSerializer, MessageSerializer, MessageWriteSerializer, KitSearchSuggestionSerializer, NotificationSerializer, CollectionValueSnapshotSerializer
+from .models import League, UserKit, UserKitImage, WishlistItem, Kit, KitType, KitTypeAlias, TeamSeasonKitType, ShirtVersion, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country, Follow, KitComment, KitCommentLike, KitReport, Conversation, Message, Notification, CollectionValueSnapshot, calculate_collection_total_value, record_collection_value_snapshot, build_team_slug, normalize_wishlist_kit_type
+from .serializers import LeagueSerializer, UserKitSerializer, WishlistItemSerializer, WishlistToggleSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer, CountrySerializer, KitCommentSerializer, KitCommentWriteSerializer, KitReportSerializer, ConversationListSerializer, ConversationDetailSerializer, ConversationStartSerializer, MessageSerializer, MessageWriteSerializer, KitSearchSuggestionSerializer, NotificationSerializer, CollectionValueSnapshotSerializer, AdminKitTypeSuggestionSerializer, AdminKitTypeMergeSerializer, ApprovedTeamSeasonKitTypeSerializer, normalize_catalog_name
 
 
 SUPPORTED_KIT_TYPES = [
@@ -662,6 +663,13 @@ class CurrentUserAPI(generics.RetrieveAPIView):
     def get_object(self):
         return self.request.user
 
+
+class IsStaffUser(permissions.BasePermission):
+    message = 'You do not have permission to access this resource.'
+
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated and request.user.is_staff)
+
 # Pagination configuration
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 12
@@ -978,6 +986,208 @@ class TeamResolveAPI(APIView):
 
         serializer = TeamSerializer(team)
         return Response(serializer.data)
+
+
+class AdminKitTypeSuggestionsAPI(APIView):
+    permission_classes = [IsAuthenticated, IsStaffUser]
+
+    def get(self, request):
+        suggestions = list(
+            TeamSeasonKitType.objects.filter(status=TeamSeasonKitType.STATUS_PENDING)
+            .select_related('team', 'kit_type', 'created_by')
+            .order_by('-created_at', '-id')
+        )
+
+        if suggestions:
+            keys = {
+                (suggestion.team_id, suggestion.season, suggestion.kit_type_id)
+                for suggestion in suggestions
+            }
+            team_ids = {key[0] for key in keys}
+            seasons = {key[1] for key in keys}
+            kit_type_ids = {key[2] for key in keys}
+
+            matching_uploads = (
+                UserKit.objects.filter(
+                    kit__team_id__in=team_ids,
+                    kit__season__in=seasons,
+                    kit__kit_type_ref_id__in=kit_type_ids,
+                )
+                .select_related('kit', 'kit__team')
+                .prefetch_related('images')
+                .order_by('kit__team_id', 'kit__season', 'kit__kit_type_ref_id', '-added_at', '-id')
+            )
+
+            upload_count_map = {}
+            preview_map = {}
+            example_userkit_map = {}
+            for user_kit in matching_uploads:
+                key = (
+                    user_kit.kit.team_id,
+                    user_kit.kit.season,
+                    user_kit.kit.kit_type_ref_id,
+                )
+                upload_count_map[key] = upload_count_map.get(key, 0) + 1
+                example_userkit_map.setdefault(key, user_kit.id)
+                if key not in preview_map:
+                    first_image = next(iter(user_kit.images.all()), None)
+                    if first_image is not None:
+                        preview_map[key] = first_image.image.url
+
+            for suggestion in suggestions:
+                key = (suggestion.team_id, suggestion.season, suggestion.kit_type_id)
+                suggestion.upload_count = upload_count_map.get(key, 0)
+                suggestion.preview_image = preview_map.get(key)
+                suggestion.example_source_userkit_id = example_userkit_map.get(key)
+
+        serializer = AdminKitTypeSuggestionSerializer(
+            suggestions,
+            many=True,
+            context={'request': request},
+        )
+        return Response(serializer.data)
+
+
+class AdminTeamSeasonKitTypeApproveAPI(APIView):
+    permission_classes = [IsAuthenticated, IsStaffUser]
+
+    def post(self, request, pk):
+        suggestion = get_object_or_404(
+            TeamSeasonKitType.objects.select_related('kit_type'),
+            pk=pk,
+        )
+        now = timezone.now()
+
+        with transaction.atomic():
+            suggestion.status = TeamSeasonKitType.STATUS_APPROVED
+            suggestion.approved_by = request.user
+            suggestion.approved_at = now
+            suggestion.save(update_fields=['status', 'approved_by', 'approved_at'])
+
+            if suggestion.kit_type.status == KitType.STATUS_PENDING:
+                suggestion.kit_type.status = KitType.STATUS_APPROVED
+                suggestion.kit_type.approved_by = request.user
+                suggestion.kit_type.approved_at = now
+                suggestion.kit_type.save(
+                    update_fields=['status', 'approved_by', 'approved_at']
+                )
+
+        return Response({
+            'id': suggestion.id,
+            'status': suggestion.status,
+            'kit_type_status': suggestion.kit_type.status,
+        })
+
+
+class AdminTeamSeasonKitTypeRejectAPI(APIView):
+    permission_classes = [IsAuthenticated, IsStaffUser]
+
+    def post(self, request, pk):
+        suggestion = get_object_or_404(TeamSeasonKitType, pk=pk)
+        suggestion.status = TeamSeasonKitType.STATUS_REJECTED
+        suggestion.approved_by = None
+        suggestion.approved_at = None
+        suggestion.save(update_fields=['status', 'approved_by', 'approved_at'])
+        return Response({'id': suggestion.id, 'status': suggestion.status})
+
+
+class AdminTeamSeasonKitTypeMergeAPI(APIView):
+    permission_classes = [IsAuthenticated, IsStaffUser]
+
+    def post(self, request, pk):
+        serializer = AdminKitTypeMergeSerializer(
+            data=request.data,
+            context={'request': request},
+        )
+        serializer.is_valid(raise_exception=True)
+        target_kit_type = serializer.context['target_kit_type']
+        suggestion = get_object_or_404(
+            TeamSeasonKitType.objects.select_related('kit_type'),
+            pk=pk,
+        )
+        source_kit_type = suggestion.kit_type
+
+        if source_kit_type.id == target_kit_type.id:
+            raise ValidationError({'target_kit_type_id': 'Source and target shirt type must differ.'})
+
+        now = timezone.now()
+        affected_team_season_rows = 0
+        deleted_team_season_rows = 0
+
+        with transaction.atomic():
+            Kit.objects.filter(kit_type_ref=source_kit_type).update(
+                kit_type_ref=target_kit_type,
+                kit_type=target_kit_type.name,
+            )
+
+            team_season_rows = list(
+                TeamSeasonKitType.objects.filter(kit_type=source_kit_type)
+                .select_related('team', 'kit_type')
+                .order_by('id')
+            )
+            for row in team_season_rows:
+                force_approve = row.id == suggestion.id
+                duplicate = TeamSeasonKitType.objects.filter(
+                    team=row.team,
+                    season=row.season,
+                    kit_type=target_kit_type,
+                ).exclude(pk=row.pk).first()
+
+                if duplicate is not None:
+                    duplicate_updates = []
+                    if force_approve or row.status == TeamSeasonKitType.STATUS_APPROVED:
+                        if duplicate.status != TeamSeasonKitType.STATUS_APPROVED:
+                            duplicate.status = TeamSeasonKitType.STATUS_APPROVED
+                            duplicate_updates.append('status')
+                        duplicate.approved_by = request.user
+                        duplicate.approved_at = now
+                        duplicate_updates.extend(['approved_by', 'approved_at'])
+                    if duplicate_updates:
+                        duplicate.save(update_fields=list(dict.fromkeys(duplicate_updates)))
+                    row.delete()
+                    deleted_team_season_rows += 1
+                    continue
+
+                row.kit_type = target_kit_type
+                if force_approve:
+                    row.status = TeamSeasonKitType.STATUS_APPROVED
+                    row.approved_by = request.user
+                    row.approved_at = now
+                    row.save(update_fields=['kit_type', 'status', 'approved_by', 'approved_at'])
+                else:
+                    row.save(update_fields=['kit_type'])
+                affected_team_season_rows += 1
+
+            alias_defaults = {
+                'display_alias': source_kit_type.name,
+                'kit_type': target_kit_type,
+                'created_by': source_kit_type.created_by or request.user,
+                'approved_by': request.user,
+            }
+            alias, created = KitTypeAlias.objects.get_or_create(
+                alias_normalized=normalize_catalog_name(source_kit_type.name),
+                defaults=alias_defaults,
+            )
+            if not created and alias.kit_type_id != target_kit_type.id:
+                alias.kit_type = target_kit_type
+                alias.display_alias = alias.display_alias or source_kit_type.name
+                alias.approved_by = request.user
+                alias.save(update_fields=['kit_type', 'display_alias', 'approved_by'])
+
+            source_kit_type.status = KitType.STATUS_MERGED
+            source_kit_type.merged_into = target_kit_type
+            source_kit_type.approved_by = request.user
+            source_kit_type.approved_at = now
+            source_kit_type.save(
+                update_fields=['status', 'merged_into', 'approved_by', 'approved_at']
+            )
+
+        return Response({
+            'merged_kit_type_id': source_kit_type.id,
+            'target_kit_type_id': target_kit_type.id,
+            'team_season_rows_updated': affected_team_season_rows,
+            'team_season_rows_deleted': deleted_team_season_rows,
+        })
 
 # Endpoint: User collection statistics
 class UserCollectionStatsAPI(APIView):
@@ -1751,6 +1961,23 @@ class TopKitsByTeamAPI(generics.ListAPIView):
             .prefetch_related('images', 'likes')\
             .annotate(likes_count=Count('likes', distinct=True), comments_count=Count('comments', distinct=True))\
             .order_by('-likes_count', '-added_at')
+
+
+class ApprovedTeamSeasonKitTypesAPI(generics.ListAPIView):
+    serializer_class = ApprovedTeamSeasonKitTypeSerializer
+    permission_classes = [permissions.AllowAny]
+    pagination_class = None
+
+    def get_queryset(self):
+        return (
+            TeamSeasonKitType.objects.filter(
+                team_id=self.kwargs['team_id'],
+                status=TeamSeasonKitType.STATUS_APPROVED,
+                kit_type__status=KitType.STATUS_APPROVED,
+            )
+            .select_related('team', 'kit_type')
+            .order_by('-season', 'kit_type__sort_order', 'kit_type__name', 'id')
+        )
 
 # Endpoint: Check username availability
 class CheckUsernameAPI(APIView):

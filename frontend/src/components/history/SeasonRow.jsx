@@ -19,6 +19,7 @@ const SeasonRow = ({
 	season,
 	organizedKits,
 	kitTypes,
+	approvedTypes,
 	showEmpty,
 	selectedTeamName,
 	selectedTeamId,
@@ -39,6 +40,9 @@ const SeasonRow = ({
 	const defaultKeys = new Set(
 		[...primaryTypes, ...expandedTypes].map((type) => type.key),
 	);
+	const approvedExtraTypes = (approvedTypes || []).filter(
+		(type) => !defaultKeys.has(type.key),
+	);
 	const uploadedExtraTypes = actualEntries
 		.map((entry) => entry.type)
 		.filter((type) => !defaultKeys.has(type.key));
@@ -47,6 +51,7 @@ const SeasonRow = ({
 		? uniqueTypes([
 			...primaryTypes,
 			...(isExpanded ? expandedTypes : []),
+			...approvedExtraTypes,
 			...uploadedExtraTypes,
 		])
 		: uniqueTypes(actualEntries.map((entry) => entry.type));

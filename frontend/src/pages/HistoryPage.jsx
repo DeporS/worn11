@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigationType } from "react-router-dom";
-import api from "../services/api";
+import api, { getApprovedTeamSeasonKitTypes } from "../services/api";
 
 // Importy nowych komponentów
 import LeaguesGrid from "../components/history/LeaguesGrid";
@@ -21,6 +21,7 @@ const HistoryPage = ({ user }) => {
 	const [teams, setTeams] = useState([]);
 	const [kits, setKits] = useState([]);
 	const [kitTypes, setKitTypes] = useState([]);
+	const [approvedTeamSeasonTypes, setApprovedTeamSeasonTypes] = useState([]);
 
 	// --- STATE WITH SESSION STORAGE ---
 	const [step, setStep] = useState(() => {
@@ -86,12 +87,18 @@ const HistoryPage = ({ user }) => {
 	useEffect(() => {
 		if (selectedTeam && step === 3) {
 			setLoading(true);
-			api.get(`/kits/team/${selectedTeam.id}/best/`)
-				.then((res) => {
-					setKits(res.data.results || res.data);
+			Promise.all([
+				api.get(`/kits/team/${selectedTeam.id}/best/`),
+				getApprovedTeamSeasonKitTypes(selectedTeam.id),
+			])
+				.then(([kitsResponse, approvedTypesResponse]) => {
+					setKits(kitsResponse.data.results || kitsResponse.data);
+					setApprovedTeamSeasonTypes(approvedTypesResponse || []);
 					setLoading(false);
 				})
 				.catch((err) => setLoading(false));
+		} else if (step !== 3) {
+			setApprovedTeamSeasonTypes([]);
 		}
 	}, [selectedTeam, step]);
 
@@ -183,6 +190,7 @@ const HistoryPage = ({ user }) => {
 				<KitsGrid
 					kits={kits}
 					kitTypes={kitTypes}
+					approvedTeamSeasonTypes={approvedTeamSeasonTypes}
 					loading={loading}
 					selectedTeamName={selectedTeam?.name}
 					selectedTeamId={selectedTeam?.id}

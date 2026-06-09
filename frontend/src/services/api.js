@@ -235,6 +235,11 @@ export const getKitVariants = async (teamIdentifier, season, type) => {
 	return response.data;
 };
 
+export const getApprovedTeamSeasonKitTypes = async (teamId) => {
+	const response = await api.get(`/teams/${teamId}/approved-kit-types/`);
+	return response.data;
+};
+
 export const resolveTeam = async (teamIdentifier) => {
 	const response = await api.get(`/teams/${teamIdentifier}/resolve/`);
 	return response.data;
@@ -290,6 +295,28 @@ export const deleteComment = async (commentId) => {
 
 export const reportKit = async (kitId, payload) => {
 	const response = await api.post(`/kits/${kitId}/report/`, payload);
+	return response.data;
+};
+
+export const getAdminKitTypeSuggestions = async () => {
+	const response = await api.get("/admin/kit-type-suggestions/");
+	return response.data;
+};
+
+export const approveAdminTeamSeasonKitType = async (id) => {
+	const response = await api.post(`/admin/team-season-kit-types/${id}/approve/`);
+	return response.data;
+};
+
+export const rejectAdminTeamSeasonKitType = async (id) => {
+	const response = await api.post(`/admin/team-season-kit-types/${id}/reject/`);
+	return response.data;
+};
+
+export const mergeAdminTeamSeasonKitType = async (id, targetKitTypeId) => {
+	const response = await api.post(`/admin/team-season-kit-types/${id}/merge/`, {
+		target_kit_type_id: targetKitTypeId,
+	});
 	return response.data;
 };
 
