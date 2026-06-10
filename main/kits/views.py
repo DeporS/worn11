@@ -1439,7 +1439,10 @@ class AdminKitTypeSuggestionsAPI(APIView):
 
     def get(self, request):
         suggestions = list(
-            TeamSeasonKitType.objects.filter(status=TeamSeasonKitType.STATUS_PENDING)
+            TeamSeasonKitType.objects.filter(
+                status=TeamSeasonKitType.STATUS_PENDING,
+                team__is_verified=True,
+            )
             .select_related('team', 'kit_type', 'created_by')
             .order_by('-created_at', '-id')
         )
@@ -2563,6 +2566,7 @@ class ApprovedTeamSeasonKitTypesAPI(generics.ListAPIView):
         return (
             TeamSeasonKitType.objects.filter(
                 team_id=self.kwargs['team_id'],
+                team__is_verified=True,
                 status=TeamSeasonKitType.STATUS_APPROVED,
                 kit_type__status=KitType.STATUS_APPROVED,
             )

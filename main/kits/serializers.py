@@ -6,6 +6,7 @@ from django.utils.text import slugify
 import json
 from urllib.parse import urlencode
 from .permissions import can_undo_moderation_action, moderation_action_is_currently_undoable, is_staff_or_moderator
+from .team_season_suggestions import ensure_team_season_suggestion
 
 
 def normalize_catalog_name(value):
@@ -77,30 +78,6 @@ def get_or_create_pending_kit_type(*, legacy_name, created_by=None):
         default_visibility=KitType.VISIBILITY_NONE,
         created_by=created_by,
     )
-
-
-def ensure_team_season_suggestion(*, team, season, kit_type, created_by=None):
-    if kit_type is None:
-        return None
-
-    should_track = (
-        kit_type.status == KitType.STATUS_PENDING
-        or kit_type.default_visibility == KitType.VISIBILITY_NONE
-    )
-    if not should_track:
-        return None
-
-    suggestion, _ = TeamSeasonKitType.objects.get_or_create(
-        team=team,
-        season=season,
-        kit_type=kit_type,
-        defaults={
-            'status': TeamSeasonKitType.STATUS_PENDING,
-            'source': TeamSeasonKitType.SOURCE_UPLOAD,
-            'created_by': created_by,
-        },
-    )
-    return suggestion
 
 
 class CommentAuthorSerializer(serializers.ModelSerializer):

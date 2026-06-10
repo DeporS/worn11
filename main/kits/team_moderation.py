@@ -26,6 +26,7 @@ from .models import (
     build_team_slug,
     normalize_wishlist_kit_type,
 )
+from .team_season_suggestions import create_team_season_suggestions_from_existing_kits
 
 
 TEAM_MERGE_UNDO_BLOCK_REASON = 'Team merge undo requires manual review.'
@@ -197,19 +198,25 @@ def delete_rejectable_orphan_kits(team):
     return deleted_count
 
 
-def delete_rejectable_rejected_team_season_rows(team):
-    rejected_rows = list(
-        TeamSeasonKitType.objects.select_for_update().filter(
-            team=team,
-            status=TeamSeasonKitType.STATUS_REJECTED,
-        )
+def delete_rejectable_non_approved_team_season_rows(team):
+    deletable_rows = list(
+        TeamSeasonKitType.objects.select_for_update().filter(team=team).exclude(
+            status=TeamSeasonKitType.STATUS_APPROVED,
+        ).order_by('id')
     )
-    if not rejected_rows:
-        return 0
+    if not deletable_rows:
+        return {
+            'deleted_pending_team_season_types': 0,
+            'deleted_rejected_team_season_types': 0,
+        }
 
-    deleted_count = len(rejected_rows)
-    TeamSeasonKitType.objects.filter(pk__in=[row.pk for row in rejected_rows]).delete()
-    return deleted_count
+    deleted_pending = sum(1 for row in deletable_rows if row.status == TeamSeasonKitType.STATUS_PENDING)
+    deleted_rejected = sum(1 for row in deletable_rows if row.status == TeamSeasonKitType.STATUS_REJECTED)
+    TeamSeasonKitType.objects.filter(pk__in=[row.pk for row in deletable_rows]).delete()
+    return {
+        'deleted_pending_team_season_types': deleted_pending,
+        'deleted_rejected_team_season_types': deleted_rejected,
+    }
 
 
 def snapshot_team(team):
@@ -457,6 +464,7 @@ def approve_team(*, team_id, actor, name, country, league=None):
         team.league = league
         team.is_verified = True
         team.save(update_fields=['name', 'country', 'league', 'is_verified'])
+        suggestion_summary = create_team_season_suggestions_from_existing_kits(team)
 
         action = build_team_moderation_action(
             actor=actor,
@@ -464,7 +472,11 @@ def approve_team(*, team_id, actor, name, country, league=None):
             source_team=team,
             previous_state=previous_state,
             resulting_state={'source_team': snapshot_team(team)},
-            summary={'approved': True},
+            summary={
+                'approved': True,
+                'created_team_season_suggestions': suggestion_summary['created'],
+                'reused_team_season_suggestions': suggestion_summary['reused'],
+            },
             is_reversible=True,
         )
 
@@ -525,6 +537,7 @@ def merge_teams_safely(*, source_team_id, target_team_id, actor):
             source_team,
             target_team,
         )
+        suggestion_summary = create_team_season_suggestions_from_existing_kits(target_team)
 
         source_team_snapshot = snapshot_team(source_team)
         source_team.delete()
@@ -541,6 +554,8 @@ def merge_teams_safely(*, source_team_id, target_team_id, actor):
             'updated_favorite_profiles': updated_favorite_profiles,
             'moved_team_season_types': moved_team_season_types,
             'reconciled_team_season_types': reconciled_team_season_types,
+            'created_team_season_suggestions': suggestion_summary['created'],
+            'reused_team_season_suggestions': suggestion_summary['reused'],
         }
 
         action = build_team_moderation_action(
@@ -567,7 +582,7 @@ def reject_unused_team(*, team_id, actor):
 
         initial_usage = get_team_usage(team)
         deleted_orphan_kits = delete_rejectable_orphan_kits(team)
-        deleted_rejected_team_season_types = delete_rejectable_rejected_team_season_rows(team)
+        deleted_team_season_type_summary = delete_rejectable_non_approved_team_season_rows(team)
         usage = get_team_usage(team)
         if not usage.is_unused():
             raise TeamModerationConflict({
@@ -577,7 +592,7 @@ def reject_unused_team(*, team_id, actor):
                     **usage.as_dict(),
                     'orphan_kits': initial_usage.orphan_kits,
                     'deleted_orphan_kits': deleted_orphan_kits,
-                    'deleted_rejected_team_season_types': deleted_rejected_team_season_types,
+                    **deleted_team_season_type_summary,
                 },
             })
 
@@ -597,7 +612,7 @@ def reject_unused_team(*, team_id, actor):
                 'deleted': True,
                 'usage': initial_usage.as_dict(),
                 'deleted_orphan_kits': deleted_orphan_kits,
-                'deleted_rejected_team_season_types': deleted_rejected_team_season_types,
+                **deleted_team_season_type_summary,
             },
             is_reversible=False,
             undo_block_reason=TEAM_REJECT_UNDO_BLOCK_REASON,

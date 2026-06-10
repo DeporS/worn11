@@ -726,7 +726,7 @@ class KitTypeWriteAPITests(APITestCase):
         self.assertEqual(suggestion.source, TeamSeasonKitType.SOURCE_UPLOAD)
         self.assertEqual(suggestion.created_by, self.user)
 
-    def test_create_new_unverified_team_with_custom_type_does_not_auto_approve_team_season(self):
+    def test_create_new_unverified_team_with_custom_type_defers_team_season_suggestion(self):
         response = self.client.post(
             reverse('api-my-collection'),
             self.payload(
@@ -739,19 +739,13 @@ class KitTypeWriteAPITests(APITestCase):
         self.assertEqual(response.status_code, 201)
         team = Team.objects.get(name='Fresh Upload United')
         self.assertFalse(team.is_verified)
+        self.assertFalse(TeamSeasonKitType.objects.filter(team=team).exists())
 
-        rows = list(
-            TeamSeasonKitType.objects.filter(team=team).select_related('kit_type')
-        )
-        self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0].status, TeamSeasonKitType.STATUS_PENDING)
-        self.assertEqual(rows[0].source, TeamSeasonKitType.SOURCE_UPLOAD)
-        self.assertFalse(
-            TeamSeasonKitType.objects.filter(
-                team=team,
-                status=TeamSeasonKitType.STATUS_APPROVED,
-            ).exists()
-        )
+        user_kit = UserKit.objects.select_related('kit__kit_type_ref').get(pk=response.data['id'])
+        self.assertEqual(user_kit.kit.team_id, team.id)
+        self.assertIsNotNone(user_kit.kit.kit_type_ref)
+        self.assertEqual(user_kit.kit.kit_type_ref.name, 'Tunnel Walk Anthem')
+        self.assertEqual(user_kit.kit.kit_type, 'Tunnel Walk Anthem')
 
     def test_create_new_unverified_team_with_default_type_creates_no_team_season_row(self):
         response = self.client.post(
@@ -932,6 +926,24 @@ class AdminKitTypeModerationAPITests(APITestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data), 1)
+
+    def test_pending_suggestions_for_unverified_teams_are_hidden_from_admin_queue(self):
+        hidden_team = Team.objects.create(name='Hidden Queue FC', is_verified=False)
+        hidden_suggestion = TeamSeasonKitType.objects.create(
+            team=hidden_team,
+            season='2024/2025',
+            kit_type=self.pending_type,
+            status=TeamSeasonKitType.STATUS_PENDING,
+            source=TeamSeasonKitType.SOURCE_UPLOAD,
+            created_by=self.creator,
+        )
+        self.client.force_authenticate(user=self.moderator_user)
+
+        response = self.client.get(reverse('admin-kit-type-suggestions'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([row['id'] for row in response.data], [self.pending_suggestion.id])
+        self.assertNotIn(hidden_suggestion.id, [row['id'] for row in response.data])
 
     def test_moderator_can_approve_pending_suggestion_and_pending_type(self):
         self.client.force_authenticate(user=self.moderator_user)
@@ -1735,6 +1747,29 @@ class AdminKitTypeModerationAPITests(APITestCase):
         self.assertEqual(response.data[0]['kit_type_id'], self.pending_type.id)
         self.assertEqual(response.data[0]['kit_type_name'], self.pending_type.name)
 
+    def test_public_approved_team_season_slots_endpoint_hides_unverified_teams(self):
+        hidden_team = Team.objects.create(name='Hidden Museum FC', is_verified=False)
+        self.pending_type.status = KitType.STATUS_APPROVED
+        self.pending_type.approved_by = self.staff_user
+        self.pending_type.approved_at = timezone.now()
+        self.pending_type.save(update_fields=['status', 'approved_by', 'approved_at'])
+        TeamSeasonKitType.objects.create(
+            team=hidden_team,
+            season='2024/2025',
+            kit_type=self.pending_type,
+            status=TeamSeasonKitType.STATUS_APPROVED,
+            source=TeamSeasonKitType.SOURCE_MODERATOR,
+            approved_by=self.staff_user,
+            approved_at=timezone.now(),
+        )
+
+        response = self.client.get(
+            reverse('approved-team-season-kit-types', args=[hidden_team.id])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [])
+
 
 class AdminTeamModerationAPITests(APITestCase):
     def setUp(self):
@@ -2377,6 +2412,192 @@ class AdminTeamModerationAPITests(APITestCase):
         self.assertEqual(response.data['team']['country_id'], self.england.id)
         self.assertEqual(response.data['team']['league_id'], self.premier_league.id)
 
+    def test_approve_derives_deferred_suggestions_from_existing_custom_uploads(self):
+        team = Team.objects.create(name='Deferred Custom FC', is_verified=False)
+        custom_type = KitType.objects.create(
+            name='Anniversary Night',
+            slug='anniversary-night',
+            category=KitType.CATEGORY_OTHER,
+            status=KitType.STATUS_PENDING,
+            default_visibility=KitType.VISIBILITY_NONE,
+            created_by=self.owner,
+        )
+        first_kit = Kit.objects.create(
+            team=team,
+            season='2024/2025',
+            kit_type=custom_type.name,
+            kit_type_ref=custom_type,
+            estimated_price=Decimal('100.00'),
+        )
+        second_kit = Kit.objects.create(
+            team=team,
+            season='2025/2026',
+            kit_type=custom_type.name,
+            kit_type_ref=custom_type,
+            estimated_price=Decimal('105.00'),
+        )
+        default_kit = Kit.objects.create(
+            team=team,
+            season='2024/2025',
+            kit_type='Home',
+            kit_type_ref=self.home_type,
+            estimated_price=Decimal('90.00'),
+        )
+        for kit, user in (
+            (first_kit, self.owner),
+            (first_kit, self.other_owner),
+            (second_kit, self.other_owner),
+            (default_kit, self.owner),
+        ):
+            UserKit.objects.create(
+                user=user,
+                kit=kit,
+                shirt_technology='REPLICA',
+                shirt_version=ShirtVersion.objects.get(code='REPLICA'),
+                condition='VERY_GOOD',
+                size='L',
+            )
+
+        response = self.approve_team(
+            team.id,
+            user=self.moderator_user,
+            payload={'name': team.name, 'country_id': self.england.id},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        rows = list(TeamSeasonKitType.objects.filter(team=team).order_by('season'))
+        self.assertEqual([(row.season, row.kit_type_id) for row in rows], [
+            ('2024/2025', custom_type.id),
+            ('2025/2026', custom_type.id),
+        ])
+        action = TeamModerationAction.objects.get(pk=response.data['moderation_action_id'])
+        self.assertEqual(action.summary['created_team_season_suggestions'], 2)
+        self.assertEqual(action.summary['reused_team_season_suggestions'], 0)
+
+    def test_approve_reuses_existing_rows_without_reopening_rejected_or_downgrading_approved(self):
+        team = Team.objects.create(name='Legacy Suggestion FC', is_verified=False)
+        pending_type = KitType.objects.create(
+            name='Pending Night',
+            slug='pending-night',
+            category=KitType.CATEGORY_OTHER,
+            status=KitType.STATUS_PENDING,
+            default_visibility=KitType.VISIBILITY_NONE,
+            created_by=self.owner,
+        )
+        approved_type = KitType.objects.create(
+            name='Approved Night',
+            slug='approved-night',
+            category=KitType.CATEGORY_OTHER,
+            status=KitType.STATUS_APPROVED,
+            default_visibility=KitType.VISIBILITY_NONE,
+            approved_by=self.staff_user,
+            approved_at=timezone.now(),
+        )
+        rejected_type = KitType.objects.create(
+            name='Rejected Night',
+            slug='rejected-night',
+            category=KitType.CATEGORY_OTHER,
+            status=KitType.STATUS_APPROVED,
+            default_visibility=KitType.VISIBILITY_NONE,
+            approved_by=self.staff_user,
+            approved_at=timezone.now(),
+        )
+        for season, kit_type_ref, user in (
+            ('2024/2025', pending_type, self.owner),
+            ('2023/2024', approved_type, self.owner),
+            ('2022/2023', rejected_type, self.other_owner),
+        ):
+            kit = Kit.objects.create(
+                team=team,
+                season=season,
+                kit_type=kit_type_ref.name,
+                kit_type_ref=kit_type_ref,
+                estimated_price=Decimal('88.00'),
+            )
+            UserKit.objects.create(
+                user=user,
+                kit=kit,
+                shirt_technology='REPLICA',
+                shirt_version=ShirtVersion.objects.get(code='REPLICA'),
+                condition='VERY_GOOD',
+                size='L',
+            )
+        pending_row = TeamSeasonKitType.objects.create(
+            team=team,
+            season='2024/2025',
+            kit_type=pending_type,
+            status=TeamSeasonKitType.STATUS_PENDING,
+            source=TeamSeasonKitType.SOURCE_UPLOAD,
+            created_by=self.owner,
+        )
+        approved_row = TeamSeasonKitType.objects.create(
+            team=team,
+            season='2023/2024',
+            kit_type=approved_type,
+            status=TeamSeasonKitType.STATUS_APPROVED,
+            source=TeamSeasonKitType.SOURCE_MODERATOR,
+            approved_by=self.staff_user,
+            approved_at=timezone.now(),
+        )
+        rejected_row = TeamSeasonKitType.objects.create(
+            team=team,
+            season='2022/2023',
+            kit_type=rejected_type,
+            status=TeamSeasonKitType.STATUS_REJECTED,
+            source=TeamSeasonKitType.SOURCE_UPLOAD,
+            created_by=self.other_owner,
+        )
+
+        response = self.approve_team(
+            team.id,
+            user=self.moderator_user,
+            payload={'name': team.name, 'country_id': self.england.id},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        pending_row.refresh_from_db()
+        approved_row.refresh_from_db()
+        rejected_row.refresh_from_db()
+        self.assertEqual(pending_row.status, TeamSeasonKitType.STATUS_PENDING)
+        self.assertEqual(approved_row.status, TeamSeasonKitType.STATUS_APPROVED)
+        self.assertEqual(rejected_row.status, TeamSeasonKitType.STATUS_REJECTED)
+        action = TeamModerationAction.objects.get(pk=response.data['moderation_action_id'])
+        self.assertEqual(action.summary['created_team_season_suggestions'], 0)
+        self.assertEqual(action.summary['reused_team_season_suggestions'], 3)
+
+    def test_approve_makes_legacy_pending_suggestions_visible_in_queue_only_after_verification(self):
+        team = Team.objects.create(name='Legacy Queue FC', is_verified=False)
+        custom_type = KitType.objects.create(
+            name='Queue Night',
+            slug='queue-night',
+            category=KitType.CATEGORY_OTHER,
+            status=KitType.STATUS_PENDING,
+            default_visibility=KitType.VISIBILITY_NONE,
+            created_by=self.owner,
+        )
+        legacy_row = TeamSeasonKitType.objects.create(
+            team=team,
+            season='2024/2025',
+            kit_type=custom_type,
+            status=TeamSeasonKitType.STATUS_PENDING,
+            source=TeamSeasonKitType.SOURCE_UPLOAD,
+            created_by=self.owner,
+        )
+        self.client.force_authenticate(user=self.moderator_user)
+        hidden_response = self.client.get(reverse('admin-kit-type-suggestions'))
+        self.assertEqual(hidden_response.status_code, 200)
+        self.assertNotIn(legacy_row.id, [row['id'] for row in hidden_response.data])
+
+        approve_response = self.approve_team(
+            team.id,
+            user=self.moderator_user,
+            payload={'name': team.name, 'country_id': self.england.id},
+        )
+
+        self.assertEqual(approve_response.status_code, 200)
+        visible_response = self.client.get(reverse('admin-kit-type-suggestions'))
+        self.assertIn(legacy_row.id, [row['id'] for row in visible_response.data])
+
     def test_approve_rejects_case_insensitive_name_conflict(self):
         response = self.approve_team(
             self.source_team.id,
@@ -2490,6 +2711,102 @@ class AdminTeamModerationAPITests(APITestCase):
         self.assertEqual(self.source_unique_kit.team_id, self.source_team.id)
         self.assertEqual(self.duplicate_userkit.kit_id, self.source_duplicate_kit.id)
         self.assertFalse(TeamModerationAction.objects.filter(action_type=TeamModerationAction.ACTION_MERGE).exists())
+
+    def test_team_approval_is_atomic_when_suggestion_backfill_fails(self):
+        team = Team.objects.create(name='Atomic Approval FC', is_verified=False)
+
+        with patch('kits.team_moderation.create_team_season_suggestions_from_existing_kits', side_effect=RuntimeError('boom')):
+            with self.assertRaises(RuntimeError):
+                self.approve_team(
+                    team.id,
+                    user=self.moderator_user,
+                    payload={'name': team.name, 'country_id': self.england.id},
+                )
+
+        team.refresh_from_db()
+        self.assertFalse(team.is_verified)
+        self.assertFalse(TeamModerationAction.objects.filter(source_team_id_snapshot=team.id).exists())
+
+    def test_merge_creates_missing_suggestions_for_custom_uploads_under_verified_target(self):
+        source_team = Team.objects.create(name='Merge Source Custom FC', is_verified=False)
+        custom_type = KitType.objects.create(
+            name='Merge Night',
+            slug='merge-night',
+            category=KitType.CATEGORY_OTHER,
+            status=KitType.STATUS_PENDING,
+            default_visibility=KitType.VISIBILITY_NONE,
+            created_by=self.owner,
+        )
+        custom_kit = Kit.objects.create(
+            team=source_team,
+            season='2024/2025',
+            kit_type=custom_type.name,
+            kit_type_ref=custom_type,
+            estimated_price=Decimal('99.00'),
+        )
+        UserKit.objects.create(
+            user=self.owner,
+            kit=custom_kit,
+            shirt_technology='REPLICA',
+            shirt_version=ShirtVersion.objects.get(code='REPLICA'),
+            condition='VERY_GOOD',
+            size='L',
+        )
+
+        response = self.merge_team(source_team.id, self.target_team.id, user=self.moderator_user)
+
+        self.assertEqual(response.status_code, 200)
+        suggestion = TeamSeasonKitType.objects.get(
+            team=self.target_team,
+            season='2024/2025',
+            kit_type=custom_type,
+        )
+        self.assertEqual(suggestion.status, TeamSeasonKitType.STATUS_PENDING)
+        self.assertFalse(TeamSeasonKitType.objects.filter(team_id=source_team.id).exists())
+        self.assertEqual(response.data['created_team_season_suggestions'], 1)
+        self.assertEqual(response.data['reused_team_season_suggestions'], 0)
+
+    def test_merge_keeps_existing_rejected_target_suggestion_closed(self):
+        source_team = Team.objects.create(name='Merge Source Rejected FC', is_verified=False)
+        custom_type = KitType.objects.create(
+            name='Rejected Merge Night',
+            slug='rejected-merge-night',
+            category=KitType.CATEGORY_OTHER,
+            status=KitType.STATUS_PENDING,
+            default_visibility=KitType.VISIBILITY_NONE,
+            created_by=self.owner,
+        )
+        Kit.objects.create(
+            team=source_team,
+            season='2024/2025',
+            kit_type=custom_type.name,
+            kit_type_ref=custom_type,
+            estimated_price=Decimal('101.00'),
+        )
+        target_row = TeamSeasonKitType.objects.create(
+            team=self.target_team,
+            season='2024/2025',
+            kit_type=custom_type,
+            status=TeamSeasonKitType.STATUS_REJECTED,
+            source=TeamSeasonKitType.SOURCE_UPLOAD,
+            created_by=self.owner,
+        )
+
+        response = self.merge_team(source_team.id, self.target_team.id, user=self.moderator_user)
+
+        self.assertEqual(response.status_code, 200)
+        target_row.refresh_from_db()
+        self.assertEqual(target_row.status, TeamSeasonKitType.STATUS_REJECTED)
+        self.assertEqual(
+            TeamSeasonKitType.objects.filter(
+                team=self.target_team,
+                season='2024/2025',
+                kit_type=custom_type,
+            ).count(),
+            1,
+        )
+        self.assertEqual(response.data['created_team_season_suggestions'], 0)
+        self.assertEqual(response.data['reused_team_season_suggestions'], 1)
 
     def test_reject_deletes_unused_team_and_creates_audit_action(self):
         response = self.reject_team(self.unused_team.id, user=self.moderator_user)
@@ -2690,7 +3007,7 @@ class AdminTeamModerationAPITests(APITestCase):
         self.assertEqual(response.data['usage']['userkits'], 1)
         self.assertEqual(response.data['usage']['orphan_kits'], 0)
 
-    def test_wishlist_favorite_and_team_season_rows_block_rejection(self):
+    def test_wishlist_favorite_rows_block_rejection_and_stale_pending_team_season_rows_can_be_rejected(self):
         wishlist_team = Team.objects.create(name='Wishlist Block FC', is_verified=False)
         WishlistItem.objects.create(
             user=self.wishlist_owner,
@@ -2720,13 +3037,8 @@ class AdminTeamModerationAPITests(APITestCase):
             created_by=self.owner,
         )
         season_response = self.reject_team(season_team.id, user=self.moderator_user)
-        self.assertEqual(season_response.status_code, 409)
-        self.assertEqual(
-            season_response.data['detail'],
-            'This team has a pending Kit Museum slot suggestion.',
-        )
-        self.assertEqual(season_response.data['usage']['approved_team_season_types'], 0)
-        self.assertEqual(season_response.data['usage']['pending_team_season_types'], 1)
+        self.assertEqual(season_response.status_code, 200)
+        self.assertFalse(Team.objects.filter(pk=season_team.id).exists())
 
     def test_approved_team_season_rows_use_approved_blocker_reason(self):
         team = Team.objects.create(name='Approved Slot FC', is_verified=False)
@@ -2770,7 +3082,34 @@ class AdminTeamModerationAPITests(APITestCase):
         self.assertEqual(reject_response.status_code, 200)
         self.assertFalse(Team.objects.filter(pk=team.id).exists())
 
-    def test_upload_created_pending_team_season_is_reported_as_pending_not_approved(self):
+    def test_reject_deletes_stale_pending_and_rejected_team_season_rows_for_unused_team(self):
+        team = Team.objects.create(name='Stale Slot FC', is_verified=False)
+        TeamSeasonKitType.objects.create(
+            team=team,
+            season='2024/2025',
+            kit_type=self.home_type,
+            status=TeamSeasonKitType.STATUS_PENDING,
+            source=TeamSeasonKitType.SOURCE_UPLOAD,
+            created_by=self.owner,
+        )
+        TeamSeasonKitType.objects.create(
+            team=team,
+            season='2023/2024',
+            kit_type=self.away_type,
+            status=TeamSeasonKitType.STATUS_REJECTED,
+            source=TeamSeasonKitType.SOURCE_UPLOAD,
+            created_by=self.owner,
+        )
+
+        reject_response = self.reject_team(team.id, user=self.moderator_user)
+
+        self.assertEqual(reject_response.status_code, 200)
+        self.assertFalse(Team.objects.filter(pk=team.id).exists())
+        action = TeamModerationAction.objects.get(pk=reject_response.data['moderation_action_id'])
+        self.assertEqual(action.summary['deleted_pending_team_season_types'], 1)
+        self.assertEqual(action.summary['deleted_rejected_team_season_types'], 1)
+
+    def test_unverified_upload_with_custom_type_does_not_create_team_season_row(self):
         self.client.force_authenticate(user=self.owner)
         response = self.client.post(
             reverse('api-my-collection'),
@@ -2787,8 +3126,7 @@ class AdminTeamModerationAPITests(APITestCase):
         self.assertEqual(response.status_code, 201)
 
         team = Team.objects.get(name='Pending Suggestion FC')
-        suggestion = TeamSeasonKitType.objects.get(team=team)
-        self.assertEqual(suggestion.status, TeamSeasonKitType.STATUS_PENDING)
+        self.assertFalse(TeamSeasonKitType.objects.filter(team=team).exists())
 
         list_response = self.list_unverified(user=self.moderator_user)
         payload = next(item for item in list_response.data['results'] if item['id'] == team.id)
@@ -2797,9 +3135,9 @@ class AdminTeamModerationAPITests(APITestCase):
             payload['reject_block_reason'],
             '1 upload still uses this team.',
         )
-        self.assertEqual(payload['usage']['team_season_types'], 1)
+        self.assertEqual(payload['usage']['team_season_types'], 0)
         self.assertEqual(payload['usage']['approved_team_season_types'], 0)
-        self.assertEqual(payload['usage']['pending_team_season_types'], 1)
+        self.assertEqual(payload['usage']['pending_team_season_types'], 0)
         self.assertEqual(payload['usage']['rejected_team_season_types'], 0)
 
     def test_orphan_kit_is_cleared_during_reject_and_list_recalculation(self):
