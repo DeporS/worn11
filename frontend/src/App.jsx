@@ -19,8 +19,12 @@ import MessagesPage from "./pages/MessagesPage";
 import FeedPage from "./pages/FeedPage";
 import AdminKitTypesPage from "./pages/AdminKitTypesPage";
 import ModerationLayout from "./pages/admin/ModerationLayout";
+import AdminCatalogLayout from "./pages/admin/AdminCatalogLayout";
 import AdminTeamsPage from "./pages/admin/AdminTeamsPage";
 import AdminReportsPage from "./pages/admin/AdminReportsPage";
+import AdminCountriesPage from "./pages/admin/AdminCountriesPage";
+import AdminLeaguesPage from "./pages/admin/AdminLeaguesPage";
+import AdminCatalogTeamsPage from "./pages/admin/AdminCatalogTeamsPage";
 import NavBar from "./components/NavBar";
 import api, {
 	getUnreadMessagesCount,
@@ -286,6 +290,27 @@ function App() {
 						/>
 						<Route path="teams" element={<AdminTeamsPage />} />
 						<Route path="reports" element={<AdminReportsPage />} />
+						<Route
+							path="catalog"
+							element={<AdminCatalogLayout user={user} />}
+						>
+							<Route
+								index
+								element={<Navigate to="countries" replace />}
+							/>
+							<Route
+								path="countries"
+								element={<AdminCountriesPage />}
+							/>
+							<Route
+								path="leagues"
+								element={<AdminLeaguesPage />}
+							/>
+							<Route
+								path="teams"
+								element={<AdminCatalogTeamsPage />}
+							/>
+						</Route>
 					</Route>
 				</Routes>
 			</div>

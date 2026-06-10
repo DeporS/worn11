@@ -3180,6 +3180,431 @@ class AdminTeamModerationAPITests(APITestCase):
         self.assertFalse(Kit.objects.filter(pk=orphan_kit.id).exists())
 
 
+class AdminCatalogAPITests(APITestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.staff_user = User.objects.create_user(
+            username='catalog_staff',
+            password='password123',
+            is_staff=True,
+        )
+        self.superuser = User.objects.create_superuser(
+            username='catalog_superuser',
+            password='password123',
+            email='catalog-super@example.com',
+        )
+        self.moderator_user = User.objects.create_user(
+            username='catalog_moderator',
+            password='password123',
+        )
+        self.moderator_user.profile.is_moderator = True
+        self.moderator_user.profile.save(update_fields=['is_moderator'])
+        self.regular_user = User.objects.create_user(
+            username='catalog_regular',
+            password='password123',
+        )
+        self.owner = User.objects.create_user(
+            username='catalog_owner',
+            password='password123',
+        )
+        self.country = Country.objects.create(
+            name='England',
+            code='EN',
+            created_by=self.staff_user,
+        )
+        self.other_country = Country.objects.create(
+            name='Spain',
+            code='ES',
+            created_by=self.staff_user,
+        )
+        self.inactive_country = Country.objects.create(
+            name='Retired Country',
+            code='RC',
+            is_active=False,
+            created_by=self.staff_user,
+        )
+        self.league = League.objects.create(
+            name='Premier League',
+            country=self.country,
+            created_by=self.staff_user,
+            hex_color='#112233',
+            order=10,
+        )
+        self.inactive_league = League.objects.create(
+            name='Old League',
+            country=self.country,
+            created_by=self.staff_user,
+            is_active=False,
+        )
+        self.team = Team.objects.create(
+            name='Arsenal F.C.',
+            country=self.country,
+            league=self.league,
+            is_verified=True,
+        )
+        self.home_type = KitType.objects.get(canonical_code='HOME')
+        self.kit = Kit.objects.create(
+            team=self.team,
+            season='2024/2025',
+            kit_type='Home',
+            kit_type_ref=self.home_type,
+            estimated_price=Decimal('90.00'),
+        )
+        self.userkit = UserKit.objects.create(
+            user=self.owner,
+            kit=self.kit,
+            shirt_technology='REPLICA',
+            shirt_version=ShirtVersion.objects.get(code='REPLICA'),
+            condition='VERY_GOOD',
+            size='L',
+        )
+        WishlistItem.objects.create(
+            user=self.owner,
+            team=self.team,
+            season='2024/2025',
+            kit_type='Home',
+            kit_type_ref=self.home_type,
+        )
+        self.owner.profile.favorite_team = self.team
+        self.owner.profile.save(update_fields=['favorite_team'])
+
+    def catalog_get(self, route_name, user=None, args=None, params=None):
+        self.client.force_authenticate(user=user) if user else self.client.force_authenticate(user=None)
+        return self.client.get(reverse(route_name, args=args or []), params or {})
+
+    def catalog_post(self, route_name, payload, user=None, args=None, format='json'):
+        self.client.force_authenticate(user=user) if user else self.client.force_authenticate(user=None)
+        return self.client.post(reverse(route_name, args=args or []), payload, format=format)
+
+    def catalog_patch(self, route_name, payload, user=None, args=None, format='json'):
+        self.client.force_authenticate(user=user) if user else self.client.force_authenticate(user=None)
+        return self.client.patch(reverse(route_name, args=args or []), payload, format=format)
+
+    def test_staff_and_superuser_can_access_catalog_endpoints(self):
+        for user in (self.staff_user, self.superuser):
+            self.assertEqual(
+                self.catalog_get('admin-catalog-countries', user=user).status_code,
+                200,
+            )
+            self.assertEqual(
+                self.catalog_get('admin-catalog-leagues', user=user).status_code,
+                200,
+            )
+            self.assertEqual(
+                self.catalog_get('admin-catalog-teams', user=user).status_code,
+                200,
+            )
+
+    def test_moderator_only_normal_user_and_anonymous_cannot_access_catalog_endpoints(self):
+        for user, expected_status in (
+            (None, 401),
+            (self.regular_user, 403),
+            (self.moderator_user, 403),
+        ):
+            self.assertEqual(
+                self.catalog_get('admin-catalog-countries', user=user).status_code,
+                expected_status,
+            )
+            self.assertEqual(
+                self.catalog_post(
+                    'admin-catalog-teams',
+                    {
+                        'name': 'Forbidden FC',
+                        'country_id': self.country.id,
+                        'is_verified': True,
+                    },
+                    user=user,
+                ).status_code,
+                expected_status,
+            )
+
+    def test_staff_can_create_country_and_normalize_code(self):
+        response = self.catalog_post(
+            'admin-catalog-countries',
+            {
+                'name': '  New   Zealand ',
+                'code': ' nz ',
+                'is_active': True,
+            },
+            user=self.staff_user,
+        )
+
+        self.assertEqual(response.status_code, 201)
+        country = Country.objects.get(pk=response.data['id'])
+        self.assertEqual(country.name, 'New Zealand')
+        self.assertEqual(country.code, 'NZ')
+        self.assertEqual(country.created_by_id, self.staff_user.id)
+
+    def test_staff_can_update_country(self):
+        response = self.catalog_patch(
+            'admin-catalog-country-detail',
+            {
+                'name': 'England and Wales',
+                'code': 'ew',
+                'is_active': False,
+            },
+            user=self.staff_user,
+            args=[self.country.id],
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.country.refresh_from_db()
+        self.assertEqual(self.country.name, 'England and Wales')
+        self.assertEqual(self.country.code, 'EW')
+        self.assertFalse(self.country.is_active)
+
+    def test_duplicate_country_name_rejected_case_insensitively(self):
+        response = self.catalog_post(
+            'admin-catalog-countries',
+            {'name': ' england ', 'code': 'GB-ENG'},
+            user=self.staff_user,
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.data['code'], 'country_name_conflict')
+
+    def test_duplicate_country_code_rejected_case_insensitively(self):
+        response = self.catalog_post(
+            'admin-catalog-countries',
+            {'name': 'Scotland', 'code': 'en'},
+            user=self.staff_user,
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.data['code'], 'country_code_conflict')
+
+    def test_inactive_country_still_serializes_for_existing_team_reference(self):
+        self.country.is_active = False
+        self.country.save(update_fields=['is_active'])
+
+        response = self.catalog_get(
+            'admin-catalog-team-detail',
+            user=self.staff_user,
+            args=[self.team.id],
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['country_id'], self.country.id)
+        self.assertEqual(response.data['country_name'], self.country.name)
+
+    def test_staff_can_create_league(self):
+        response = self.catalog_post(
+            'admin-catalog-leagues',
+            {
+                'name': '  FA   Cup ',
+                'country_id': self.country.id,
+                'hex_color': '#ef4444',
+                'order': 3,
+                'is_active': True,
+            },
+            user=self.staff_user,
+        )
+
+        self.assertEqual(response.status_code, 201)
+        league = League.objects.get(pk=response.data['id'])
+        self.assertEqual(league.name, 'FA Cup')
+        self.assertEqual(league.country_id, self.country.id)
+        self.assertEqual(league.hex_color, '#EF4444')
+        self.assertEqual(league.order, 3)
+
+    def test_staff_can_update_league(self):
+        response = self.catalog_patch(
+            'admin-catalog-league-detail',
+            {
+                'name': 'Premier League Elite',
+                'country_id': self.country.id,
+                'hex_color': '#ABCDEF',
+                'order': 7,
+                'is_active': False,
+            },
+            user=self.staff_user,
+            args=[self.league.id],
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.league.refresh_from_db()
+        self.assertEqual(self.league.name, 'Premier League Elite')
+        self.assertEqual(self.league.hex_color, '#ABCDEF')
+        self.assertEqual(self.league.order, 7)
+        self.assertFalse(self.league.is_active)
+
+    def test_league_country_required_on_create(self):
+        response = self.catalog_post(
+            'admin-catalog-leagues',
+            {'name': 'No Country League'},
+            user=self.staff_user,
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('country_id', response.data)
+
+    def test_duplicate_league_within_country_rejected(self):
+        response = self.catalog_post(
+            'admin-catalog-leagues',
+            {'name': ' premier league ', 'country_id': self.country.id},
+            user=self.staff_user,
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.data['code'], 'league_name_conflict')
+
+    def test_global_league_name_db_limitation_is_handled_gracefully(self):
+        response = self.catalog_post(
+            'admin-catalog-leagues',
+            {'name': 'Premier League', 'country_id': self.other_country.id},
+            user=self.staff_user,
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.data['code'], 'league_global_name_conflict')
+
+    def test_league_country_changes_validate_correctly(self):
+        response = self.catalog_patch(
+            'admin-catalog-league-detail',
+            {'country_id': 999999},
+            user=self.staff_user,
+            args=[self.league.id],
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('country_id', response.data)
+
+    def test_staff_can_create_verified_team(self):
+        response = self.catalog_post(
+            'admin-catalog-teams',
+            {
+                'name': '  Staff   FC ',
+                'country_id': self.country.id,
+                'league_id': self.league.id,
+                'is_verified': True,
+            },
+            user=self.staff_user,
+        )
+
+        self.assertEqual(response.status_code, 201)
+        team = Team.objects.get(pk=response.data['id'])
+        self.assertEqual(team.name, 'Staff FC')
+        self.assertEqual(team.country_id, self.country.id)
+        self.assertEqual(team.league_id, self.league.id)
+        self.assertTrue(team.is_verified)
+
+    def test_country_required_for_verified_team(self):
+        response = self.catalog_post(
+            'admin-catalog-teams',
+            {
+                'name': 'No Country FC',
+                'is_verified': True,
+            },
+            user=self.staff_user,
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('country_id', response.data)
+
+    def test_team_create_allows_optional_league(self):
+        response = self.catalog_post(
+            'admin-catalog-teams',
+            {
+                'name': 'Country Only FC',
+                'country_id': self.country.id,
+                'is_verified': True,
+            },
+            user=self.staff_user,
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertIsNone(Team.objects.get(pk=response.data['id']).league_id)
+
+    def test_team_league_must_belong_to_country(self):
+        other_league = League.objects.create(
+            name='La Liga',
+            country=self.other_country,
+            created_by=self.staff_user,
+        )
+
+        response = self.catalog_post(
+            'admin-catalog-teams',
+            {
+                'name': 'Mismatch FC',
+                'country_id': self.country.id,
+                'league_id': other_league.id,
+                'is_verified': True,
+            },
+            user=self.staff_user,
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data['code'][0], 'league_country_mismatch')
+
+    def test_duplicate_team_name_rejected_case_insensitively(self):
+        response = self.catalog_post(
+            'admin-catalog-teams',
+            {
+                'name': ' arsenal f.c. ',
+                'country_id': self.country.id,
+                'is_verified': True,
+            },
+            user=self.staff_user,
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.data['code'], 'team_name_conflict')
+
+    def test_staff_can_update_team_and_preserve_associated_kits(self):
+        new_league = League.objects.create(
+            name='Championship',
+            country=self.country,
+            created_by=self.staff_user,
+        )
+
+        response = self.catalog_patch(
+            'admin-catalog-team-detail',
+            {
+                'name': 'Arsenal Official',
+                'country_id': self.country.id,
+                'league_id': new_league.id,
+                'is_verified': True,
+            },
+            user=self.staff_user,
+            args=[self.team.id],
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.team.refresh_from_db()
+        self.kit.refresh_from_db()
+        self.userkit.refresh_from_db()
+        self.assertEqual(self.team.name, 'Arsenal Official')
+        self.assertEqual(self.team.league_id, new_league.id)
+        self.assertEqual(self.kit.team_id, self.team.id)
+        self.assertEqual(self.userkit.kit_id, self.kit.id)
+
+    def test_catalog_team_list_filters_and_counts_work(self):
+        unverified_team = Team.objects.create(
+            name='Unverified Catalog FC',
+            country=self.country,
+            is_verified=False,
+        )
+
+        response = self.catalog_get(
+            'admin-catalog-teams',
+            user=self.staff_user,
+            params={
+                'q': 'Arsenal',
+                'country_id': self.country.id,
+                'league_id': self.league.id,
+                'verified': 'verified',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([row['id'] for row in response.data], [self.team.id])
+        self.assertEqual(response.data[0]['kits_count'], 1)
+        self.assertEqual(response.data[0]['userkits_count'], 1)
+        self.assertEqual(response.data[0]['wishlist_count'], 1)
+        self.assertEqual(response.data[0]['favorite_team_count'], 1)
+        self.assertNotIn(unverified_team.id, [row['id'] for row in response.data])
+
+
 class TeamCountryBackfillMigrationTests(APITestCase):
     @staticmethod
     def run_backfill():

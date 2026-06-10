@@ -8,6 +8,27 @@ const api = axios.create({
 	timeout: 5000, // Timeout after 5 seconds
 });
 
+const buildMultipartPayload = (payload) => {
+	const formData = new FormData();
+	Object.entries(payload || {}).forEach(([key, value]) => {
+		if (value === undefined) return;
+		if (value === null) {
+			formData.append(key, "");
+			return;
+		}
+		if (value instanceof File) {
+			formData.append(key, value);
+			return;
+		}
+		if (typeof value === "boolean") {
+			formData.append(key, value ? "true" : "false");
+			return;
+		}
+		formData.append(key, value);
+	});
+	return formData;
+};
+
 // INTERCEPTOR: Before each request, add the token
 api.interceptors.request.use(
 	(config) => {
@@ -378,6 +399,75 @@ export const getAdminLeagues = async (countryId) => {
 
 export const createAdminLeague = async (payload) => {
 	const response = await api.post("/admin/leagues/", payload);
+	return response.data;
+};
+
+export const getAdminCatalogCountries = async (params = {}) => {
+	const response = await api.get("/admin/catalog/countries/", { params });
+	return response.data;
+};
+
+export const createAdminCatalogCountry = async (payload) => {
+	const response = await api.post(
+		"/admin/catalog/countries/",
+		buildMultipartPayload(payload),
+		{ headers: { "Content-Type": "multipart/form-data" } },
+	);
+	return response.data;
+};
+
+export const updateAdminCatalogCountry = async (id, payload) => {
+	const response = await api.patch(
+		`/admin/catalog/countries/${id}/`,
+		buildMultipartPayload(payload),
+		{ headers: { "Content-Type": "multipart/form-data" } },
+	);
+	return response.data;
+};
+
+export const getAdminCatalogLeagues = async (params = {}) => {
+	const response = await api.get("/admin/catalog/leagues/", { params });
+	return response.data;
+};
+
+export const createAdminCatalogLeague = async (payload) => {
+	const response = await api.post(
+		"/admin/catalog/leagues/",
+		buildMultipartPayload(payload),
+		{ headers: { "Content-Type": "multipart/form-data" } },
+	);
+	return response.data;
+};
+
+export const updateAdminCatalogLeague = async (id, payload) => {
+	const response = await api.patch(
+		`/admin/catalog/leagues/${id}/`,
+		buildMultipartPayload(payload),
+		{ headers: { "Content-Type": "multipart/form-data" } },
+	);
+	return response.data;
+};
+
+export const getAdminCatalogTeams = async (params = {}) => {
+	const response = await api.get("/admin/catalog/teams/", { params });
+	return response.data;
+};
+
+export const createAdminCatalogTeam = async (payload) => {
+	const response = await api.post(
+		"/admin/catalog/teams/",
+		buildMultipartPayload(payload),
+		{ headers: { "Content-Type": "multipart/form-data" } },
+	);
+	return response.data;
+};
+
+export const updateAdminCatalogTeam = async (id, payload) => {
+	const response = await api.patch(
+		`/admin/catalog/teams/${id}/`,
+		buildMultipartPayload(payload),
+		{ headers: { "Content-Type": "multipart/form-data" } },
+	);
 	return response.data;
 };
 

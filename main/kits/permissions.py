@@ -38,6 +38,13 @@ def is_staff_or_moderator(user):
     return bool(profile and profile.is_moderator)
 
 
+def is_staff_or_superuser(user):
+    if not user or not user.is_authenticated:
+        return False
+
+    return bool(user.is_staff or user.is_superuser)
+
+
 def can_undo_moderation_action(user, action):
     if not user or not user.is_authenticated:
         return False
@@ -91,3 +98,10 @@ class IsStaffOrModerator(permissions.BasePermission):
 
     def has_permission(self, request, view):
         return is_staff_or_moderator(request.user)
+
+
+class IsStaffOrSuperuser(permissions.BasePermission):
+    message = 'You do not have permission to access this resource.'
+
+    def has_permission(self, request, view):
+        return is_staff_or_superuser(request.user)

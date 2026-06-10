@@ -3,6 +3,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import JSONParser
 from rest_framework.exceptions import ValidationError, PermissionDenied
 from rest_framework.pagination import PageNumberPagination
 
@@ -10,7 +11,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from .throttles import KitCreationThrottle
 
 from django.shortcuts import get_object_or_404
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Sum, Count, Exists, OuterRef, Value, BooleanField, Prefetch, Q, Subquery
 from django.contrib.auth.models import User
 from django.utils import timezone
@@ -19,8 +20,8 @@ from urllib.parse import urlencode
 import re
 
 from .models import League, UserKit, UserKitImage, WishlistItem, Kit, KitType, KitTypeAlias, TeamSeasonKitType, KitTypeModerationAction, TeamModerationAction, ShirtVersion, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country, Follow, KitComment, KitCommentLike, KitReport, Conversation, Message, Notification, CollectionValueSnapshot, calculate_collection_total_value, record_collection_value_snapshot, build_team_slug, normalize_wishlist_kit_type
-from .permissions import IsStaffOrModerator, can_undo_moderation_action, moderation_action_is_currently_undoable, is_staff_or_moderator
-from .serializers import LeagueSerializer, UserKitSerializer, WishlistItemSerializer, WishlistToggleSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer, CountrySerializer, KitCommentSerializer, KitCommentWriteSerializer, KitReportSerializer, ConversationListSerializer, ConversationDetailSerializer, ConversationStartSerializer, MessageSerializer, MessageWriteSerializer, KitSearchSuggestionSerializer, NotificationSerializer, CollectionValueSnapshotSerializer, AdminKitTypeSuggestionSerializer, AdminKitTypeMergeSerializer, TeamModerationListSerializer, TeamModerationMergeSerializer, TeamModerationActionSerializer, KitTypeModerationActionSerializer, ApprovedTeamSeasonKitTypeSerializer, normalize_catalog_name, AdminCountryCreateSerializer, AdminLeagueCreateSerializer, TeamModerationApproveSerializer, TeamModerationDeleteContentSerializer
+from .permissions import IsStaffOrModerator, IsStaffOrSuperuser, can_undo_moderation_action, moderation_action_is_currently_undoable, is_staff_or_moderator
+from .serializers import LeagueSerializer, UserKitSerializer, WishlistItemSerializer, WishlistToggleSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer, CountrySerializer, KitCommentSerializer, KitCommentWriteSerializer, KitReportSerializer, ConversationListSerializer, ConversationDetailSerializer, ConversationStartSerializer, MessageSerializer, MessageWriteSerializer, KitSearchSuggestionSerializer, NotificationSerializer, CollectionValueSnapshotSerializer, AdminKitTypeSuggestionSerializer, AdminKitTypeMergeSerializer, TeamModerationListSerializer, TeamModerationMergeSerializer, TeamModerationActionSerializer, KitTypeModerationActionSerializer, ApprovedTeamSeasonKitTypeSerializer, normalize_catalog_name, AdminCountryCreateSerializer, AdminLeagueCreateSerializer, TeamModerationApproveSerializer, TeamModerationDeleteContentSerializer, CatalogCountrySerializer, CatalogCountryWriteSerializer, CatalogLeagueSerializer, CatalogLeagueWriteSerializer, CatalogTeamSerializer, CatalogTeamWriteSerializer
 from .team_moderation import TeamModerationConflict, TEAM_MERGE_UNDO_BLOCK_REASON, TEAM_REJECT_UNDO_BLOCK_REASON, approve_team, build_team_reject_block_reason, delete_team_and_associated_content, get_team_usage, merge_teams_safely, normalize_team_name_for_matching, reject_unused_team, team_name_tokens
 
 
@@ -1240,6 +1241,81 @@ class AdminTeamApproveAPI(APIView):
         })
 
 
+def get_active_filter_value(request, *, default='active'):
+    value = (request.query_params.get('active') or default).strip().lower()
+    return value if value in {'active', 'inactive', 'all'} else default
+
+
+def apply_active_filter(queryset, active_filter):
+    if active_filter == 'active':
+        return queryset.filter(is_active=True)
+    if active_filter == 'inactive':
+        return queryset.filter(is_active=False)
+    return queryset
+
+
+def country_name_conflict_response(country):
+    return Response({
+        'detail': 'A country with this name already exists.',
+        'code': 'country_name_conflict',
+        'existing_country_id': country.id,
+    }, status=status.HTTP_409_CONFLICT)
+
+
+def country_code_conflict_response(country):
+    return Response({
+        'detail': 'A country with this code already exists.',
+        'code': 'country_code_conflict',
+        'existing_country_id': country.id,
+    }, status=status.HTTP_409_CONFLICT)
+
+
+def league_name_conflict_response(league):
+    return Response({
+        'detail': 'A league with this name already exists for the selected country.',
+        'code': 'league_name_conflict',
+        'existing_league_id': league.id,
+    }, status=status.HTTP_409_CONFLICT)
+
+
+def league_global_name_conflict_response(league):
+    return Response({
+        'detail': 'A league with this name already exists. Global league-name uniqueness is still enforced in this phase.',
+        'code': 'league_global_name_conflict',
+        'existing_league_id': league.id,
+    }, status=status.HTTP_409_CONFLICT)
+
+
+def team_name_conflict_response(team):
+    return Response({
+        'detail': 'A team with this name already exists.',
+        'code': 'team_name_conflict',
+        'existing_team_id': team.id,
+    }, status=status.HTTP_409_CONFLICT)
+
+
+def annotate_catalog_countries(queryset):
+    return queryset.annotate(
+        leagues_count=Count('leagues', distinct=True),
+        teams_count=Count('teams', distinct=True),
+    )
+
+
+def annotate_catalog_leagues(queryset):
+    return queryset.annotate(
+        teams_count=Count('teams', distinct=True),
+    )
+
+
+def annotate_catalog_teams(queryset):
+    return queryset.annotate(
+        kits_count=Count('kits', distinct=True),
+        userkits_count=Count('kits__owned_by', distinct=True),
+        wishlist_count=Count('wishlist_items', distinct=True),
+        favorite_team_count=Count('fans', distinct=True),
+    )
+
+
 class AdminCountriesAPI(APIView):
     permission_classes = [IsAuthenticated, IsStaffOrModerator]
 
@@ -1329,6 +1405,259 @@ class AdminLeaguesAPI(APIView):
         )
         response_serializer = LeagueSerializer(league)
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+
+class AdminCatalogCountriesAPI(APIView):
+    permission_classes = [IsAuthenticated, IsStaffOrSuperuser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get(self, request):
+        queryset = annotate_catalog_countries(Country.objects.select_related('created_by'))
+        query = (request.query_params.get('q') or '').strip()
+        if query:
+            queryset = queryset.filter(Q(name__icontains=query) | Q(code__icontains=query))
+        queryset = apply_active_filter(queryset, get_active_filter_value(request)).order_by('name', 'id')
+        serializer = CatalogCountrySerializer(queryset, many=True, context={'request': request})
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = CatalogCountryWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        name = serializer.validated_data['name']
+        code = serializer.validated_data['code']
+
+        existing_by_name = Country.objects.filter(name__iexact=name).order_by('id').first()
+        if existing_by_name is not None:
+            return country_name_conflict_response(existing_by_name)
+
+        existing_by_code = Country.objects.filter(code__iexact=code).order_by('id').first()
+        if existing_by_code is not None:
+            return country_code_conflict_response(existing_by_code)
+
+        country = serializer.save(created_by=request.user)
+        response_serializer = CatalogCountrySerializer(
+            annotate_catalog_countries(Country.objects.select_related('created_by')).get(pk=country.pk),
+            context={'request': request},
+        )
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+
+class AdminCatalogCountryDetailAPI(APIView):
+    permission_classes = [IsAuthenticated, IsStaffOrSuperuser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get_object(self, pk):
+        return get_object_or_404(Country.objects.select_related('created_by'), pk=pk)
+
+    def get(self, request, pk):
+        country = annotate_catalog_countries(Country.objects.select_related('created_by')).get(pk=pk)
+        serializer = CatalogCountrySerializer(country, context={'request': request})
+        return Response(serializer.data)
+
+    def patch(self, request, pk):
+        country = self.get_object(pk)
+        serializer = CatalogCountryWriteSerializer(country, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        name = serializer.validated_data.get('name', country.name)
+        code = serializer.validated_data.get('code', country.code)
+
+        existing_by_name = Country.objects.filter(name__iexact=name).exclude(pk=country.pk).order_by('id').first()
+        if existing_by_name is not None:
+            return country_name_conflict_response(existing_by_name)
+
+        existing_by_code = Country.objects.filter(code__iexact=code).exclude(pk=country.pk).order_by('id').first()
+        if existing_by_code is not None:
+            return country_code_conflict_response(existing_by_code)
+
+        country = serializer.save()
+        response_serializer = CatalogCountrySerializer(
+            annotate_catalog_countries(Country.objects.select_related('created_by')).get(pk=country.pk),
+            context={'request': request},
+        )
+        return Response(response_serializer.data)
+
+
+class AdminCatalogLeaguesAPI(APIView):
+    permission_classes = [IsAuthenticated, IsStaffOrSuperuser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get(self, request):
+        queryset = annotate_catalog_leagues(
+            League.objects.select_related('country', 'created_by')
+        )
+        query = (request.query_params.get('q') or '').strip()
+        if query:
+            queryset = queryset.filter(name__icontains=query)
+        country_id = request.query_params.get('country_id')
+        if country_id not in (None, ''):
+            queryset = queryset.filter(country_id=country_id)
+        queryset = apply_active_filter(queryset, get_active_filter_value(request)).order_by(
+            'country__name',
+            'order',
+            'name',
+            'id',
+        )
+        serializer = CatalogLeagueSerializer(queryset, many=True, context={'request': request})
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = CatalogLeagueWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        name = serializer.validated_data['name']
+        country = serializer.validated_data['country']
+
+        existing_in_country = League.objects.filter(
+            country=country,
+            name__iexact=name,
+        ).order_by('id').first()
+        if existing_in_country is not None:
+            return league_name_conflict_response(existing_in_country)
+
+        existing_global = League.objects.filter(name__iexact=name).order_by('id').first()
+        if existing_global is not None:
+            return league_global_name_conflict_response(existing_global)
+
+        try:
+            league = serializer.save(created_by=request.user, country=country)
+        except IntegrityError:
+            existing_global = League.objects.filter(name__iexact=name).order_by('id').first()
+            if existing_global is not None:
+                return league_global_name_conflict_response(existing_global)
+            raise
+
+        response_serializer = CatalogLeagueSerializer(
+            annotate_catalog_leagues(League.objects.select_related('country', 'created_by')).get(pk=league.pk),
+            context={'request': request},
+        )
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+
+class AdminCatalogLeagueDetailAPI(APIView):
+    permission_classes = [IsAuthenticated, IsStaffOrSuperuser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get_object(self, pk):
+        return get_object_or_404(League.objects.select_related('country', 'created_by'), pk=pk)
+
+    def get(self, request, pk):
+        league = annotate_catalog_leagues(
+            League.objects.select_related('country', 'created_by')
+        ).get(pk=pk)
+        serializer = CatalogLeagueSerializer(league, context={'request': request})
+        return Response(serializer.data)
+
+    def patch(self, request, pk):
+        league = self.get_object(pk)
+        serializer = CatalogLeagueWriteSerializer(league, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        name = serializer.validated_data.get('name', league.name)
+        country = serializer.validated_data.get('country', league.country)
+
+        existing_in_country = League.objects.filter(
+            country=country,
+            name__iexact=name,
+        ).exclude(pk=league.pk).order_by('id').first()
+        if existing_in_country is not None:
+            return league_name_conflict_response(existing_in_country)
+
+        existing_global = League.objects.filter(name__iexact=name).exclude(pk=league.pk).order_by('id').first()
+        if existing_global is not None:
+            return league_global_name_conflict_response(existing_global)
+
+        try:
+            league = serializer.save(country=country)
+        except IntegrityError:
+            existing_global = League.objects.filter(name__iexact=name).exclude(pk=league.pk).order_by('id').first()
+            if existing_global is not None:
+                return league_global_name_conflict_response(existing_global)
+            raise
+
+        response_serializer = CatalogLeagueSerializer(
+            annotate_catalog_leagues(League.objects.select_related('country', 'created_by')).get(pk=league.pk),
+            context={'request': request},
+        )
+        return Response(response_serializer.data)
+
+
+class AdminCatalogTeamsAPI(APIView):
+    permission_classes = [IsAuthenticated, IsStaffOrSuperuser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get(self, request):
+        queryset = annotate_catalog_teams(
+            Team.objects.select_related('country', 'league')
+        )
+        query = (request.query_params.get('q') or '').strip()
+        if query:
+            queryset = queryset.filter(name__icontains=query)
+        country_id = request.query_params.get('country_id')
+        if country_id not in (None, ''):
+            queryset = queryset.filter(country_id=country_id)
+        league_id = request.query_params.get('league_id')
+        if league_id not in (None, ''):
+            queryset = queryset.filter(league_id=league_id)
+        verified_filter = (request.query_params.get('verified') or 'all').strip().lower()
+        if verified_filter == 'verified':
+            queryset = queryset.filter(is_verified=True)
+        elif verified_filter == 'unverified':
+            queryset = queryset.filter(is_verified=False)
+        queryset = queryset.order_by('name', 'id')
+        serializer = CatalogTeamSerializer(queryset, many=True, context={'request': request})
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = CatalogTeamWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        name = serializer.validated_data['name']
+
+        existing_team = Team.objects.filter(name__iexact=name).order_by('id').first()
+        if existing_team is not None:
+            return team_name_conflict_response(existing_team)
+
+        team = serializer.save(
+            country=serializer.validated_data.get('country'),
+            league=serializer.validated_data.get('league'),
+            is_verified=serializer.validated_data.get('is_verified', True),
+        )
+        response_serializer = CatalogTeamSerializer(
+            annotate_catalog_teams(Team.objects.select_related('country', 'league')).get(pk=team.pk),
+            context={'request': request},
+        )
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+
+class AdminCatalogTeamDetailAPI(APIView):
+    permission_classes = [IsAuthenticated, IsStaffOrSuperuser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get_object(self, pk):
+        return get_object_or_404(Team.objects.select_related('country', 'league'), pk=pk)
+
+    def get(self, request, pk):
+        team = annotate_catalog_teams(Team.objects.select_related('country', 'league')).get(pk=pk)
+        serializer = CatalogTeamSerializer(team, context={'request': request})
+        return Response(serializer.data)
+
+    def patch(self, request, pk):
+        team = self.get_object(pk)
+        serializer = CatalogTeamWriteSerializer(team, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        name = serializer.validated_data.get('name', team.name)
+
+        existing_team = Team.objects.filter(name__iexact=name).exclude(pk=team.pk).order_by('id').first()
+        if existing_team is not None:
+            return team_name_conflict_response(existing_team)
+
+        team = serializer.save(
+            country=serializer.validated_data.get('country', team.country),
+            league=serializer.validated_data.get('league', team.league),
+            is_verified=serializer.validated_data.get('is_verified', team.is_verified),
+        )
+        response_serializer = CatalogTeamSerializer(
+            annotate_catalog_teams(Team.objects.select_related('country', 'league')).get(pk=team.pk),
+            context={'request': request},
+        )
+        return Response(response_serializer.data)
 
 
 class AdminTeamMergeAPI(APIView):

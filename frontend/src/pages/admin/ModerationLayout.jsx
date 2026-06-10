@@ -25,7 +25,7 @@ const ModerationLayout = ({ user }) => {
 				<div>
 					<h1 className="fw-bold mb-1">{t("moderation.title")}</h1>
 				</div>
-				<ModerationNavigation />
+				<ModerationNavigation user={user} />
 			</header>
 
 			<div className="moderation-content">

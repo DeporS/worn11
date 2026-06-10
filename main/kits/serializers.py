@@ -3,10 +3,14 @@ from .models import Country, League, Team, Kit, KitType, KitTypeAlias, TeamSeaso
 from django.contrib.auth.models import User
 from dj_rest_auth.serializers import UserDetailsSerializer
 from django.utils.text import slugify
+import re
 import json
 from urllib.parse import urlencode
 from .permissions import can_undo_moderation_action, moderation_action_is_currently_undoable, is_staff_or_moderator
 from .team_season_suggestions import ensure_team_season_suggestion
+
+
+HEX_COLOR_PATTERN = re.compile(r'^#[0-9A-Fa-f]{6}$')
 
 
 def normalize_catalog_name(value):
@@ -679,6 +683,213 @@ class AdminLeagueCreateSerializer(serializers.Serializer):
         if not Country.objects.filter(pk=value, is_active=True).exists():
             raise serializers.ValidationError('Country must be an active country.')
         return value
+
+
+class CatalogCountrySerializer(serializers.ModelSerializer):
+    created_by = serializers.CharField(source='created_by.username', read_only=True, allow_null=True)
+    leagues_count = serializers.IntegerField(read_only=True)
+    teams_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = Country
+        fields = [
+            'id',
+            'name',
+            'code',
+            'flag',
+            'is_active',
+            'created_by',
+            'created_at',
+            'leagues_count',
+            'teams_count',
+        ]
+
+
+class CatalogCountryWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Country
+        fields = ['name', 'code', 'flag', 'is_active']
+        extra_kwargs = {
+            'name': {'validators': []},
+            'code': {'validators': []},
+        }
+
+    def validate_name(self, value):
+        cleaned = ' '.join((value or '').strip().split())
+        if not cleaned:
+            raise serializers.ValidationError('Country name is required.')
+        return cleaned
+
+    def validate_code(self, value):
+        cleaned = (value or '').strip().upper()
+        if not cleaned:
+            raise serializers.ValidationError('Country code is required.')
+        return cleaned
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        return attrs
+
+
+class CatalogLeagueSerializer(serializers.ModelSerializer):
+    created_by = serializers.CharField(source='created_by.username', read_only=True, allow_null=True)
+    country_id = serializers.IntegerField(source='country.id', read_only=True, allow_null=True)
+    country_name = serializers.CharField(source='country.name', read_only=True, allow_null=True)
+    country_code = serializers.CharField(source='country.code', read_only=True, allow_null=True)
+    teams_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = League
+        fields = [
+            'id',
+            'name',
+            'country_id',
+            'country_name',
+            'country_code',
+            'logo',
+            'hex_color',
+            'order',
+            'is_active',
+            'created_by',
+            'created_at',
+            'teams_count',
+        ]
+
+
+class CatalogLeagueWriteSerializer(serializers.ModelSerializer):
+    country_id = serializers.IntegerField()
+
+    class Meta:
+        model = League
+        fields = ['name', 'country_id', 'logo', 'hex_color', 'order', 'is_active']
+        extra_kwargs = {
+            'name': {'validators': []},
+        }
+
+    def validate_name(self, value):
+        cleaned = ' '.join((value or '').strip().split())
+        if not cleaned:
+            raise serializers.ValidationError('League name is required.')
+        return cleaned
+
+    def validate_hex_color(self, value):
+        cleaned = (value or '').strip()
+        if not cleaned:
+            return '#333333'
+        if not HEX_COLOR_PATTERN.match(cleaned):
+            raise serializers.ValidationError('Color must be a valid hex code like #EF4444.')
+        return cleaned.upper()
+
+    def validate_country_id(self, value):
+        country = Country.objects.filter(pk=value).first()
+        if country is None:
+            raise serializers.ValidationError('Country is invalid.')
+        return value
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        instance = getattr(self, 'instance', None)
+        country_id = attrs.get('country_id', instance.country_id if instance is not None else None)
+
+        country = Country.objects.filter(pk=country_id).first()
+        if country is None:
+            raise serializers.ValidationError({'country_id': 'Country is invalid.'})
+        if instance is None and not country.is_active:
+            raise serializers.ValidationError({'country_id': 'Country must be active.'})
+
+        attrs['country'] = country
+        return attrs
+
+
+class CatalogTeamSerializer(serializers.ModelSerializer):
+    slug = serializers.SerializerMethodField()
+    country_id = serializers.IntegerField(source='country.id', read_only=True, allow_null=True)
+    country_name = serializers.CharField(source='country.name', read_only=True, allow_null=True)
+    country_code = serializers.CharField(source='country.code', read_only=True, allow_null=True)
+    league_id = serializers.IntegerField(source='league.id', read_only=True, allow_null=True)
+    league_name = serializers.CharField(source='league.name', read_only=True, allow_null=True)
+    kits_count = serializers.IntegerField(read_only=True)
+    userkits_count = serializers.IntegerField(read_only=True)
+    wishlist_count = serializers.IntegerField(read_only=True)
+    favorite_team_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = Team
+        fields = [
+            'id',
+            'name',
+            'slug',
+            'logo',
+            'country_id',
+            'country_name',
+            'country_code',
+            'league_id',
+            'league_name',
+            'is_verified',
+            'kits_count',
+            'userkits_count',
+            'wishlist_count',
+            'favorite_team_count',
+        ]
+
+    def get_slug(self, obj):
+        return build_team_slug(obj.name)
+
+
+class CatalogTeamWriteSerializer(serializers.ModelSerializer):
+    country_id = serializers.IntegerField(required=False)
+    league_id = serializers.IntegerField(required=False, allow_null=True)
+
+    class Meta:
+        model = Team
+        fields = ['name', 'country_id', 'league_id', 'logo', 'is_verified']
+        extra_kwargs = {
+            'name': {'validators': []},
+        }
+
+    def validate_name(self, value):
+        cleaned = ' '.join((value or '').strip().split())
+        if not cleaned:
+            raise serializers.ValidationError('Team name is required.')
+        return cleaned
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        instance = getattr(self, 'instance', None)
+        is_verified = attrs.get('is_verified', instance.is_verified if instance is not None else True)
+        country_id = attrs.get('country_id', instance.country_id if instance is not None else None)
+        league_id = attrs.get('league_id', instance.league_id if instance is not None else None)
+
+        country = None
+        if country_id not in (None, ''):
+            country = Country.objects.filter(pk=country_id).first()
+            if country is None:
+                raise serializers.ValidationError({'country_id': 'Country is invalid.'})
+            country_changed = instance is None or country.id != instance.country_id
+            if country_changed and not country.is_active:
+                raise serializers.ValidationError({'country_id': 'Country must be active.'})
+        elif is_verified:
+            raise serializers.ValidationError({'country_id': 'Country is required for verified teams.'})
+
+        league = None
+        if league_id not in (None, ''):
+            league = League.objects.select_related('country').filter(pk=league_id).first()
+            if league is None:
+                raise serializers.ValidationError({'league_id': 'League is invalid.'})
+            league_changed = instance is None or league.id != instance.league_id
+            if league_changed and not league.is_active:
+                raise serializers.ValidationError({'league_id': 'League must be active.'})
+            if country is None:
+                raise serializers.ValidationError({'country_id': 'Country is required when setting a league.'})
+            if league.country_id != country.id:
+                raise serializers.ValidationError({
+                    'detail': 'Selected league does not belong to the selected country.',
+                    'code': 'league_country_mismatch',
+                })
+
+        attrs['country'] = country
+        attrs['league'] = league
+        return attrs
 
 
 class TeamModerationApproveSerializer(serializers.Serializer):
@@ -1385,10 +1596,11 @@ class UserSerializer(serializers.ModelSerializer):
     # Nested profile serializer
     profile = ProfileSerializer(read_only=True)
     is_staff = serializers.BooleanField(read_only=True)
+    is_superuser = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'is_staff', 'profile']
+        fields = ['id', 'username', 'email', 'is_staff', 'is_superuser', 'profile']
 
 # Custom User Details Serializer to include is_pro field
 class CustomUserDetailsSerializer(UserDetailsSerializer):
