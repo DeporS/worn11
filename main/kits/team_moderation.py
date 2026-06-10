@@ -2,17 +2,26 @@ from dataclasses import dataclass
 import re
 
 from django.db import transaction
-from django.db.models import Count
+from django.db.models import Count, Q
 from rest_framework import status
 from rest_framework.exceptions import APIException, ValidationError
 
 from .models import (
+    CollectionValueSnapshot,
+    Country,
     Kit,
+    KitComment,
+    KitCommentLike,
+    KitReport,
+    League,
+    Notification,
     Profile,
     Team,
     TeamModerationAction,
     TeamSeasonKitType,
     UserKit,
+    UserKitImage,
+    record_collection_value_snapshot,
     WishlistItem,
     build_team_slug,
     normalize_wishlist_kit_type,
@@ -21,6 +30,7 @@ from .models import (
 
 TEAM_MERGE_UNDO_BLOCK_REASON = 'Team merge undo requires manual review.'
 TEAM_REJECT_UNDO_BLOCK_REASON = 'Deleted teams cannot be restored automatically.'
+TEAM_DELETE_CONTENT_UNDO_BLOCK_REASON = 'Destructive team deletion cannot be automatically undone.'
 
 _PUNCTUATION_PATTERN = re.compile(r'[^a-z0-9\s]+')
 _WHITESPACE_PATTERN = re.compile(r'\s+')
@@ -39,22 +49,36 @@ class TeamModerationConflict(APIException):
 @dataclass
 class TeamUsage:
     kits: int
+    orphan_kits: int
     userkits: int
     wishlist_items: int
     favorite_profiles: int
     team_season_types: int
+    approved_team_season_types: int
+    pending_team_season_types: int
+    rejected_team_season_types: int
 
     def as_dict(self):
         return {
             'kits': self.kits,
+            'orphan_kits': self.orphan_kits,
             'userkits': self.userkits,
             'wishlist_items': self.wishlist_items,
             'favorite_profiles': self.favorite_profiles,
             'team_season_types': self.team_season_types,
+            'approved_team_season_types': self.approved_team_season_types,
+            'pending_team_season_types': self.pending_team_season_types,
+            'rejected_team_season_types': self.rejected_team_season_types,
         }
 
     def is_unused(self):
-        return not any(self.as_dict().values())
+        return not any([
+            self.userkits,
+            self.wishlist_items,
+            self.favorite_profiles,
+            self.approved_team_season_types,
+            self.pending_team_season_types,
+        ])
 
 
 def normalize_team_name_for_matching(name):
@@ -74,28 +98,118 @@ def team_name_tokens(name):
 def get_team_usage(team):
     usage = Team.objects.filter(pk=team.pk).annotate(
         kits_count=Count('kits', distinct=True),
+        orphan_kits_count=Count('kits', filter=Q(kits__owned_by__isnull=True), distinct=True),
         userkits_count=Count('kits__owned_by', distinct=True),
         wishlist_count=Count('wishlist_items', distinct=True),
         favorite_team_count=Count('fans', distinct=True),
         team_season_count=Count('season_kit_types', distinct=True),
+        approved_team_season_count=Count(
+            'season_kit_types',
+            filter=Q(season_kit_types__status=TeamSeasonKitType.STATUS_APPROVED),
+            distinct=True,
+        ),
+        pending_team_season_count=Count(
+            'season_kit_types',
+            filter=Q(season_kit_types__status=TeamSeasonKitType.STATUS_PENDING),
+            distinct=True,
+        ),
+        rejected_team_season_count=Count(
+            'season_kit_types',
+            filter=Q(season_kit_types__status=TeamSeasonKitType.STATUS_REJECTED),
+            distinct=True,
+        ),
     ).values(
         'kits_count',
+        'orphan_kits_count',
         'userkits_count',
         'wishlist_count',
         'favorite_team_count',
         'team_season_count',
+        'approved_team_season_count',
+        'pending_team_season_count',
+        'rejected_team_season_count',
     ).first()
 
     if usage is None:
-        return TeamUsage(0, 0, 0, 0, 0)
+        return TeamUsage(0, 0, 0, 0, 0, 0, 0, 0, 0)
 
     return TeamUsage(
         kits=usage['kits_count'] or 0,
+        orphan_kits=usage['orphan_kits_count'] or 0,
         userkits=usage['userkits_count'] or 0,
         wishlist_items=usage['wishlist_count'] or 0,
         favorite_profiles=usage['favorite_team_count'] or 0,
         team_season_types=usage['team_season_count'] or 0,
+        approved_team_season_types=usage['approved_team_season_count'] or 0,
+        pending_team_season_types=usage['pending_team_season_count'] or 0,
+        rejected_team_season_types=usage['rejected_team_season_count'] or 0,
     )
+
+
+def build_team_reject_block_reason(usage):
+    if usage.userkits:
+        return (
+            '1 upload still uses this team.'
+            if usage.userkits == 1
+            else f'{usage.userkits} uploads still use this team.'
+        )
+    if usage.wishlist_items:
+        return (
+            '1 wishlist item still uses this team.'
+            if usage.wishlist_items == 1
+            else f'{usage.wishlist_items} wishlist items still use this team.'
+        )
+    if usage.favorite_profiles:
+        return (
+            '1 profile still favorites this team.'
+            if usage.favorite_profiles == 1
+            else f'{usage.favorite_profiles} profiles still favorite this team.'
+        )
+    if usage.approved_team_season_types:
+        return (
+            'This team has an approved Kit Museum slot.'
+            if usage.approved_team_season_types == 1
+            else f'This team has {usage.approved_team_season_types} approved Kit Museum slots.'
+        )
+    if usage.pending_team_season_types:
+        return (
+            'This team has a pending Kit Museum slot suggestion.'
+            if usage.pending_team_season_types == 1
+            else f'This team has {usage.pending_team_season_types} pending Kit Museum slot suggestions.'
+        )
+    if usage.rejected_team_season_types:
+        return ''
+    return 'This team is still referenced and cannot be rejected.'
+
+
+def delete_rejectable_orphan_kits(team):
+    orphan_kits = list(
+        Kit.objects.select_for_update().filter(
+            team=team,
+            owned_by__isnull=True,
+        )
+    )
+    if not orphan_kits:
+        return 0
+
+    deleted_count = len(orphan_kits)
+    Kit.objects.filter(pk__in=[kit.pk for kit in orphan_kits]).delete()
+    return deleted_count
+
+
+def delete_rejectable_rejected_team_season_rows(team):
+    rejected_rows = list(
+        TeamSeasonKitType.objects.select_for_update().filter(
+            team=team,
+            status=TeamSeasonKitType.STATUS_REJECTED,
+        )
+    )
+    if not rejected_rows:
+        return 0
+
+    deleted_count = len(rejected_rows)
+    TeamSeasonKitType.objects.filter(pk__in=[row.pk for row in rejected_rows]).delete()
+    return deleted_count
 
 
 def snapshot_team(team):
@@ -107,7 +221,11 @@ def snapshot_team(team):
         'name': team.name,
         'slug': build_team_slug(team.name),
         'is_verified': team.is_verified,
+        'country_id': team.country_id,
+        'country_name': team.country.name if team.country_id else None,
+        'country_code': team.country.code if team.country_id else None,
         'league_id': team.league_id,
+        'league_name': team.league.name if team.league_id else None,
         'logo': team.logo.name if team.logo else None,
     }
 
@@ -294,19 +412,51 @@ def validate_team_merge(source_team, target_team):
         raise ValidationError({'target_team_id': 'Target team must be verified.'})
 
 
-def approve_team(*, team_id, actor):
+def approve_team(*, team_id, actor, name, country, league=None):
     with transaction.atomic():
-        team = Team.objects.select_for_update().select_related('league').get(pk=team_id)
+        team = Team.objects.select_for_update().select_related(
+            'country',
+            'league',
+        ).get(pk=team_id)
 
         if team.is_verified:
             raise TeamModerationConflict('This team has already been verified.')
+
+        existing_team = Team.objects.filter(
+            name__iexact=name,
+        ).exclude(
+            pk=team.pk,
+        ).order_by('id').first()
+        if existing_team is not None:
+            raise TeamModerationConflict({
+                'detail': 'A team with this name already exists. Merge into the existing team instead.',
+                'code': 'team_name_conflict',
+                'existing_team_id': existing_team.id,
+            })
+
+        if country is None or not isinstance(country, Country) or not country.is_active:
+            raise ValidationError({'country_id': 'Country must be an active country.'})
+
+        if league is not None:
+            if not isinstance(league, League):
+                raise ValidationError({'league_id': 'League is invalid.'})
+            if not league.is_active:
+                raise ValidationError({'league_id': 'League must be active.'})
+            if league.country_id != country.id:
+                raise ValidationError({
+                    'detail': 'Selected league does not belong to the selected country.',
+                    'code': 'league_country_mismatch',
+                })
 
         previous_state = {
             'source_team': snapshot_team(team),
         }
 
+        team.name = name
+        team.country = country
+        team.league = league
         team.is_verified = True
-        team.save(update_fields=['is_verified'])
+        team.save(update_fields=['name', 'country', 'league', 'is_verified'])
 
         action = build_team_moderation_action(
             actor=actor,
@@ -323,8 +473,8 @@ def approve_team(*, team_id, actor):
 
 def merge_teams_safely(*, source_team_id, target_team_id, actor):
     with transaction.atomic():
-        source_team = Team.objects.select_for_update().select_related('league').get(pk=source_team_id)
-        target_team = Team.objects.select_for_update().select_related('league').get(pk=target_team_id)
+        source_team = Team.objects.select_for_update().select_related('country', 'league').get(pk=source_team_id)
+        target_team = Team.objects.select_for_update().select_related('country', 'league').get(pk=target_team_id)
 
         validate_team_merge(source_team, target_team)
 
@@ -410,17 +560,25 @@ def merge_teams_safely(*, source_team_id, target_team_id, actor):
 
 def reject_unused_team(*, team_id, actor):
     with transaction.atomic():
-        team = Team.objects.select_for_update().select_related('league').get(pk=team_id)
+        team = Team.objects.select_for_update().select_related('country', 'league').get(pk=team_id)
 
         if team.is_verified:
             raise TeamModerationConflict('Verified teams cannot be rejected through this moderation flow.')
 
+        initial_usage = get_team_usage(team)
+        deleted_orphan_kits = delete_rejectable_orphan_kits(team)
+        deleted_rejected_team_season_types = delete_rejectable_rejected_team_season_rows(team)
         usage = get_team_usage(team)
         if not usage.is_unused():
             raise TeamModerationConflict({
-                'detail': 'This team is in use and cannot be rejected. Merge it into an existing team instead.',
+                'detail': build_team_reject_block_reason(usage),
                 'code': 'team_in_use',
-                'usage': usage.as_dict(),
+                'usage': {
+                    **usage.as_dict(),
+                    'orphan_kits': initial_usage.orphan_kits,
+                    'deleted_orphan_kits': deleted_orphan_kits,
+                    'deleted_rejected_team_season_types': deleted_rejected_team_season_types,
+                },
             })
 
         previous_state = {
@@ -435,9 +593,147 @@ def reject_unused_team(*, team_id, actor):
             source_team=Team(id=source_team_snapshot['id'], name=source_team_snapshot['name']),
             previous_state=previous_state,
             resulting_state={'deleted': True},
-            summary={'deleted': True, 'usage': usage.as_dict()},
+            summary={
+                'deleted': True,
+                'usage': initial_usage.as_dict(),
+                'deleted_orphan_kits': deleted_orphan_kits,
+                'deleted_rejected_team_season_types': deleted_rejected_team_season_types,
+            },
             is_reversible=False,
             undo_block_reason=TEAM_REJECT_UNDO_BLOCK_REASON,
         )
 
         return source_team_snapshot, action
+
+
+def delete_team_and_associated_content(*, team_id, actor, confirmation, reason, note=''):
+    with transaction.atomic():
+        team = Team.objects.select_for_update().select_related('country', 'league').get(pk=team_id)
+
+        if team.is_verified:
+            raise TeamModerationConflict({
+                'detail': 'Verified teams cannot be deleted through this moderation flow.',
+                'code': 'verified_team_delete_forbidden',
+            })
+
+        expected_confirmation = (team.name or '').strip()
+        if (confirmation or '').strip() != expected_confirmation:
+            raise ValidationError({
+                'detail': 'Confirmation must exactly match the current team name.',
+                'code': 'delete_confirmation_required',
+            })
+
+        previous_state = {
+            'source_team': snapshot_team(team),
+        }
+
+        kits = list(Kit.objects.select_for_update().filter(team=team).order_by('id'))
+        kit_ids = [kit.id for kit in kits]
+        userkits = list(
+            UserKit.objects.select_for_update().filter(kit_id__in=kit_ids).select_related('user', 'kit').order_by('id')
+        )
+        userkit_ids = [userkit.id for userkit in userkits]
+        affected_user_ids = sorted({userkit.user_id for userkit in userkits})
+        affected_users = {
+            userkit.user_id: userkit.user
+            for userkit in userkits
+        }
+        affected_usernames = sorted({user.username for user in affected_users.values()})
+
+        comments = list(
+            KitComment.objects.select_for_update().filter(kit_id__in=userkit_ids).select_related('user').order_by('id')
+        )
+        comment_ids = [comment.id for comment in comments]
+        reports = list(
+            KitReport.objects.select_for_update().filter(kit_id__in=userkit_ids).select_related('reporter', 'resolved_by').order_by('id')
+        )
+        report_snapshots = [
+            {
+                'id': report.id,
+                'kit_id': report.kit_id,
+                'reporter_id': report.reporter_id,
+                'reporter_username': report.reporter.username,
+                'reason': report.reason,
+                'description': report.description,
+                'status': report.status,
+                'resolved_by_id': report.resolved_by_id,
+                'resolved_by_username': report.resolved_by.username if report.resolved_by_id else None,
+                'resolution_note': report.resolution_note,
+            }
+            for report in reports
+        ]
+
+        deleted_wishlist_items = WishlistItem.objects.select_for_update().filter(team=team).count()
+        cleared_favorite_profiles = Profile.objects.select_for_update().filter(favorite_team=team).count()
+        deleted_team_season_types = TeamSeasonKitType.objects.select_for_update().filter(team=team).count()
+        deleted_images = UserKitImage.objects.filter(user_kit_id__in=userkit_ids).count()
+        deleted_comment_likes = KitCommentLike.objects.filter(comment_id__in=comment_ids).count()
+        deleted_comments = len(comment_ids)
+        deleted_reports = len(report_snapshots)
+        deleted_notifications = Notification.objects.filter(
+            Q(kit_id__in=userkit_ids) | Q(comment_id__in=comment_ids)
+        ).distinct().count()
+        deleted_kit_likes = sum(userkit.likes.count() for userkit in userkits)
+        deleted_userkits = len(userkits)
+        deleted_kits = len(kits)
+
+        if deleted_wishlist_items:
+            WishlistItem.objects.filter(team=team).delete()
+
+        if cleared_favorite_profiles:
+            Profile.objects.filter(favorite_team=team).update(favorite_team=None)
+
+        if deleted_team_season_types:
+            TeamSeasonKitType.objects.filter(team=team).delete()
+
+        if userkit_ids:
+            UserKit.objects.filter(pk__in=userkit_ids).delete()
+
+        if kit_ids:
+            Kit.objects.filter(pk__in=kit_ids).delete()
+
+        team.delete()
+
+        for user_id in affected_user_ids:
+            record_collection_value_snapshot(
+                user=affected_users[user_id],
+                reason=CollectionValueSnapshot.REASON_KIT_REMOVED,
+            )
+
+        source_team_snapshot = previous_state['source_team']
+        summary = {
+            'deleted': True,
+            'reason': reason,
+            'note': note or '',
+            'deleted_kits': deleted_kits,
+            'deleted_userkits': deleted_userkits,
+            'affected_users': len(affected_user_ids),
+            'affected_user_ids': affected_user_ids,
+            'affected_usernames': affected_usernames,
+            'deleted_images': deleted_images,
+            'deleted_comments': deleted_comments,
+            'deleted_comment_likes': deleted_comment_likes,
+            'deleted_kit_likes': deleted_kit_likes,
+            'deleted_reports': deleted_reports,
+            'deleted_notifications': deleted_notifications,
+            'deleted_wishlist_items': deleted_wishlist_items,
+            'cleared_favorite_profiles': cleared_favorite_profiles,
+            'deleted_team_season_types': deleted_team_season_types,
+            'deleted_userkit_ids': userkit_ids,
+            'deleted_kit_ids': kit_ids,
+            'report_snapshots': report_snapshots,
+            'collection_snapshot_reason': CollectionValueSnapshot.REASON_KIT_REMOVED,
+        }
+
+        action = build_team_moderation_action(
+            actor=actor,
+            action_type=TeamModerationAction.ACTION_DELETE_CONTENT,
+            source_team=Team(id=source_team_snapshot['id'], name=source_team_snapshot['name']),
+            previous_state=previous_state,
+            resulting_state={'deleted': True},
+            summary=summary,
+            is_reversible=False,
+            undo_block_reason=TEAM_DELETE_CONTENT_UNDO_BLOCK_REASON,
+        )
+
+        return source_team_snapshot, action, summary

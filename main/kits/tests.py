@@ -13,8 +13,8 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient, APITestCase
 
-from .models import Kit, KitType, KitTypeAlias, TeamSeasonKitType, KitTypeModerationAction, TeamModerationAction, ShirtVersion, Team, UserKit, UserKitImage, WishlistItem, KitComment, KitReport, Conversation, Message, Follow, Notification, CollectionValueSnapshot, AUTOMATED_VALUATION_UNAVAILABLE_MESSAGE, TECHNOLOGIE_MULTIPLIERS, calculate_collection_total_value
-from .serializers import KitSerializer, UserKitSerializer, WishlistItemSerializer
+from .models import Country, League, Kit, KitType, KitTypeAlias, TeamSeasonKitType, KitTypeModerationAction, TeamModerationAction, ShirtVersion, Team, UserKit, UserKitImage, WishlistItem, KitComment, KitCommentLike, KitReport, Conversation, Message, Follow, Notification, CollectionValueSnapshot, AUTOMATED_VALUATION_UNAVAILABLE_MESSAGE, TECHNOLOGIE_MULTIPLIERS, calculate_collection_total_value
+from .serializers import KitSerializer, TeamSerializer, UserKitSerializer, WishlistItemSerializer
 
 
 class CatalogFoundationTests(APITestCase):
@@ -725,6 +725,48 @@ class KitTypeWriteAPITests(APITestCase):
         self.assertEqual(suggestion.status, TeamSeasonKitType.STATUS_PENDING)
         self.assertEqual(suggestion.source, TeamSeasonKitType.SOURCE_UPLOAD)
         self.assertEqual(suggestion.created_by, self.user)
+
+    def test_create_new_unverified_team_with_custom_type_does_not_auto_approve_team_season(self):
+        response = self.client.post(
+            reverse('api-my-collection'),
+            self.payload(
+                team_name='Fresh Upload United',
+                kit_type='Tunnel Walk Anthem',
+            ),
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        team = Team.objects.get(name='Fresh Upload United')
+        self.assertFalse(team.is_verified)
+
+        rows = list(
+            TeamSeasonKitType.objects.filter(team=team).select_related('kit_type')
+        )
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].status, TeamSeasonKitType.STATUS_PENDING)
+        self.assertEqual(rows[0].source, TeamSeasonKitType.SOURCE_UPLOAD)
+        self.assertFalse(
+            TeamSeasonKitType.objects.filter(
+                team=team,
+                status=TeamSeasonKitType.STATUS_APPROVED,
+            ).exists()
+        )
+
+    def test_create_new_unverified_team_with_default_type_creates_no_team_season_row(self):
+        response = self.client.post(
+            reverse('api-my-collection'),
+            self.payload(
+                team_name='Default Type Wanderers',
+                kit_type='Home',
+            ),
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        team = Team.objects.get(name='Default Type Wanderers')
+        self.assertFalse(team.is_verified)
+        self.assertFalse(TeamSeasonKitType.objects.filter(team=team).exists())
 
 
 class AdminKitTypeModerationAPITests(APITestCase):
@@ -1725,9 +1767,35 @@ class AdminTeamModerationAPITests(APITestCase):
         self.wishlist_owner = User.objects.create_user(username='wishlist_owner', password='password123')
         self.wishlist_duplicate_owner = User.objects.create_user(username='wishlist_duplicate_owner', password='password123')
 
-        self.target_team = Team.objects.create(name='Arsenal F.C.', is_verified=True)
-        self.similar_verified_team = Team.objects.create(name='Arsenal FC Women', is_verified=True)
-        self.other_verified_team = Team.objects.create(name='Barcelona', is_verified=True)
+        self.england = Country.objects.create(name='England', code='EN')
+        self.spain = Country.objects.create(name='Spain', code='ES')
+        self.inactive_country = Country.objects.create(name='Retired Nation', code='RN', is_active=False)
+        self.premier_league = League.objects.create(name='Premier League', country=self.england)
+        self.la_liga = League.objects.create(name='La Liga', country=self.spain)
+        self.inactive_league = League.objects.create(
+            name='Old First Division',
+            country=self.england,
+            is_active=False,
+        )
+
+        self.target_team = Team.objects.create(
+            name='Arsenal F.C.',
+            country=self.england,
+            league=self.premier_league,
+            is_verified=True,
+        )
+        self.similar_verified_team = Team.objects.create(
+            name='Arsenal FC Women',
+            country=self.england,
+            league=self.premier_league,
+            is_verified=True,
+        )
+        self.other_verified_team = Team.objects.create(
+            name='Barcelona',
+            country=self.spain,
+            league=self.la_liga,
+            is_verified=True,
+        )
         self.source_team = Team.objects.create(name='Arsenal Legends', is_verified=False)
         self.unused_team = Team.objects.create(name='Unused Typo FC', is_verified=False)
 
@@ -1850,9 +1918,35 @@ class AdminTeamModerationAPITests(APITestCase):
         self.client.force_authenticate(user=user) if user else self.client.force_authenticate(user=None)
         return self.client.get(reverse('admin-unverified-teams'), params)
 
-    def approve_team(self, team_id, user=None):
+    def approve_team(self, team_id, user=None, payload=None):
         self.client.force_authenticate(user=user or self.staff_user)
-        return self.client.post(reverse('admin-team-approve', args=[team_id]))
+        default_payload = {
+            'name': Team.objects.get(pk=team_id).name,
+            'country_id': self.england.id,
+        }
+        if payload is not None:
+            default_payload.update(payload)
+        return self.client.post(
+            reverse('admin-team-approve', args=[team_id]),
+            default_payload,
+            format='json',
+        )
+
+    def list_countries(self, user=None, **params):
+        self.client.force_authenticate(user=user) if user else self.client.force_authenticate(user=None)
+        return self.client.get(reverse('admin-countries'), params)
+
+    def create_country(self, payload, user=None):
+        self.client.force_authenticate(user=user or self.staff_user)
+        return self.client.post(reverse('admin-countries'), payload, format='json')
+
+    def list_leagues(self, user=None, **params):
+        self.client.force_authenticate(user=user) if user else self.client.force_authenticate(user=None)
+        return self.client.get(reverse('admin-leagues'), params)
+
+    def create_league(self, payload, user=None):
+        self.client.force_authenticate(user=user or self.staff_user)
+        return self.client.post(reverse('admin-leagues'), payload, format='json')
 
     def merge_team(self, source_team_id, target_team_id, user=None):
         self.client.force_authenticate(user=user or self.staff_user)
@@ -1865,6 +1959,21 @@ class AdminTeamModerationAPITests(APITestCase):
     def reject_team(self, team_id, user=None):
         self.client.force_authenticate(user=user or self.staff_user)
         return self.client.post(reverse('admin-team-reject', args=[team_id]))
+
+    def delete_team_content(self, team_id, payload=None, user=None):
+        self.client.force_authenticate(user=user or self.staff_user)
+        default_payload = {
+            'confirmation': Team.objects.get(pk=team_id).name,
+            'reason': 'spam',
+            'note': '',
+        }
+        if payload is not None:
+            default_payload.update(payload)
+        return self.client.post(
+            reverse('admin-team-delete-content', args=[team_id]),
+            default_payload,
+            format='json',
+        )
 
     def test_anonymous_user_cannot_list_unverified_teams(self):
         response = self.client.get(reverse('admin-unverified-teams'))
@@ -1891,11 +2000,110 @@ class AdminTeamModerationAPITests(APITestCase):
                 response = self.client.post(reverse(route_name, args=[self.source_team.id]))
             self.assertEqual(response.status_code, 403)
 
+        self.client.force_authenticate(user=None)
+        anonymous_delete_response = self.client.post(
+            reverse('admin-team-delete-content', args=[self.source_team.id]),
+            {'confirmation': self.source_team.name, 'reason': 'spam'},
+            format='json',
+        )
+        self.assertEqual(anonymous_delete_response.status_code, 401)
+
+        self.client.force_authenticate(user=self.regular_user)
+        forbidden_delete_response = self.client.post(
+            reverse('admin-team-delete-content', args=[self.source_team.id]),
+            {'confirmation': self.source_team.name, 'reason': 'spam'},
+            format='json',
+        )
+        self.assertEqual(forbidden_delete_response.status_code, 403)
+
+    def test_anonymous_and_normal_user_cannot_access_country_or_league_admin_endpoints(self):
+        self.assertEqual(self.client.get(reverse('admin-countries')).status_code, 401)
+        self.assertEqual(self.client.get(reverse('admin-leagues')).status_code, 401)
+
+        self.client.force_authenticate(user=self.regular_user)
+        self.assertEqual(self.client.get(reverse('admin-countries')).status_code, 403)
+        self.assertEqual(self.client.post(reverse('admin-countries'), {'name': 'France', 'code': 'FR'}, format='json').status_code, 403)
+        self.assertEqual(self.client.get(reverse('admin-leagues')).status_code, 403)
+        self.assertEqual(self.client.post(reverse('admin-leagues'), {'name': 'Ligue 1', 'country_id': self.england.id}, format='json').status_code, 403)
+
     def test_moderator_staff_and_superuser_can_list_unverified_teams(self):
         for user in (self.moderator_user, self.staff_user, self.superuser):
             self.client.force_authenticate(user=user)
             response = self.client.get(reverse('admin-unverified-teams'))
             self.assertEqual(response.status_code, 200)
+
+    def test_moderator_staff_and_superuser_can_delete_unverified_team_content(self):
+        for user in (self.moderator_user, self.staff_user, self.superuser):
+            team = Team.objects.create(name=f'Deletable {user.username}', is_verified=False)
+            kit = Kit.objects.create(
+                team=team,
+                season='2024/2025',
+                kit_type='Home',
+                kit_type_ref=self.home_type,
+                estimated_price=Decimal('20.00'),
+            )
+            UserKit.objects.create(
+                user=self.owner,
+                kit=kit,
+                shirt_technology='REPLICA',
+                shirt_version=ShirtVersion.objects.get(code='REPLICA'),
+                condition='VERY_GOOD',
+                size='L',
+            )
+            response = self.delete_team_content(team.id, user=user)
+            self.assertEqual(response.status_code, 200)
+
+    def test_delete_team_content_rejects_bad_confirmation_invalid_reason_and_verified_teams(self):
+        missing_confirmation = self.delete_team_content(
+            self.source_team.id,
+            payload={'confirmation': '', 'reason': 'spam'},
+            user=self.moderator_user,
+        )
+        self.assertEqual(missing_confirmation.status_code, 400)
+        self.assertEqual(missing_confirmation.data['code'], 'delete_confirmation_required')
+
+        incorrect_confirmation = self.delete_team_content(
+            self.source_team.id,
+            payload={'confirmation': 'wrong name', 'reason': 'spam'},
+            user=self.moderator_user,
+        )
+        self.assertEqual(incorrect_confirmation.status_code, 400)
+        self.assertEqual(incorrect_confirmation.data['code'], 'delete_confirmation_required')
+
+        invalid_reason = self.delete_team_content(
+            self.source_team.id,
+            payload={'confirmation': self.source_team.name, 'reason': 'bogus'},
+            user=self.moderator_user,
+        )
+        self.assertEqual(invalid_reason.status_code, 400)
+        self.assertIn('reason', invalid_reason.data)
+
+        verified_delete = self.delete_team_content(
+            self.target_team.id,
+            payload={'confirmation': self.target_team.name, 'reason': 'spam'},
+            user=self.moderator_user,
+        )
+        self.assertEqual(verified_delete.status_code, 409)
+        self.assertEqual(verified_delete.data['code'], 'verified_team_delete_forbidden')
+
+    def test_moderator_staff_and_superuser_can_list_and_create_countries_and_leagues(self):
+        for user in (self.moderator_user, self.staff_user, self.superuser):
+            self.assertEqual(self.list_countries(user=user).status_code, 200)
+            self.assertEqual(self.list_leagues(user=user).status_code, 200)
+
+        country_response = self.create_country({'name': 'France', 'code': 'fr'}, user=self.moderator_user)
+        self.assertEqual(country_response.status_code, 201)
+        country = Country.objects.get(pk=country_response.data['id'])
+        self.assertEqual(country.code, 'FR')
+        self.assertEqual(country.created_by_id, self.moderator_user.id)
+
+        league_response = self.create_league(
+            {'name': 'Ligue 1', 'country_id': country.id},
+            user=self.staff_user,
+        )
+        self.assertEqual(league_response.status_code, 201)
+        league = League.objects.get(pk=league_response.data['id'])
+        self.assertEqual(league.created_by_id, self.staff_user.id)
 
     def test_unverified_teams_list_returns_only_unverified_rows_with_counts_preview_and_similarity(self):
         self.client.force_authenticate(user=self.moderator_user)
@@ -1923,19 +2131,233 @@ class AdminTeamModerationAPITests(APITestCase):
         self.assertIsNotNone(source_payload['preview_image'])
         self.assertFalse(source_payload['can_reject'])
         self.assertTrue(source_payload['reject_block_reason'])
+        self.assertEqual(source_payload['usage']['approved_team_season_types'], 1)
+        self.assertEqual(source_payload['usage']['pending_team_season_types'], 1)
+        self.assertEqual(source_payload['usage']['rejected_team_season_types'], 0)
         self.assertTrue(any(team['id'] == self.target_team.id for team in source_payload['similar_verified_teams']))
         self.assertTrue(all(team['id'] != self.source_team.id for team in source_payload['similar_verified_teams']))
+        self.assertIsNone(source_payload['country_id'])
+        self.assertIsNone(source_payload['country_name'])
+        self.assertIsNone(source_payload['country_code'])
+        self.assertIsNone(source_payload['league_id'])
+        self.assertIsNone(source_payload['league_name'])
 
         self.assertIsNone(unused_payload['preview_image'])
         self.assertTrue(unused_payload['can_reject'])
         self.assertEqual(unused_payload['reject_block_reason'], '')
+        self.assertEqual(unused_payload['usage']['approved_team_season_types'], 0)
+        self.assertEqual(unused_payload['usage']['pending_team_season_types'], 0)
+        self.assertEqual(unused_payload['usage']['rejected_team_season_types'], 0)
+
+    def test_unverified_queue_orders_oldest_first_with_id_tiebreak_and_limit(self):
+        older_team = Team.objects.create(name='Older Queue FC', is_verified=False)
+        newer_team = Team.objects.create(name='Newer Queue FC', is_verified=False)
+        verified_team = Team.objects.create(name='Verified Queue FC', is_verified=True)
+        same_name_team = Team.objects.create(name='Age Tie FC', is_verified=False)
+        same_name_team_duplicate = Team.objects.create(name='Age Tie FC 2', is_verified=False)
+
+        response = self.list_unverified(user=self.moderator_user, limit=50)
+
+        self.assertEqual(response.status_code, 200)
+        returned_ids = [team['id'] for team in response.data['results']]
+        self.assertEqual(
+            returned_ids,
+            [
+                self.source_team.id,
+                self.unused_team.id,
+                older_team.id,
+                newer_team.id,
+                same_name_team.id,
+                same_name_team_duplicate.id,
+            ],
+        )
+        self.assertFalse(response.data['has_more'])
+        self.assertNotIn(verified_team.id, returned_ids)
+
+        limited_response = self.list_unverified(user=self.moderator_user, limit=2)
+        self.assertEqual(limited_response.status_code, 200)
+        self.assertEqual(
+            [team['id'] for team in limited_response.data['results']],
+            [self.source_team.id, self.unused_team.id],
+        )
+        self.assertTrue(limited_response.data['has_more'])
+
+    def test_country_list_returns_active_rows_by_default(self):
+        response = self.list_countries(user=self.moderator_user)
+
+        self.assertEqual(response.status_code, 200)
+        country_ids = [row['id'] for row in response.data]
+        self.assertIn(self.england.id, country_ids)
+        self.assertIn(self.spain.id, country_ids)
+        self.assertNotIn(self.inactive_country.id, country_ids)
+
+        include_inactive_response = self.list_countries(user=self.moderator_user, include_inactive=1)
+        self.assertIn(self.inactive_country.id, [row['id'] for row in include_inactive_response.data])
+
+    def test_create_country_trims_uppercases_and_sets_creator(self):
+        response = self.create_country(
+            {'name': '  New   Zealand  ', 'code': ' nz '},
+            user=self.moderator_user,
+        )
+
+        self.assertEqual(response.status_code, 201)
+        country = Country.objects.get(pk=response.data['id'])
+        self.assertEqual(country.name, 'New Zealand')
+        self.assertEqual(country.code, 'NZ')
+        self.assertEqual(country.created_by_id, self.moderator_user.id)
+        self.assertTrue(country.is_active)
+
+    def test_create_country_rejects_blank_name_blank_code_and_case_insensitive_duplicates(self):
+        self.assertEqual(
+            self.create_country({'name': '   ', 'code': 'EN'}, user=self.moderator_user).status_code,
+            400,
+        )
+        self.assertEqual(
+            self.create_country({'name': 'France', 'code': '   '}, user=self.moderator_user).status_code,
+            400,
+        )
+
+        duplicate_name_response = self.create_country(
+            {'name': ' england ', 'code': 'GB-ENG'},
+            user=self.moderator_user,
+        )
+        self.assertEqual(duplicate_name_response.status_code, 409)
+        self.assertEqual(duplicate_name_response.data['code'], 'country_name_conflict')
+        self.assertEqual(duplicate_name_response.data['existing_country_id'], self.england.id)
+
+        duplicate_code_response = self.create_country(
+            {'name': 'Scotland', 'code': 'en'},
+            user=self.moderator_user,
+        )
+        self.assertEqual(duplicate_code_response.status_code, 409)
+        self.assertEqual(duplicate_code_response.data['code'], 'country_code_conflict')
+        self.assertEqual(duplicate_code_response.data['existing_country_id'], self.england.id)
+
+    def test_league_list_can_filter_by_country(self):
+        response = self.list_leagues(user=self.moderator_user, country_id=self.england.id)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([row['id'] for row in response.data], [self.premier_league.id])
+        self.assertEqual(response.data[0]['country_id'], self.england.id)
+        self.assertEqual(response.data[0]['country_code'], 'EN')
+
+    def test_create_league_requires_active_country_and_normalized_name(self):
+        blank_response = self.create_league(
+            {'name': '   ', 'country_id': self.england.id},
+            user=self.moderator_user,
+        )
+        self.assertEqual(blank_response.status_code, 400)
+
+        inactive_country_response = self.create_league(
+            {'name': 'Legacy League', 'country_id': self.inactive_country.id},
+            user=self.moderator_user,
+        )
+        self.assertEqual(inactive_country_response.status_code, 400)
+
+        response = self.create_league(
+            {'name': '  FA   Cup  ', 'country_id': self.england.id},
+            user=self.moderator_user,
+        )
+        self.assertEqual(response.status_code, 201)
+        league = League.objects.get(pk=response.data['id'])
+        self.assertEqual(league.name, 'FA Cup')
+        self.assertEqual(league.created_by_id, self.moderator_user.id)
+        self.assertTrue(league.is_active)
+
+    def test_create_league_rejects_duplicates_and_retains_global_unique_limitation(self):
+        duplicate_in_country_response = self.create_league(
+            {'name': ' premier   league ', 'country_id': self.england.id},
+            user=self.moderator_user,
+        )
+        self.assertEqual(duplicate_in_country_response.status_code, 409)
+        self.assertEqual(duplicate_in_country_response.data['code'], 'league_name_conflict')
+        self.assertEqual(duplicate_in_country_response.data['existing_league_id'], self.premier_league.id)
+
+        duplicate_global_response = self.create_league(
+            {'name': 'Premier League', 'country_id': self.spain.id},
+            user=self.moderator_user,
+        )
+        self.assertEqual(duplicate_global_response.status_code, 409)
+        self.assertEqual(duplicate_global_response.data['code'], 'league_global_name_conflict')
+        self.assertEqual(duplicate_global_response.data['existing_league_id'], self.premier_league.id)
+
+    def test_approve_requires_country(self):
+        response = self.approve_team(
+            self.source_team.id,
+            user=self.moderator_user,
+            payload={'name': 'Arsenal Legends', 'country_id': None},
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_approve_allows_null_or_omitted_league(self):
+        null_response = self.approve_team(
+            self.source_team.id,
+            user=self.moderator_user,
+            payload={
+                'name': 'Arsenal Legends',
+                'country_id': self.england.id,
+                'league_id': None,
+            },
+        )
+        self.assertEqual(null_response.status_code, 200)
+        self.source_team.refresh_from_db()
+        self.assertEqual(self.source_team.country_id, self.england.id)
+        self.assertIsNone(self.source_team.league_id)
+
+    def test_approve_rejects_league_country_mismatch_and_inactive_catalog_rows(self):
+        mismatch_team = Team.objects.create(name='Mismatch FC', is_verified=False)
+        mismatch_response = self.approve_team(
+            mismatch_team.id,
+            user=self.moderator_user,
+            payload={
+                'name': 'Mismatch FC',
+                'country_id': self.england.id,
+                'league_id': self.la_liga.id,
+            },
+        )
+        self.assertEqual(mismatch_response.status_code, 400)
+        self.assertEqual(mismatch_response.data['code'], 'league_country_mismatch')
+
+        inactive_country_team = Team.objects.create(name='Inactive Country FC', is_verified=False)
+        inactive_country_response = self.approve_team(
+            inactive_country_team.id,
+            user=self.moderator_user,
+            payload={
+                'name': 'Inactive Country FC',
+                'country_id': self.inactive_country.id,
+            },
+        )
+        self.assertEqual(inactive_country_response.status_code, 400)
+
+        inactive_league_team = Team.objects.create(name='Inactive League FC', is_verified=False)
+        inactive_league_response = self.approve_team(
+            inactive_league_team.id,
+            user=self.moderator_user,
+            payload={
+                'name': 'Inactive League FC',
+                'country_id': self.england.id,
+                'league_id': self.inactive_league.id,
+            },
+        )
+        self.assertEqual(inactive_league_response.status_code, 400)
 
     def test_approve_marks_team_verified_and_preserves_references_and_audit(self):
-        response = self.approve_team(self.source_team.id, user=self.moderator_user)
+        response = self.approve_team(
+            self.source_team.id,
+            user=self.moderator_user,
+            payload={
+                'name': '  Arsenal   Legends  ',
+                'country_id': self.england.id,
+                'league_id': self.premier_league.id,
+            },
+        )
 
         self.assertEqual(response.status_code, 200)
         self.source_team.refresh_from_db()
         self.assertTrue(self.source_team.is_verified)
+        self.assertEqual(self.source_team.name, 'Arsenal Legends')
+        self.assertEqual(self.source_team.country_id, self.england.id)
+        self.assertEqual(self.source_team.league_id, self.premier_league.id)
         self.assertEqual(Kit.objects.get(pk=self.source_duplicate_kit.id).team_id, self.source_team.id)
         self.assertEqual(UserKit.objects.get(pk=self.duplicate_userkit.id).kit_id, self.source_duplicate_kit.id)
 
@@ -1943,12 +2365,41 @@ class AdminTeamModerationAPITests(APITestCase):
         self.assertEqual(action.action_type, TeamModerationAction.ACTION_APPROVE)
         self.assertTrue(action.is_reversible)
         self.assertEqual(action.source_team_id_snapshot, self.source_team.id)
+        self.assertEqual(action.previous_state['source_team']['country_id'], None)
+        self.assertEqual(action.previous_state['source_team']['league_id'], None)
+        self.assertEqual(action.resulting_state['source_team']['country_id'], self.england.id)
+        self.assertEqual(action.resulting_state['source_team']['country_name'], 'England')
+        self.assertEqual(action.resulting_state['source_team']['country_code'], 'EN')
+        self.assertEqual(action.resulting_state['source_team']['league_id'], self.premier_league.id)
+        self.assertEqual(action.resulting_state['source_team']['league_name'], 'Premier League')
         self.assertEqual(response.data['team']['id'], self.source_team.id)
         self.assertTrue(response.data['team']['is_verified'])
+        self.assertEqual(response.data['team']['country_id'], self.england.id)
+        self.assertEqual(response.data['team']['league_id'], self.premier_league.id)
+
+    def test_approve_rejects_case_insensitive_name_conflict(self):
+        response = self.approve_team(
+            self.source_team.id,
+            user=self.moderator_user,
+            payload={
+                'name': ' arsenal f.c. ',
+                'country_id': self.england.id,
+                'league_id': self.premier_league.id,
+            },
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.data['code'], 'team_name_conflict')
+        self.assertEqual(response.data['existing_team_id'], self.target_team.id)
 
     def test_repeated_approval_returns_409(self):
-        first = self.approve_team(self.source_team.id)
-        second = self.approve_team(self.source_team.id)
+        payload = {
+            'name': 'Arsenal Legends',
+            'country_id': self.england.id,
+            'league_id': self.premier_league.id,
+        }
+        first = self.approve_team(self.source_team.id, payload=payload)
+        second = self.approve_team(self.source_team.id, payload=payload)
 
         self.assertEqual(first.status_code, 200)
         self.assertEqual(second.status_code, 409)
@@ -2017,9 +2468,14 @@ class AdminTeamModerationAPITests(APITestCase):
         self.assertEqual(action.action_type, TeamModerationAction.ACTION_MERGE)
         self.assertFalse(action.is_reversible)
         self.assertEqual(action.undo_block_reason, 'Team merge undo requires manual review.')
+        self.assertEqual(self.target_team.name, 'Arsenal F.C.')
+        self.assertEqual(self.target_team.country_id, self.england.id)
+        self.assertEqual(self.target_team.league_id, self.premier_league.id)
         self.assertEqual(response.data['merged_duplicate_kits'], 1)
         self.assertEqual(response.data['moved_userkits'], 1)
         self.assertEqual(response.data['deduplicated_wishlist_items'], 1)
+        self.assertEqual(response.data['target_team']['country_id'], self.england.id)
+        self.assertEqual(response.data['target_team']['league_id'], self.premier_league.id)
 
     def test_team_merge_is_atomic_when_a_later_step_fails(self):
         with patch('kits.team_moderation.reconcile_wishlist_items', side_effect=RuntimeError('boom')):
@@ -2044,6 +2500,131 @@ class AdminTeamModerationAPITests(APITestCase):
         self.assertEqual(action.action_type, TeamModerationAction.ACTION_REJECT)
         self.assertFalse(action.is_reversible)
 
+    def test_delete_team_content_removes_associated_content_and_audits_summary(self):
+        duplicate_like_notification = Notification.objects.create(
+            recipient=self.owner,
+            actor=self.liker,
+            type='kit_like',
+            kit=self.duplicate_userkit,
+        )
+        comment_notification = Notification.objects.create(
+            recipient=self.owner,
+            actor=self.liker,
+            type='kit_comment',
+            comment=self.comment,
+        )
+        comment_like = KitCommentLike.objects.create(comment=self.comment, user=self.owner)
+        TeamSeasonKitType.objects.create(
+            team=self.source_team,
+            season='2022/2023',
+            kit_type=self.home_type,
+            status=TeamSeasonKitType.STATUS_REJECTED,
+            source=TeamSeasonKitType.SOURCE_UPLOAD,
+            created_by=self.owner,
+        )
+        owner_initial_snapshot = CollectionValueSnapshot.objects.create(
+            user=self.owner,
+            total_value=Decimal('333.00'),
+            kits_count=1,
+            reason=CollectionValueSnapshot.REASON_INITIAL,
+        )
+        other_owner_initial_snapshot = CollectionValueSnapshot.objects.create(
+            user=self.other_owner,
+            total_value=Decimal('0.00'),
+            kits_count=1,
+            reason=CollectionValueSnapshot.REASON_INITIAL,
+        )
+
+        response = self.delete_team_content(
+            self.source_team.id,
+            payload={
+                'confirmation': self.source_team.name,
+                'reason': 'offensive_name',
+                'note': 'Obvious spam team name.',
+            },
+            user=self.moderator_user,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Team.objects.filter(pk=self.source_team.id).exists())
+        self.assertFalse(Kit.objects.filter(pk=self.source_duplicate_kit.id).exists())
+        self.assertFalse(Kit.objects.filter(pk=self.source_unique_kit.id).exists())
+        self.assertFalse(UserKit.objects.filter(pk=self.duplicate_userkit.id).exists())
+        self.assertFalse(UserKit.objects.filter(pk=self.unique_userkit.id).exists())
+        self.assertFalse(UserKitImage.objects.filter(user_kit_id__in=[self.duplicate_userkit.id, self.unique_userkit.id]).exists())
+        self.assertFalse(KitComment.objects.filter(pk=self.comment.id).exists())
+        self.assertFalse(KitCommentLike.objects.filter(pk=comment_like.id).exists())
+        self.assertFalse(Notification.objects.filter(pk=duplicate_like_notification.id).exists())
+        self.assertFalse(Notification.objects.filter(pk=comment_notification.id).exists())
+        self.assertFalse(KitReport.objects.filter(pk=self.report.id).exists())
+        self.assertFalse(WishlistItem.objects.filter(team_id=self.source_team.id).exists())
+        self.favorite_user.profile.refresh_from_db()
+        self.assertIsNone(self.favorite_user.profile.favorite_team_id)
+        self.assertFalse(TeamSeasonKitType.objects.filter(team=self.source_team).exists())
+        self.assertTrue(KitType.objects.filter(pk=self.home_type.id).exists())
+        self.assertTrue(KitType.objects.filter(pk=self.away_type.id).exists())
+        self.assertTrue(User.objects.filter(pk=self.owner.id).exists())
+        self.assertTrue(owner_initial_snapshot.pk)
+        self.assertTrue(other_owner_initial_snapshot.pk)
+
+        owner_snapshots = list(self.owner.collection_value_snapshots.order_by('id'))
+        other_owner_snapshots = list(self.other_owner.collection_value_snapshots.order_by('id'))
+        self.assertEqual(len(owner_snapshots), 2)
+        self.assertEqual(len(other_owner_snapshots), 2)
+        self.assertEqual(owner_snapshots[-1].reason, CollectionValueSnapshot.REASON_KIT_REMOVED)
+        self.assertEqual(other_owner_snapshots[-1].reason, CollectionValueSnapshot.REASON_KIT_REMOVED)
+        self.assertEqual(owner_snapshots[-1].kits_count, 0)
+        self.assertEqual(other_owner_snapshots[-1].kits_count, 0)
+
+        action = TeamModerationAction.objects.get(pk=response.data['moderation_action_id'])
+        self.assertEqual(action.action_type, TeamModerationAction.ACTION_DELETE_CONTENT)
+        self.assertFalse(action.is_reversible)
+        self.assertEqual(action.undo_block_reason, 'Destructive team deletion cannot be automatically undone.')
+        self.assertEqual(action.source_team_id_snapshot, self.source_team.id)
+        self.assertEqual(action.summary['reason'], 'offensive_name')
+        self.assertEqual(action.summary['note'], 'Obvious spam team name.')
+        self.assertEqual(action.summary['deleted_kits'], 2)
+        self.assertEqual(action.summary['deleted_userkits'], 2)
+        self.assertEqual(action.summary['affected_users'], 2)
+        self.assertEqual(action.summary['deleted_images'], 1)
+        self.assertEqual(action.summary['deleted_comments'], 1)
+        self.assertEqual(action.summary['deleted_comment_likes'], 1)
+        self.assertEqual(action.summary['deleted_kit_likes'], 1)
+        self.assertEqual(action.summary['deleted_reports'], 1)
+        self.assertEqual(action.summary['deleted_notifications'], 2)
+        self.assertEqual(action.summary['deleted_wishlist_items'], 2)
+        self.assertEqual(action.summary['cleared_favorite_profiles'], 1)
+        self.assertEqual(action.summary['deleted_team_season_types'], 3)
+        self.assertEqual(action.summary['collection_snapshot_reason'], CollectionValueSnapshot.REASON_KIT_REMOVED)
+        self.assertEqual(len(action.summary['report_snapshots']), 1)
+        self.assertEqual(action.summary['report_snapshots'][0]['id'], self.report.id)
+        self.assertNotIn('private_note', action.summary)
+        self.assertEqual(response.data['summary']['deleted_userkits'], 2)
+
+    def test_delete_team_content_is_atomic_when_snapshot_recording_fails(self):
+        with patch(
+            'kits.team_moderation.record_collection_value_snapshot',
+            side_effect=[None, RuntimeError('snapshot failure')],
+        ):
+            with self.assertRaises(RuntimeError):
+                self.delete_team_content(
+                    self.source_team.id,
+                    payload={
+                        'confirmation': self.source_team.name,
+                        'reason': 'spam',
+                    },
+                    user=self.moderator_user,
+                )
+
+        self.assertTrue(Team.objects.filter(pk=self.source_team.id).exists())
+        self.assertTrue(Kit.objects.filter(pk=self.source_duplicate_kit.id).exists())
+        self.assertTrue(UserKit.objects.filter(pk=self.duplicate_userkit.id).exists())
+        self.assertTrue(WishlistItem.objects.filter(pk=self.source_unique_wishlist.id).exists())
+        self.favorite_user.profile.refresh_from_db()
+        self.assertEqual(self.favorite_user.profile.favorite_team_id, self.source_team.id)
+        self.assertTrue(TeamSeasonKitType.objects.filter(pk=self.source_duplicate_team_season.id).exists())
+        self.assertFalse(TeamModerationAction.objects.filter(action_type=TeamModerationAction.ACTION_DELETE_CONTENT).exists())
+
     def test_reject_blocks_used_team_with_usage_counts_and_preserves_content(self):
         response = self.reject_team(self.source_team.id)
 
@@ -2056,6 +2637,239 @@ class AdminTeamModerationAPITests(APITestCase):
         self.assertTrue(Team.objects.filter(pk=self.source_team.id).exists())
         self.assertTrue(UserKit.objects.filter(pk=self.duplicate_userkit.id).exists())
         self.assertFalse(TeamModerationAction.objects.filter(action_type=TeamModerationAction.ACTION_REJECT, source_team_id_snapshot=self.source_team.id).exists())
+
+    def test_team_serializer_keeps_legacy_league_id_and_adds_country_metadata(self):
+        serialized = TeamSerializer(self.target_team).data
+
+        self.assertEqual(serialized['league'], self.premier_league.id)
+        self.assertEqual(serialized['league_id'], self.premier_league.id)
+        self.assertEqual(serialized['league_name'], 'Premier League')
+        self.assertEqual(serialized['country_id'], self.england.id)
+        self.assertEqual(serialized['country_name'], 'England')
+        self.assertEqual(serialized['country_code'], 'EN')
+
+    def test_public_country_and_league_endpoints_remain_compatible_with_additive_fields(self):
+        countries_response = self.client.get(reverse('country-list'))
+        leagues_response = self.client.get(reverse('league-list'))
+        teams_response = self.client.get(reverse('teams-by-league', args=[self.premier_league.id]))
+
+        self.assertEqual(countries_response.status_code, 200)
+        self.assertEqual(leagues_response.status_code, 200)
+        self.assertEqual(teams_response.status_code, 200)
+        self.assertTrue(any(item['id'] == self.england.id and item['code'] == 'EN' for item in countries_response.data))
+        premier_payload = next(item for item in leagues_response.data if item['id'] == self.premier_league.id)
+        self.assertEqual(premier_payload['country']['id'], self.england.id)
+        self.assertEqual(premier_payload['country']['code'], 'EN')
+        team_payload = next(item for item in teams_response.data if item['id'] == self.target_team.id)
+        self.assertEqual(team_payload['league'], self.premier_league.id)
+        self.assertEqual(team_payload['country_id'], self.england.id)
+
+    def test_reject_blocks_real_userkit_usage_with_concise_reason(self):
+        team = Team.objects.create(name='Upload Block FC', is_verified=False)
+        kit = Kit.objects.create(
+            team=team,
+            season='2024/2025',
+            kit_type='Home',
+            kit_type_ref=self.home_type,
+            estimated_price=Decimal('90.00'),
+        )
+        UserKit.objects.create(
+            user=self.owner,
+            kit=kit,
+            shirt_technology='REPLICA',
+            shirt_version=ShirtVersion.objects.get(code='REPLICA'),
+            condition='VERY_GOOD',
+            size='L',
+        )
+
+        response = self.reject_team(team.id, user=self.moderator_user)
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.data['code'], 'team_in_use')
+        self.assertEqual(response.data['detail'], '1 upload still uses this team.')
+        self.assertEqual(response.data['usage']['userkits'], 1)
+        self.assertEqual(response.data['usage']['orphan_kits'], 0)
+
+    def test_wishlist_favorite_and_team_season_rows_block_rejection(self):
+        wishlist_team = Team.objects.create(name='Wishlist Block FC', is_verified=False)
+        WishlistItem.objects.create(
+            user=self.wishlist_owner,
+            team=wishlist_team,
+            season='2024/2025',
+            kit_type='Home',
+            kit_type_ref=self.home_type,
+        )
+        wishlist_response = self.reject_team(wishlist_team.id, user=self.moderator_user)
+        self.assertEqual(wishlist_response.status_code, 409)
+        self.assertEqual(wishlist_response.data['detail'], '1 wishlist item still uses this team.')
+
+        favorite_team = Team.objects.create(name='Favorite Block FC', is_verified=False)
+        self.favorite_user.profile.favorite_team = favorite_team
+        self.favorite_user.profile.save(update_fields=['favorite_team'])
+        favorite_response = self.reject_team(favorite_team.id, user=self.moderator_user)
+        self.assertEqual(favorite_response.status_code, 409)
+        self.assertEqual(favorite_response.data['detail'], '1 profile still favorites this team.')
+
+        season_team = Team.objects.create(name='Season Block FC', is_verified=False)
+        TeamSeasonKitType.objects.create(
+            team=season_team,
+            season='2024/2025',
+            kit_type=self.home_type,
+            status=TeamSeasonKitType.STATUS_PENDING,
+            source=TeamSeasonKitType.SOURCE_UPLOAD,
+            created_by=self.owner,
+        )
+        season_response = self.reject_team(season_team.id, user=self.moderator_user)
+        self.assertEqual(season_response.status_code, 409)
+        self.assertEqual(
+            season_response.data['detail'],
+            'This team has a pending Kit Museum slot suggestion.',
+        )
+        self.assertEqual(season_response.data['usage']['approved_team_season_types'], 0)
+        self.assertEqual(season_response.data['usage']['pending_team_season_types'], 1)
+
+    def test_approved_team_season_rows_use_approved_blocker_reason(self):
+        team = Team.objects.create(name='Approved Slot FC', is_verified=False)
+        TeamSeasonKitType.objects.create(
+            team=team,
+            season='2024/2025',
+            kit_type=self.home_type,
+            status=TeamSeasonKitType.STATUS_APPROVED,
+            source=TeamSeasonKitType.SOURCE_MODERATOR,
+            approved_by=self.staff_user,
+            approved_at=timezone.now(),
+        )
+
+        response = self.reject_team(team.id, user=self.moderator_user)
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.data['detail'], 'This team has an approved Kit Museum slot.')
+        self.assertEqual(response.data['usage']['approved_team_season_types'], 1)
+        self.assertEqual(response.data['usage']['pending_team_season_types'], 0)
+
+    def test_rejected_team_season_rows_do_not_block_rejection_and_are_ignored_in_list(self):
+        team = Team.objects.create(name='Rejected Slot FC', is_verified=False)
+        TeamSeasonKitType.objects.create(
+            team=team,
+            season='2024/2025',
+            kit_type=self.home_type,
+            status=TeamSeasonKitType.STATUS_REJECTED,
+            source=TeamSeasonKitType.SOURCE_UPLOAD,
+            created_by=self.owner,
+        )
+
+        list_response = self.list_unverified(user=self.moderator_user)
+        payload = next(item for item in list_response.data['results'] if item['id'] == team.id)
+        self.assertTrue(payload['can_reject'])
+        self.assertEqual(payload['reject_block_reason'], '')
+        self.assertEqual(payload['usage']['approved_team_season_types'], 0)
+        self.assertEqual(payload['usage']['pending_team_season_types'], 0)
+        self.assertEqual(payload['usage']['rejected_team_season_types'], 1)
+
+        reject_response = self.reject_team(team.id, user=self.moderator_user)
+        self.assertEqual(reject_response.status_code, 200)
+        self.assertFalse(Team.objects.filter(pk=team.id).exists())
+
+    def test_upload_created_pending_team_season_is_reported_as_pending_not_approved(self):
+        self.client.force_authenticate(user=self.owner)
+        response = self.client.post(
+            reverse('api-my-collection'),
+            {
+                'team_name': 'Pending Suggestion FC',
+                'season': '2024/2025',
+                'kit_type': 'Collector Anthem',
+                'size': 'L',
+                'condition': 'VERY_GOOD',
+                'shirt_version_code': 'REPLICA',
+            },
+            format='multipart',
+        )
+        self.assertEqual(response.status_code, 201)
+
+        team = Team.objects.get(name='Pending Suggestion FC')
+        suggestion = TeamSeasonKitType.objects.get(team=team)
+        self.assertEqual(suggestion.status, TeamSeasonKitType.STATUS_PENDING)
+
+        list_response = self.list_unverified(user=self.moderator_user)
+        payload = next(item for item in list_response.data['results'] if item['id'] == team.id)
+        self.assertFalse(payload['can_reject'])
+        self.assertEqual(
+            payload['reject_block_reason'],
+            '1 upload still uses this team.',
+        )
+        self.assertEqual(payload['usage']['team_season_types'], 1)
+        self.assertEqual(payload['usage']['approved_team_season_types'], 0)
+        self.assertEqual(payload['usage']['pending_team_season_types'], 1)
+        self.assertEqual(payload['usage']['rejected_team_season_types'], 0)
+
+    def test_orphan_kit_is_cleared_during_reject_and_list_recalculation(self):
+        team = Team.objects.create(name='Orphanable FC', is_verified=False)
+        orphan_kit = Kit.objects.create(
+            team=team,
+            season='2024/2025',
+            kit_type='Home',
+            kit_type_ref=self.home_type,
+            estimated_price=Decimal('75.00'),
+        )
+        userkit = UserKit.objects.create(
+            user=self.owner,
+            kit=orphan_kit,
+            shirt_technology='REPLICA',
+            shirt_version=ShirtVersion.objects.get(code='REPLICA'),
+            condition='VERY_GOOD',
+            size='L',
+        )
+
+        initial_list = self.list_unverified(user=self.moderator_user)
+        payload = next(item for item in initial_list.data['results'] if item['id'] == team.id)
+        self.assertFalse(payload['can_reject'])
+        self.assertEqual(payload['usage']['userkits'], 1)
+        self.assertEqual(payload['usage']['orphan_kits'], 0)
+
+        userkit.delete()
+        self.assertTrue(Kit.objects.filter(pk=orphan_kit.id).exists())
+
+        refreshed_list = self.list_unverified(user=self.moderator_user)
+        refreshed_payload = next(item for item in refreshed_list.data['results'] if item['id'] == team.id)
+        self.assertTrue(refreshed_payload['can_reject'])
+        self.assertEqual(refreshed_payload['reject_block_reason'], '')
+        self.assertEqual(refreshed_payload['usage']['userkits'], 0)
+        self.assertEqual(refreshed_payload['usage']['orphan_kits'], 1)
+
+        reject_response = self.reject_team(team.id, user=self.moderator_user)
+        self.assertEqual(reject_response.status_code, 200)
+        self.assertFalse(Team.objects.filter(pk=team.id).exists())
+        self.assertFalse(Kit.objects.filter(pk=orphan_kit.id).exists())
+
+
+class TeamCountryBackfillMigrationTests(APITestCase):
+    @staticmethod
+    def run_backfill():
+        migration = import_module(
+            'kits.migrations.0033_country_code_country_created_at_country_created_by_and_more'
+        )
+        migration.backfill_team_country_from_league_country(django_apps, None)
+
+    def test_backfill_sets_team_country_from_league_country_only_when_deterministic(self):
+        england = Country.objects.create(name='England', code='EN')
+        league_with_country = League.objects.create(name='Premier League', country=england)
+        league_without_country = League.objects.create(name='Unknown League')
+
+        deterministic_team = Team.objects.create(name='Deterministic FC', league=league_with_country)
+        no_league_team = Team.objects.create(name='No League FC')
+        no_country_league_team = Team.objects.create(name='No Country League FC', league=league_without_country)
+
+        self.assertEqual(TeamModerationAction.objects.count(), 0)
+
+        self.run_backfill()
+
+        deterministic_team.refresh_from_db()
+        no_league_team.refresh_from_db()
+        no_country_league_team.refresh_from_db()
+        self.assertEqual(deterministic_team.country_id, england.id)
+        self.assertIsNone(no_league_team.country_id)
+        self.assertIsNone(no_country_league_team.country_id)
+        self.assertEqual(TeamModerationAction.objects.count(), 0)
 
 
 class UserKitPricingTests(APITestCase):

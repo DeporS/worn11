@@ -5,6 +5,7 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.db.models import Q, Sum, Count
+from django.db.models.functions import Lower
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -234,10 +235,26 @@ class Follow(models.Model):
 # Countries Model
 class Country(models.Model):
     name = models.CharField(max_length=100, unique=True)
+    code = models.CharField(max_length=10, null=True, blank=True, unique=True)
     flag = models.ImageField(upload_to='country_flags/', null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='created_countries',
+    )
+    created_at = models.DateTimeField(default=timezone.now, editable=False)
 
     class Meta:
         verbose_name_plural = "Countries"
+        constraints = [
+            models.UniqueConstraint(
+                Lower('name'),
+                name='kits_country_name_ci_unique',
+            ),
+        ]
 
     def __str__(self):
         return self.name
@@ -247,6 +264,15 @@ class League(models.Model):
     name = models.CharField(max_length=100, unique=True)
     country = models.ForeignKey(Country, on_delete=models.SET_NULL, null=True, blank=True, related_name='leagues')
     logo = models.ImageField(upload_to='league_logos/', null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='created_leagues',
+    )
+    created_at = models.DateTimeField(default=timezone.now, editable=False)
 
     hex_color = models.CharField(max_length=7, default="#333333", help_text="Hex color code for the league (e.g., #FF0000)")
     order = models.PositiveIntegerField(default=0)
@@ -260,6 +286,7 @@ class Team(models.Model):
     name = models.CharField(max_length=100, unique=True)
     logo = models.ImageField(upload_to='team_logos/', null=True, blank=True)
 
+    country = models.ForeignKey(Country, on_delete=models.SET_NULL, null=True, blank=True, related_name='teams')
     league = models.ForeignKey(League, on_delete=models.SET_NULL, null=True, blank=True, related_name='teams')
 
     is_verified = models.BooleanField(default=False) # Admin can verify teams to avoid duplicates
@@ -519,10 +546,12 @@ class TeamModerationAction(models.Model):
     ACTION_APPROVE = 'approve'
     ACTION_MERGE = 'merge'
     ACTION_REJECT = 'reject'
+    ACTION_DELETE_CONTENT = 'delete_content'
     ACTION_CHOICES = [
         (ACTION_APPROVE, 'Approve'),
         (ACTION_MERGE, 'Merge'),
         (ACTION_REJECT, 'Reject'),
+        (ACTION_DELETE_CONTENT, 'Delete content'),
     ]
 
     actor = models.ForeignKey(

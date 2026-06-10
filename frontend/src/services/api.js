@@ -332,4 +332,60 @@ export const undoAdminKitTypeModerationAction = async (id) => {
 	return response.data;
 };
 
+export const getUnverifiedTeams = async () => {
+	const response = await api.get("/admin/teams/unverified/");
+	return response.data;
+};
+
+export const approveTeam = async (teamId, payload) => {
+	const response = await api.post(`/admin/teams/${teamId}/approve/`, payload);
+	return response.data;
+};
+
+export const mergeTeam = async (teamId, targetTeamId) => {
+	const response = await api.post(`/admin/teams/${teamId}/merge/`, {
+		target_team_id: targetTeamId,
+	});
+	return response.data;
+};
+
+export const rejectTeam = async (teamId) => {
+	const response = await api.post(`/admin/teams/${teamId}/reject/`);
+	return response.data;
+};
+
+export const deleteTeamContent = async (teamId, payload) => {
+	const response = await api.post(`/admin/teams/${teamId}/delete-content/`, payload);
+	return response.data;
+};
+
+export const getAdminCountries = async () => {
+	const response = await api.get("/admin/countries/");
+	return response.data;
+};
+
+export const createAdminCountry = async (payload) => {
+	const response = await api.post("/admin/countries/", payload);
+	return response.data;
+};
+
+export const getAdminLeagues = async (countryId) => {
+	const response = await api.get("/admin/leagues/", {
+		params: countryId ? { country_id: countryId } : {},
+	});
+	return response.data;
+};
+
+export const createAdminLeague = async (payload) => {
+	const response = await api.post("/admin/leagues/", payload);
+	return response.data;
+};
+
+export const searchVerifiedTeams = async (query) => {
+	const response = await api.get("/teams/search/", {
+		params: { q: query },
+	});
+	return response.data;
+};
+
 export default api;

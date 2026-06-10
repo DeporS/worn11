@@ -412,10 +412,26 @@ class CollectionValueSnapshotSerializer(serializers.ModelSerializer):
 # Team Serializer
 class TeamSerializer(serializers.ModelSerializer):
     slug = serializers.SerializerMethodField()
+    country_id = serializers.IntegerField(read_only=True, allow_null=True)
+    country_name = serializers.CharField(source='country.name', read_only=True, allow_null=True)
+    country_code = serializers.CharField(source='country.code', read_only=True, allow_null=True)
+    league_id = serializers.IntegerField(read_only=True, allow_null=True)
+    league_name = serializers.CharField(source='league.name', read_only=True, allow_null=True)
 
     class Meta:
         model = Team
-        fields = ['id', 'name', 'slug', 'logo', 'league']
+        fields = [
+            'id',
+            'name',
+            'slug',
+            'logo',
+            'league',
+            'country_id',
+            'country_name',
+            'country_code',
+            'league_id',
+            'league_name',
+        ]
 
     def get_slug(self, obj):
         return build_team_slug(obj.name)
@@ -424,15 +440,29 @@ class TeamSerializer(serializers.ModelSerializer):
 class CountrySerializer(serializers.ModelSerializer):
     class Meta:
         model = Country
-        fields = ['id', 'name', 'flag']
+        fields = ['id', 'name', 'code', 'flag', 'is_active']
 
 # League Serializer
 class LeagueSerializer(serializers.ModelSerializer):
     country = CountrySerializer(read_only=True)
+    country_id = serializers.IntegerField(read_only=True, allow_null=True)
+    country_name = serializers.CharField(source='country.name', read_only=True, allow_null=True)
+    country_code = serializers.CharField(source='country.code', read_only=True, allow_null=True)
 
     class Meta:
         model = League
-        fields = ['id', 'name', 'hex_color', 'country', 'logo']
+        fields = [
+            'id',
+            'name',
+            'hex_color',
+            'country',
+            'country_id',
+            'country_name',
+            'country_code',
+            'logo',
+            'order',
+            'is_active',
+        ]
 
 # Kit Serializer
 class KitSerializer(serializers.ModelSerializer):
@@ -559,6 +589,12 @@ class SimilarVerifiedTeamSerializer(serializers.ModelSerializer):
 class TeamModerationListSerializer(serializers.ModelSerializer):
     slug = serializers.SerializerMethodField()
     league = serializers.SerializerMethodField()
+    usage = serializers.SerializerMethodField()
+    country_id = serializers.IntegerField(read_only=True, allow_null=True)
+    country_name = serializers.CharField(source='country.name', read_only=True, allow_null=True)
+    country_code = serializers.CharField(source='country.code', read_only=True, allow_null=True)
+    league_id = serializers.IntegerField(read_only=True, allow_null=True)
+    league_name = serializers.CharField(source='league.name', read_only=True, allow_null=True)
     preview_image = serializers.SerializerMethodField()
     similar_verified_teams = serializers.SerializerMethodField()
     seasons = serializers.SerializerMethodField()
@@ -578,6 +614,12 @@ class TeamModerationListSerializer(serializers.ModelSerializer):
             'slug',
             'logo',
             'league',
+            'usage',
+            'country_id',
+            'country_name',
+            'country_code',
+            'league_id',
+            'league_name',
             'is_verified',
             'kits_count',
             'userkits_count',
@@ -620,9 +662,110 @@ class TeamModerationListSerializer(serializers.ModelSerializer):
     def get_seasons(self, obj):
         return getattr(obj, 'seasons', [])
 
+    def get_usage(self, obj):
+        usage = getattr(obj, 'usage', None)
+        return usage if usage is not None else None
+
 
 class TeamModerationMergeSerializer(serializers.Serializer):
     target_team_id = serializers.IntegerField()
+
+
+class AdminCountryCreateSerializer(serializers.Serializer):
+    name = serializers.CharField()
+    code = serializers.CharField()
+
+    def validate_name(self, value):
+        cleaned = ' '.join((value or '').strip().split())
+        if not cleaned:
+            raise serializers.ValidationError('Country name is required.')
+        return cleaned
+
+    def validate_code(self, value):
+        cleaned = (value or '').strip().upper()
+        if not cleaned:
+            raise serializers.ValidationError('Country code is required.')
+        return cleaned
+
+
+class AdminLeagueCreateSerializer(serializers.Serializer):
+    name = serializers.CharField()
+    country_id = serializers.IntegerField()
+
+    def validate_name(self, value):
+        cleaned = ' '.join((value or '').strip().split())
+        if not cleaned:
+            raise serializers.ValidationError('League name is required.')
+        return cleaned
+
+    def validate_country_id(self, value):
+        if not Country.objects.filter(pk=value, is_active=True).exists():
+            raise serializers.ValidationError('Country must be an active country.')
+        return value
+
+
+class TeamModerationApproveSerializer(serializers.Serializer):
+    name = serializers.CharField()
+    country_id = serializers.IntegerField()
+    league_id = serializers.IntegerField(required=False, allow_null=True)
+
+    def validate_name(self, value):
+        cleaned = ' '.join((value or '').strip().split())
+        if not cleaned:
+            raise serializers.ValidationError('Team name is required.')
+        return cleaned
+
+    def validate(self, attrs):
+        country = Country.objects.filter(
+            pk=attrs['country_id'],
+            is_active=True,
+        ).first()
+        if country is None:
+            raise serializers.ValidationError({'country_id': 'Country must be an active country.'})
+
+        league_id = attrs.get('league_id', serializers.empty)
+        league = None
+        if league_id not in (serializers.empty, None):
+            league = League.objects.select_related('country').filter(pk=league_id).first()
+            if league is None:
+                raise serializers.ValidationError({'league_id': 'League is invalid.'})
+            if not league.is_active:
+                raise serializers.ValidationError({'league_id': 'League must be active.'})
+
+        attrs['country'] = country
+        attrs['league'] = league
+        return attrs
+
+
+class TeamModerationDeleteContentSerializer(serializers.Serializer):
+    REASON_SPAM = 'spam'
+    REASON_OFFENSIVE_NAME = 'offensive_name'
+    REASON_INVALID_TEAM = 'invalid_team'
+    REASON_DUPLICATE_ABUSE = 'duplicate_abuse'
+    REASON_OTHER = 'other'
+    REASON_CHOICES = {
+        REASON_SPAM,
+        REASON_OFFENSIVE_NAME,
+        REASON_INVALID_TEAM,
+        REASON_DUPLICATE_ABUSE,
+        REASON_OTHER,
+    }
+
+    confirmation = serializers.CharField(allow_blank=True)
+    reason = serializers.CharField()
+    note = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+    def validate_confirmation(self, value):
+        return (value or '').strip()
+
+    def validate_reason(self, value):
+        cleaned = (value or '').strip()
+        if cleaned not in self.REASON_CHOICES:
+            raise serializers.ValidationError('Reason is invalid.')
+        return cleaned
+
+    def validate_note(self, value):
+        return (value or '').strip()
 
 
 class TeamModerationActionSerializer(serializers.ModelSerializer):

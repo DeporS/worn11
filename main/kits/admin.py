@@ -71,11 +71,11 @@ class ShirtVersionAdmin(admin.ModelAdmin):
 
 # Register in admin
 class TeamAdmin(admin.ModelAdmin):
-    list_display = ['id', 'name', 'kits_in_collections_count', 'kits_definitions_count', 'is_verified']
+    list_display = ['id', 'name', 'country', 'league', 'kits_in_collections_count', 'kits_definitions_count', 'is_verified']
 
-    list_filter = ['is_verified']
+    list_filter = ['is_verified', 'country', 'league']
 
-    search_fields = ['name']
+    search_fields = ['name', 'country__name', 'league__name']
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
@@ -129,13 +129,14 @@ class CustomUserAdmin(UserAdmin):
 
 # Country Admin
 class CountryAdmin(admin.ModelAdmin):
-    list_display = ('name', 'flag')
-    search_fields = ('name',)
+    list_display = ('name', 'code', 'is_active')
+    search_fields = ('name', 'code')
+    list_filter = ('is_active',)
 
 # League Admin
 class LeagueAdmin(admin.ModelAdmin):
-    list_display = ('name', 'country', 'hex_color', 'order', 'logo')
-    list_filter = ('country',)
+    list_display = ('name', 'country', 'is_active', 'order')
+    list_filter = ('country', 'is_active')
     search_fields = ('name', 'country__name')
 
 

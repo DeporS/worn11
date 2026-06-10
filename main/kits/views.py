@@ -20,8 +20,8 @@ import re
 
 from .models import League, UserKit, UserKitImage, WishlistItem, Kit, KitType, KitTypeAlias, TeamSeasonKitType, KitTypeModerationAction, TeamModerationAction, ShirtVersion, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country, Follow, KitComment, KitCommentLike, KitReport, Conversation, Message, Notification, CollectionValueSnapshot, calculate_collection_total_value, record_collection_value_snapshot, build_team_slug, normalize_wishlist_kit_type
 from .permissions import IsStaffOrModerator, can_undo_moderation_action, moderation_action_is_currently_undoable, is_staff_or_moderator
-from .serializers import LeagueSerializer, UserKitSerializer, WishlistItemSerializer, WishlistToggleSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer, CountrySerializer, KitCommentSerializer, KitCommentWriteSerializer, KitReportSerializer, ConversationListSerializer, ConversationDetailSerializer, ConversationStartSerializer, MessageSerializer, MessageWriteSerializer, KitSearchSuggestionSerializer, NotificationSerializer, CollectionValueSnapshotSerializer, AdminKitTypeSuggestionSerializer, AdminKitTypeMergeSerializer, TeamModerationListSerializer, TeamModerationMergeSerializer, TeamModerationActionSerializer, KitTypeModerationActionSerializer, ApprovedTeamSeasonKitTypeSerializer, normalize_catalog_name
-from .team_moderation import TeamModerationConflict, TEAM_MERGE_UNDO_BLOCK_REASON, TEAM_REJECT_UNDO_BLOCK_REASON, approve_team, get_team_usage, merge_teams_safely, normalize_team_name_for_matching, reject_unused_team, team_name_tokens
+from .serializers import LeagueSerializer, UserKitSerializer, WishlistItemSerializer, WishlistToggleSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer, CountrySerializer, KitCommentSerializer, KitCommentWriteSerializer, KitReportSerializer, ConversationListSerializer, ConversationDetailSerializer, ConversationStartSerializer, MessageSerializer, MessageWriteSerializer, KitSearchSuggestionSerializer, NotificationSerializer, CollectionValueSnapshotSerializer, AdminKitTypeSuggestionSerializer, AdminKitTypeMergeSerializer, TeamModerationListSerializer, TeamModerationMergeSerializer, TeamModerationActionSerializer, KitTypeModerationActionSerializer, ApprovedTeamSeasonKitTypeSerializer, normalize_catalog_name, AdminCountryCreateSerializer, AdminLeagueCreateSerializer, TeamModerationApproveSerializer, TeamModerationDeleteContentSerializer
+from .team_moderation import TeamModerationConflict, TEAM_MERGE_UNDO_BLOCK_REASON, TEAM_REJECT_UNDO_BLOCK_REASON, approve_team, build_team_reject_block_reason, delete_team_and_associated_content, get_team_usage, merge_teams_safely, normalize_team_name_for_matching, reject_unused_team, team_name_tokens
 
 
 SUPPORTED_KIT_TYPES = [
@@ -596,9 +596,9 @@ def get_team_by_identifier(team_identifier):
         return None
 
     if normalized_identifier.isdigit():
-        return Team.objects.filter(pk=int(normalized_identifier)).first()
+        return Team.objects.select_related('country', 'league').filter(pk=int(normalized_identifier)).first()
 
-    for team in Team.objects.all().order_by('id'):
+    for team in Team.objects.select_related('country', 'league').all().order_by('id'):
         if build_team_slug(team.name) == normalized_identifier:
             return team
 
@@ -1041,6 +1041,9 @@ class TeamSearchAPI(generics.ListAPIView):
         return Team.objects.filter(
             name__icontains=query,
             is_verified=True
+        ).select_related(
+            'country',
+            'league',
         )[:5] # Limit to 5 results
 
 
@@ -1131,7 +1134,9 @@ class AdminUnverifiedTeamsAPI(APIView):
         queryset = Team.objects.filter(
             is_verified=False,
         ).select_related(
+            'country',
             'league',
+            'league__country',
         ).annotate(
             kits_count=Count('kits', distinct=True),
             userkits_count=Count('kits__owned_by', distinct=True),
@@ -1142,21 +1147,22 @@ class AdminUnverifiedTeamsAPI(APIView):
         ).prefetch_related(
             'kits',
             'season_kit_types',
-        ).order_by(
-            '-userkits_count',
-            'name',
-            'id',
-        )
+        ).order_by('id')
 
         teams = list(queryset[: limit + 1])
         has_more = len(teams) > limit
         teams = teams[:limit]
         preview_map = get_unverified_team_preview_map(teams)
         verified_teams = list(
-            Team.objects.filter(is_verified=True).select_related('league').order_by('name', 'id')
+            Team.objects.filter(is_verified=True).select_related(
+                'country',
+                'league',
+                'league__country',
+            ).order_by('name', 'id')
         )
 
         for team in teams:
+            usage = get_team_usage(team)
             seasons = {
                 kit.season
                 for kit in team.kits.all()
@@ -1169,14 +1175,9 @@ class AdminUnverifiedTeamsAPI(APIView):
             )
             team.seasons = sorted(seasons, key=get_season_sort_year, reverse=True)
             team.preview_image = preview_map.get(team.id)
-            team.can_reject = not any([
-                team.kits_count,
-                team.userkits_count,
-                team.wishlist_count,
-                team.favorite_team_count,
-                team.team_season_type_count,
-            ])
-            team.reject_block_reason = '' if team.can_reject else 'This team is in use and cannot be rejected. Merge it into an existing team instead.'
+            team.usage = usage.as_dict()
+            team.can_reject = usage.is_unused()
+            team.reject_block_reason = '' if team.can_reject else build_team_reject_block_reason(usage)
             team.similar_verified_teams = get_similar_verified_teams_for_source(team, verified_teams)
 
         serializer = TeamModerationListSerializer(
@@ -1195,28 +1196,38 @@ class AdminTeamApproveAPI(APIView):
 
     def post(self, request, team_id):
         team = get_object_or_404(Team, pk=team_id)
+        serializer = TeamModerationApproveSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
         try:
-            updated_team, action = approve_team(team_id=team.id, actor=request.user)
+            updated_team, action = approve_team(
+                team_id=team.id,
+                actor=request.user,
+                name=serializer.validated_data['name'],
+                country=serializer.validated_data['country'],
+                league=serializer.validated_data['league'],
+            )
         except TeamModerationConflict as exc:
             detail = exc.raw_detail if isinstance(exc.raw_detail, dict) else {'detail': exc.raw_detail}
             return Response(detail, status=exc.status_code)
 
         usage = get_team_usage(updated_team)
         updated_team.kits_count = usage.kits
+        updated_team.orphan_kits_count = usage.orphan_kits
         updated_team.userkits_count = usage.userkits
         updated_team.unique_users_count = UserKit.objects.filter(
             kit__team=updated_team,
         ).values('user_id').distinct().count()
         updated_team.wishlist_count = usage.wishlist_items
         updated_team.favorite_team_count = usage.favorite_profiles
+        updated_team.usage = usage.as_dict()
         updated_team.seasons = sorted({
             *updated_team.kits.values_list('season', flat=True),
             *updated_team.season_kit_types.values_list('season', flat=True),
         }, key=get_season_sort_year, reverse=True)
         updated_team.preview_image = get_unverified_team_preview_map([updated_team]).get(updated_team.id)
         updated_team.can_reject = usage.is_unused()
-        updated_team.reject_block_reason = '' if updated_team.can_reject else 'This team is in use and cannot be rejected. Merge it into an existing team instead.'
+        updated_team.reject_block_reason = '' if updated_team.can_reject else build_team_reject_block_reason(usage)
         updated_team.similar_verified_teams = []
 
         serializer = TeamModerationListSerializer(
@@ -1227,6 +1238,97 @@ class AdminTeamApproveAPI(APIView):
             'team': serializer.data,
             'moderation_action_id': action.id,
         })
+
+
+class AdminCountriesAPI(APIView):
+    permission_classes = [IsAuthenticated, IsStaffOrModerator]
+
+    def get(self, request):
+        include_inactive = request.query_params.get('include_inactive') == '1'
+        queryset = Country.objects.all()
+        if not include_inactive:
+            queryset = queryset.filter(is_active=True)
+        countries = queryset.order_by('name')
+        serializer = CountrySerializer(countries, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = AdminCountryCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        name = serializer.validated_data['name']
+        code = serializer.validated_data['code']
+
+        existing_by_name = Country.objects.filter(name__iexact=name).order_by('id').first()
+        if existing_by_name is not None:
+            return Response({
+                'detail': 'A country with this name already exists.',
+                'code': 'country_name_conflict',
+                'existing_country_id': existing_by_name.id,
+            }, status=status.HTTP_409_CONFLICT)
+
+        existing_by_code = Country.objects.filter(code__iexact=code).order_by('id').first()
+        if existing_by_code is not None:
+            return Response({
+                'detail': 'A country with this code already exists.',
+                'code': 'country_code_conflict',
+                'existing_country_id': existing_by_code.id,
+            }, status=status.HTTP_409_CONFLICT)
+
+        country = Country.objects.create(
+            name=name,
+            code=code,
+            is_active=True,
+            created_by=request.user,
+        )
+        response_serializer = CountrySerializer(country)
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+
+class AdminLeaguesAPI(APIView):
+    permission_classes = [IsAuthenticated, IsStaffOrModerator]
+
+    def get(self, request):
+        queryset = League.objects.filter(is_active=True).select_related('country')
+        country_id = request.query_params.get('country_id')
+        if country_id not in (None, ''):
+            queryset = queryset.filter(country_id=country_id)
+        leagues = queryset.order_by('order', 'name')
+        serializer = LeagueSerializer(leagues, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = AdminLeagueCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        name = serializer.validated_data['name']
+        country = Country.objects.get(pk=serializer.validated_data['country_id'])
+
+        existing_in_country = League.objects.filter(
+            country=country,
+            name__iexact=name,
+        ).order_by('id').first()
+        if existing_in_country is not None:
+            return Response({
+                'detail': 'A league with this name already exists for the selected country.',
+                'code': 'league_name_conflict',
+                'existing_league_id': existing_in_country.id,
+            }, status=status.HTTP_409_CONFLICT)
+
+        existing_global = League.objects.filter(name__iexact=name).order_by('id').first()
+        if existing_global is not None:
+            return Response({
+                'detail': 'A league with this name already exists. Global league-name uniqueness is still enforced in this phase.',
+                'code': 'league_global_name_conflict',
+                'existing_league_id': existing_global.id,
+            }, status=status.HTTP_409_CONFLICT)
+
+        league = League.objects.create(
+            name=name,
+            country=country,
+            is_active=True,
+            created_by=request.user,
+        )
+        response_serializer = LeagueSerializer(league)
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
 
 class AdminTeamMergeAPI(APIView):
@@ -1295,6 +1397,39 @@ class AdminTeamRejectAPI(APIView):
             'deleted': True,
             'team_id': deleted_team['id'],
             'team_name': deleted_team['name'],
+            'moderation_action_id': action.id,
+        })
+
+
+class AdminTeamDeleteContentAPI(APIView):
+    permission_classes = [IsAuthenticated, IsStaffOrModerator]
+
+    def post(self, request, team_id):
+        serializer = TeamModerationDeleteContentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            deleted_team, action, summary = delete_team_and_associated_content(
+                team_id=team_id,
+                actor=request.user,
+                confirmation=serializer.validated_data['confirmation'],
+                reason=serializer.validated_data['reason'],
+                note=serializer.validated_data.get('note', ''),
+            )
+        except TeamModerationConflict as exc:
+            detail = exc.raw_detail if isinstance(exc.raw_detail, dict) else {'detail': exc.raw_detail}
+            return Response(detail, status=exc.status_code)
+        except ValidationError as exc:
+            detail = exc.detail
+            if isinstance(detail, list):
+                detail = {'detail': detail}
+            return Response(detail, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({
+            'deleted': True,
+            'team_id': deleted_team['id'],
+            'team_name': deleted_team['name'],
+            'summary': summary,
             'moderation_action_id': action.id,
         })
 
@@ -2401,7 +2536,7 @@ class TeamsByLeagueAPI(generics.ListAPIView):
 
     def get_queryset(self):
         league_id = self.kwargs['league_id']
-        return Team.objects.filter(league_id=league_id).order_by('name')
+        return Team.objects.filter(league_id=league_id).select_related('country', 'league').order_by('name')
 
 # Endpoint: Top liked kits for a specific team
 class TopKitsByTeamAPI(generics.ListAPIView):
