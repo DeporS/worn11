@@ -27,7 +27,7 @@ from django.utils.dateparse import parse_datetime
 from urllib.parse import urlencode
 import re
 
-from .models import League, UserKit, UserKitImage, WishlistItem, Kit, KitType, KitTypeAlias, TeamSeasonKitType, KitTypeModerationAction, TeamModerationAction, ShirtVersion, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country, Follow, KitComment, KitCommentLike, KitReport, KitReportModerationAction, Conversation, Message, Notification, CollectionValueSnapshot, calculate_collection_total_value, record_collection_value_snapshot, build_team_slug, normalize_wishlist_kit_type
+from .models import League, UserKit, UserKitImage, WishlistItem, Kit, KitType, KitTypeAlias, TeamSeasonKitType, KitTypeModerationAction, TeamModerationAction, ShirtVersion, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country, Follow, KitComment, KitCommentLike, KitReport, KitReportModerationAction, Conversation, Message, Notification, CollectionValueSnapshot, calculate_collection_total_value, collection_value_history_needs_hidden_kit_rebuild, record_collection_value_snapshot, rebuild_collection_value_history, build_team_slug, normalize_wishlist_kit_type
 from .permissions import IsStaffOrModerator, IsStaffOrSuperuser, can_undo_moderation_action, has_pro_access, moderation_action_is_currently_undoable, is_staff_or_moderator
 from .serializers import LeagueSerializer, UserKitSerializer, WishlistItemSerializer, WishlistToggleSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer, CountrySerializer, KitCommentSerializer, KitCommentWriteSerializer, KitReportSerializer, AdminKitReportDecisionSerializer, AdminKitReportGroupListSerializer, AdminKitReportGroupDetailSerializer, ConversationListSerializer, ConversationDetailSerializer, ConversationStartSerializer, MessageSerializer, MessageWriteSerializer, KitSearchSuggestionSerializer, NotificationSerializer, RemovedKitDetailSerializer, CollectionValueSnapshotSerializer, AdminKitTypeSuggestionSerializer, AdminKitTypeMergeSerializer, TeamModerationListSerializer, TeamModerationMergeSerializer, TeamModerationActionSerializer, KitTypeModerationActionSerializer, ApprovedTeamSeasonKitTypeSerializer, normalize_catalog_name, AdminCountryCreateSerializer, AdminLeagueCreateSerializer, TeamModerationApproveSerializer, TeamModerationDeleteContentSerializer, CatalogCountrySerializer, CatalogCountryWriteSerializer, CatalogLeagueSerializer, CatalogLeagueWriteSerializer, CatalogTeamSerializer, CatalogTeamWriteSerializer
 from .team_moderation import TeamModerationConflict, TEAM_MERGE_UNDO_BLOCK_REASON, TEAM_REJECT_UNDO_BLOCK_REASON, approve_team, build_team_reject_block_reason, delete_team_and_associated_content, get_team_usage, merge_teams_safely, normalize_team_name_for_matching, reject_unused_team, team_name_tokens
@@ -2856,6 +2856,7 @@ class AdminKitReportRemoveKitAPI(APIView):
                 previous_state=previous_state,
                 resulting_state=snapshot_userkit_moderation_state(userkit),
             )
+            rebuild_collection_value_history(userkit.user)
             notify_kit_owner_about_moderation_removal(actor=request.user, userkit=userkit)
 
         return Response({
@@ -2921,6 +2922,9 @@ class MyCollectionValueHistoryAPI(APIView):
     def get(self, request):
         if not getattr(request.user.profile, 'is_pro', False):
             raise PermissionDenied('Collection value history is available for Pro members only.')
+
+        if collection_value_history_needs_hidden_kit_rebuild(request.user):
+            rebuild_collection_value_history(request.user)
 
         if not request.user.collection_value_snapshots.exists():
             record_collection_value_snapshot(

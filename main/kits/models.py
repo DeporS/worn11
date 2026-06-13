@@ -741,6 +741,7 @@ def calculate_collection_total_value(user):
     stats = UserKit.objects.filter(
         user=user,
         in_the_collection=True,
+        is_hidden_by_moderation=False,
     ).aggregate(
         total_value=Sum('final_value'),
         kits_count=Count('id'),
@@ -806,6 +807,89 @@ def record_collection_value_snapshot(user, reason, related_userkit=None):
         reason=reason,
         related_userkit=related_userkit,
     )
+
+
+def rebuild_collection_value_history(user):
+    visible_kits = list(
+        UserKit.objects.filter(
+            user=user,
+            is_hidden_by_moderation=False,
+            in_the_collection=True,
+        ).order_by('added_at', 'id')
+    )
+
+    user.collection_value_snapshots.all().delete()
+
+    if not visible_kits:
+        return [
+            CollectionValueSnapshot.objects.create(
+                user=user,
+                total_value=Decimal('0.00'),
+                kits_count=0,
+                reason=CollectionValueSnapshot.REASON_INITIAL,
+            )
+        ]
+
+    snapshots = []
+    running_total = Decimal('0.00')
+    running_count = 0
+    grouped_kits = {}
+
+    for userkit in visible_kits:
+        grouped_kits.setdefault(userkit.added_at, []).append(userkit)
+
+    for index, added_at in enumerate(sorted(grouped_kits.keys())):
+        kits_added_at_timestamp = grouped_kits[added_at]
+        for userkit in kits_added_at_timestamp:
+            running_total += userkit.final_value or Decimal('0.00')
+            running_count += 1
+
+        snapshot = CollectionValueSnapshot.objects.create(
+            user=user,
+            total_value=running_total.quantize(Decimal('0.01')),
+            kits_count=running_count,
+            reason=CollectionValueSnapshot.REASON_INITIAL
+            if index == 0
+            else CollectionValueSnapshot.REASON_KIT_ADDED,
+            related_userkit=kits_added_at_timestamp[-1],
+        )
+        CollectionValueSnapshot.objects.filter(pk=snapshot.pk).update(created_at=added_at)
+        snapshot.created_at = added_at
+        snapshots.append(snapshot)
+
+    return snapshots
+
+
+def collection_value_history_needs_hidden_kit_rebuild(user):
+    hidden_kits_exist = UserKit.objects.filter(
+        user=user,
+        is_hidden_by_moderation=True,
+    ).exists()
+    if not hidden_kits_exist:
+        return False
+
+    snapshots = list(user.collection_value_snapshots.order_by('created_at', 'id'))
+    if not snapshots:
+        return True
+
+    current_total_value, current_kits_count = calculate_collection_total_value(user)
+    latest_snapshot = snapshots[-1]
+    if latest_snapshot.total_value != current_total_value or latest_snapshot.kits_count != current_kits_count:
+        return True
+
+    visible_added_at_values = list(
+        UserKit.objects.filter(
+            user=user,
+            is_hidden_by_moderation=False,
+            in_the_collection=True,
+        ).values_list('added_at', flat=True)
+    )
+    expected_snapshot_dates = sorted(set(visible_added_at_values))
+    if not expected_snapshot_dates:
+        return len(snapshots) != 1
+
+    snapshot_dates = [snapshot.created_at for snapshot in snapshots]
+    return snapshot_dates != expected_snapshot_dates
 
 
 class WishlistItem(models.Model):

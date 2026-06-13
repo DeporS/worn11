@@ -3,14 +3,17 @@ import { useTranslation } from "react-i18next";
 
 const CHART_WIDTH = 720;
 const CHART_HEIGHT = 280;
-const PADDING_X = 36;
-const PADDING_Y = 24;
+const PLOT_LEFT = 64;
+const PLOT_RIGHT = 24;
+const PLOT_TOP = 20;
+const PLOT_BOTTOM = 38;
 const DESKTOP_TOOLTIP_EDGE_INSET = 18;
 const DESKTOP_TOOLTIP_VERTICAL_THRESHOLD = 78;
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const MIN_VISIBLE_DAY_WINDOW_DAYS = 7;
 const MIN_VISIBLE_WEEK_WINDOW_WEEKS = 6;
 const MIN_VISIBLE_MONTH_WINDOW_MONTHS = 6;
+const X_AXIS_TICK_COUNT = 4;
 
 const formatCurrency = (value) =>
 	`$${Number(value || 0).toLocaleString(undefined, {
@@ -24,9 +27,21 @@ const formatDate = (value, language) =>
 		year: "numeric",
 	}).format(value);
 
+const formatShortDate = (value, language) =>
+	new Intl.DateTimeFormat(language, {
+		day: "numeric",
+		month: "short",
+	}).format(value);
+
 const formatMonth = (value, language) =>
 	new Intl.DateTimeFormat(language, {
 		month: "long",
+		year: "numeric",
+	}).format(value);
+
+const formatShortMonth = (value, language) =>
+	new Intl.DateTimeFormat(language, {
+		month: "short",
 		year: "numeric",
 	}).format(value);
 
@@ -105,18 +120,27 @@ const getBucketKey = (date, granularity) => {
 	return bucketStart.toISOString();
 };
 
-const getBucketLabel = (bucketStart, granularity, language, t) => {
+const getBucketPresentation = (bucketStart, granularity, language, t) => {
 	if (granularity === "month") {
-		return formatMonth(bucketStart, language);
+		return {
+			tooltipLabel: formatMonth(bucketStart, language),
+			tooltipKey: "collectionValue.tooltipMonth",
+		};
 	}
 
 	if (granularity === "week") {
-		return t("collectionValue.weekOf", {
-			date: formatDate(bucketStart, language),
-		});
+		return {
+			tooltipLabel: t("collectionValue.weekOf", {
+				date: formatDate(bucketStart, language),
+			}),
+			tooltipKey: "collectionValue.tooltipWeek",
+		};
 	}
 
-	return formatDate(bucketStart, language);
+	return {
+		tooltipLabel: formatDate(bucketStart, language),
+		tooltipKey: "collectionValue.tooltipDate",
+	};
 };
 
 // Group raw snapshots into a cleaner analytics series by taking the final state
@@ -147,6 +171,7 @@ const buildCollectionValueSeries = (snapshots, language, t) => {
 
 	const points = Array.from(groupedSnapshots.values()).map((snapshot) => {
 		const bucketStart = getBucketStart(snapshot.parsedDate, granularity);
+		const presentation = getBucketPresentation(bucketStart, granularity, language, t);
 		return {
 			id: snapshot.id ?? `${granularity}-${bucketStart.toISOString()}`,
 			bucketKey: getBucketKey(snapshot.parsedDate, granularity),
@@ -154,7 +179,8 @@ const buildCollectionValueSeries = (snapshots, language, t) => {
 			createdAt: snapshot.created_at,
 			totalValue: Number(snapshot.total_value || 0),
 			kitsCount: Number(snapshot.kits_count || 0),
-			displayDate: getBucketLabel(bucketStart, granularity, language, t),
+			tooltipLabel: presentation.tooltipLabel,
+			tooltipKey: presentation.tooltipKey,
 			rawSnapshot: snapshot,
 		};
 	});
@@ -164,27 +190,6 @@ const buildCollectionValueSeries = (snapshots, language, t) => {
 		points,
 		latestRawSnapshot: sortedSnapshots[sortedSnapshots.length - 1],
 	};
-};
-
-const getXAxisLabelIndexes = (count) => {
-	if (count <= 1) {
-		return [0];
-	}
-
-	if (count <= 4) {
-		return Array.from({ length: count }, (_, index) => index);
-	}
-
-	if (count <= 8) {
-		return [0, Math.floor((count - 1) / 2), count - 1];
-	}
-
-	return [
-		0,
-		Math.floor((count - 1) / 3),
-		Math.floor(((count - 1) * 2) / 3),
-		count - 1,
-	];
 };
 
 const getMinimumDomainStart = (latestBucketStart, granularity) => {
@@ -211,6 +216,36 @@ const getTimeDomain = (seriesPoints, granularity) => {
 		};
 	}
 
+	if (seriesPoints.length === 1) {
+		if (granularity === "month") {
+			const domainStart = addMonths(firstBucketStart, -2);
+			const domainEnd = addMonths(firstBucketStart, 2);
+			return {
+				domainStart,
+				domainEnd,
+				domainRange: Math.max(1, domainEnd.getTime() - domainStart.getTime()),
+			};
+		}
+
+		if (granularity === "week") {
+			const domainStart = addWeeks(firstBucketStart, -2);
+			const domainEnd = addWeeks(firstBucketStart, 2);
+			return {
+				domainStart,
+				domainEnd,
+				domainRange: Math.max(1, domainEnd.getTime() - domainStart.getTime()),
+			};
+		}
+
+		const domainStart = addDays(firstBucketStart, -3);
+		const domainEnd = addDays(firstBucketStart, 3);
+		return {
+			domainStart,
+			domainEnd,
+			domainRange: Math.max(1, domainEnd.getTime() - domainStart.getTime()),
+		};
+	}
+
 	const minimumDomainStart = getMinimumDomainStart(lastBucketStart, granularity);
 	const domainStart =
 		firstBucketStart < minimumDomainStart ? firstBucketStart : minimumDomainStart;
@@ -226,7 +261,7 @@ const getTimeDomain = (seriesPoints, granularity) => {
 
 const getYDomain = (values) => {
 	const maxValue = Math.max(...values);
-	const paddedMaxValue = Math.max(maxValue * 1.1, maxValue + 40, 100);
+	const paddedMaxValue = Math.ceil(Math.max(maxValue * 1.1, maxValue + 40, 100));
 
 	return {
 		maxValue,
@@ -235,6 +270,25 @@ const getYDomain = (values) => {
 		valueRange: Math.max(1, paddedMaxValue),
 	};
 };
+
+const getXAxisTicks = (domainStart, domainRange, granularity, language) =>
+	Array.from({ length: X_AXIS_TICK_COUNT }, (_, index) => {
+		const ratio = index / (X_AXIS_TICK_COUNT - 1);
+		const date = new Date(domainStart.getTime() + domainRange * ratio);
+		return {
+			date,
+			label:
+				granularity === "month"
+					? formatShortMonth(date, language)
+					: formatShortDate(date, language),
+		};
+	});
+
+const getYAxisTicks = (topValue) => [
+	{ value: topValue, position: 0 },
+	{ value: topValue / 2, position: 0.5 },
+	{ value: 0, position: 1 },
+];
 
 const CollectionValueLineChart = ({ points: rawPoints = [] }) => {
 	const { t, i18n } = useTranslation();
@@ -278,16 +332,18 @@ const CollectionValueLineChart = ({ points: rawPoints = [] }) => {
 	const values = points.map((point) => point.totalValue);
 	const { paddedMinValue, paddedMaxValue, valueRange } = getYDomain(values);
 	const { domainStart, domainRange } = getTimeDomain(points, granularity);
+	const plotWidth = CHART_WIDTH - PLOT_LEFT - PLOT_RIGHT;
+	const plotHeight = CHART_HEIGHT - PLOT_TOP - PLOT_BOTTOM;
 	const getXForDate = (date) => {
 		const elapsedTime = Math.max(0, date.getTime() - domainStart.getTime());
 		const normalizedX = elapsedTime / domainRange;
-		return PADDING_X + normalizedX * (CHART_WIDTH - PADDING_X * 2);
+		return PLOT_LEFT + normalizedX * plotWidth;
 	};
 
 	const chartPoints = points.map((point) => {
 		const x = getXForDate(point.bucketStart);
 		const normalized = (point.totalValue - paddedMinValue) / valueRange;
-		const y = CHART_HEIGHT - PADDING_Y - normalized * (CHART_HEIGHT - PADDING_Y * 2);
+		const y = CHART_HEIGHT - PLOT_BOTTOM - normalized * plotHeight;
 		return {
 			...point,
 			x,
@@ -303,11 +359,9 @@ const CollectionValueLineChart = ({ points: rawPoints = [] }) => {
 					.join(" ")
 			: "";
 
-	const xAxisLabelIndexes = new Set(getXAxisLabelIndexes(chartPoints.length));
-	const dateLabelKey =
-		granularity === "day"
-			? "collectionValue.tooltipDate"
-			: "collectionValue.tooltipPeriod";
+	const xAxisTicks = getXAxisTicks(domainStart, domainRange, granularity, i18n.language);
+	const yAxisTicks = getYAxisTicks(paddedMaxValue);
+	const tooltipDateLabelKey = activePoint?.tooltipKey || "collectionValue.tooltipDate";
 
 	const desktopTooltipPosition = activePoint
 		? {
@@ -369,10 +423,10 @@ const CollectionValueLineChart = ({ points: rawPoints = [] }) => {
 						</div>
 						<div className="collection-value-chart-tooltip-row">
 							<span className="collection-value-chart-tooltip-label">
-								{t(dateLabelKey)}
+								{t(tooltipDateLabelKey)}
 							</span>
 							<span className="collection-value-chart-tooltip-value">
-								{activePoint.displayDate}
+								{activePoint.tooltipLabel}
 							</span>
 						</div>
 						<div className="collection-value-chart-tooltip-row">
@@ -394,21 +448,45 @@ const CollectionValueLineChart = ({ points: rawPoints = [] }) => {
 					aria-label={t("collectionValue.title")}
 				>
 					<line
-						x1={PADDING_X}
-						y1={CHART_HEIGHT - PADDING_Y}
-						x2={CHART_WIDTH - PADDING_X}
-						y2={CHART_HEIGHT - PADDING_Y}
+						x1={PLOT_LEFT}
+						y1={CHART_HEIGHT - PLOT_BOTTOM}
+						x2={CHART_WIDTH - PLOT_RIGHT}
+						y2={CHART_HEIGHT - PLOT_BOTTOM}
 						className="collection-value-axis"
 					/>
 					<line
-						x1={PADDING_X}
-						y1={PADDING_Y}
-						x2={PADDING_X}
-						y2={CHART_HEIGHT - PADDING_Y}
+						x1={PLOT_LEFT}
+						y1={PLOT_TOP}
+						x2={PLOT_LEFT}
+						y2={CHART_HEIGHT - PLOT_BOTTOM}
 						className="collection-value-axis"
 					/>
+					{yAxisTicks.map((tick) => {
+						const y = PLOT_TOP + tick.position * plotHeight;
+						return (
+							<React.Fragment key={tick.position}>
+								{tick.position !== 1 ? (
+									<line
+										x1={PLOT_LEFT}
+										y1={y}
+										x2={CHART_WIDTH - PLOT_RIGHT}
+										y2={y}
+										className="collection-value-grid-line"
+									/>
+								) : null}
+								<text
+									x={PLOT_LEFT - 10}
+									y={y + 4}
+									className="collection-value-axis-label collection-value-axis-label-y"
+									textAnchor="end"
+								>
+									{formatCurrency(tick.value)}
+								</text>
+							</React.Fragment>
+						);
+					})}
 					{path ? <path d={path} className="collection-value-line" /> : null}
-					{chartPoints.map((point, index) => (
+					{chartPoints.map((point) => (
 						<React.Fragment key={point.id}>
 							<circle
 								cx={point.x}
@@ -424,29 +502,27 @@ const CollectionValueLineChart = ({ points: rawPoints = [] }) => {
 								}}
 								tabIndex="0"
 							/>
-							{xAxisLabelIndexes.has(index) ? (
-								<text
-									x={getXForDate(point.bucketStart)}
-									y={CHART_HEIGHT - 6}
-									className="collection-value-axis-label"
-									textAnchor="middle"
-								>
-									{point.displayDate}
-								</text>
-							) : null}
 						</React.Fragment>
 					))}
-					<text x={PADDING_X - 8} y={PADDING_Y + 4} className="collection-value-axis-label" textAnchor="end">
-						{formatCurrency(paddedMaxValue)}
-					</text>
-					<text
-						x={PADDING_X - 8}
-						y={CHART_HEIGHT - PADDING_Y + 4}
-						className="collection-value-axis-label"
-						textAnchor="end"
-					>
-						{formatCurrency(0)}
-					</text>
+					{xAxisTicks.map((tick, index) => (
+						<React.Fragment key={`${tick.date.toISOString()}-${index}`}>
+							<line
+								x1={PLOT_LEFT + (index / (X_AXIS_TICK_COUNT - 1)) * plotWidth}
+								y1={CHART_HEIGHT - PLOT_BOTTOM}
+								x2={PLOT_LEFT + (index / (X_AXIS_TICK_COUNT - 1)) * plotWidth}
+								y2={CHART_HEIGHT - PLOT_BOTTOM + 5}
+								className="collection-value-axis-tick"
+							/>
+							<text
+								x={PLOT_LEFT + (index / (X_AXIS_TICK_COUNT - 1)) * plotWidth}
+								y={CHART_HEIGHT - 10}
+								className="collection-value-axis-label collection-value-axis-label-x"
+								textAnchor={index === 0 ? "start" : index === X_AXIS_TICK_COUNT - 1 ? "end" : "middle"}
+							>
+								{tick.label}
+							</text>
+						</React.Fragment>
+					))}
 				</svg>
 			</div>
 			{activePoint ? (
@@ -462,10 +538,10 @@ const CollectionValueLineChart = ({ points: rawPoints = [] }) => {
 						</div>
 						<div className="collection-value-chart-point-detail">
 							<span className="collection-value-chart-point-detail-label">
-								{t(dateLabelKey)}
+								{t(activePoint.tooltipKey)}
 							</span>
 							<span className="collection-value-chart-point-detail-value">
-								{activePoint.displayDate}
+								{activePoint.tooltipLabel}
 							</span>
 						</div>
 						<div className="collection-value-chart-point-detail">

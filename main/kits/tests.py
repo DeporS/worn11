@@ -1,6 +1,6 @@
 import csv
 from decimal import Decimal
-from datetime import timedelta
+from datetime import datetime, timedelta
 from importlib import import_module
 from io import BytesIO, StringIO
 from urllib.parse import urlencode
@@ -4093,6 +4093,20 @@ class CollectionValueSnapshotTests(APITestCase):
         self.assertEqual(snapshot.total_value, Decimal("100.00"))
         self.assertEqual(snapshot.kits_count, 1)
 
+    def test_snapshot_calculation_excludes_moderation_hidden_kits(self):
+        self.create_user_kit(manual_value=Decimal("100.00"))
+        self.create_user_kit(
+            manual_value=Decimal("250.00"),
+            is_hidden_by_moderation=True,
+        )
+
+        response = self.client.get(reverse("my-collection-value-history"))
+
+        self.assertEqual(response.status_code, 200)
+        snapshot = CollectionValueSnapshot.objects.get(user=self.user)
+        self.assertEqual(snapshot.total_value, Decimal("100.00"))
+        self.assertEqual(snapshot.kits_count, 1)
+
     def test_total_value_history_matches_profile_stats_logic(self):
         self.create_user_kit(manual_value=Decimal("220.00"))
 
@@ -4258,6 +4272,121 @@ class CollectionValueSnapshotTests(APITestCase):
             [item["id"] for item in response.data["results"]],
             [first.id, second.id],
         )
+
+    def test_history_endpoint_rebuilds_stale_snapshots_when_hidden_kits_exist(self):
+        visible_kit = self.create_user_kit(manual_value=Decimal("100.00"))
+        hidden_kit = self.create_user_kit(
+            manual_value=Decimal("300.00"),
+            is_hidden_by_moderation=True,
+        )
+        visible_added_at = timezone.make_aware(datetime(2026, 6, 1, 12, 0, 0))
+        hidden_added_at = timezone.make_aware(datetime(2026, 6, 10, 12, 0, 0))
+        UserKit.objects.filter(pk=visible_kit.pk).update(added_at=visible_added_at)
+        UserKit.objects.filter(pk=hidden_kit.pk).update(added_at=hidden_added_at)
+        CollectionValueSnapshot.objects.create(
+            user=self.user,
+            total_value=Decimal("400.00"),
+            kits_count=2,
+            reason=CollectionValueSnapshot.REASON_KIT_ADDED,
+            related_userkit=hidden_kit,
+        )
+
+        response = self.client.get(reverse("my-collection-value-history"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["results"]), 1)
+        rebuilt_snapshot = CollectionValueSnapshot.objects.get(user=self.user)
+        self.assertEqual(rebuilt_snapshot.reason, CollectionValueSnapshot.REASON_INITIAL)
+        self.assertEqual(rebuilt_snapshot.total_value, Decimal("100.00"))
+        self.assertEqual(rebuilt_snapshot.kits_count, 1)
+        self.assertEqual(rebuilt_snapshot.related_userkit_id, visible_kit.id)
+        self.assertEqual(rebuilt_snapshot.created_at.date().isoformat(), "2026-06-01")
+        self.assertTrue(response.data["results"][0]["created_at"].startswith("2026-06-01"))
+
+    def test_history_endpoint_rebuild_preserves_visible_historical_dates(self):
+        kit_a = self.create_user_kit(manual_value=Decimal("100.00"))
+        kit_b = self.create_user_kit(manual_value=Decimal("200.00"))
+        kit_c = self.create_user_kit(
+            manual_value=Decimal("300.00"),
+            is_hidden_by_moderation=True,
+        )
+        added_at_a = timezone.make_aware(datetime(2026, 6, 1, 10, 0, 0))
+        added_at_b = timezone.make_aware(datetime(2026, 6, 5, 10, 0, 0))
+        added_at_c = timezone.make_aware(datetime(2026, 6, 10, 10, 0, 0))
+        UserKit.objects.filter(pk=kit_a.pk).update(added_at=added_at_a)
+        UserKit.objects.filter(pk=kit_b.pk).update(added_at=added_at_b)
+        UserKit.objects.filter(pk=kit_c.pk).update(added_at=added_at_c)
+        CollectionValueSnapshot.objects.create(
+            user=self.user,
+            total_value=Decimal("100.00"),
+            kits_count=1,
+            reason=CollectionValueSnapshot.REASON_INITIAL,
+            related_userkit=kit_a,
+        )
+        CollectionValueSnapshot.objects.create(
+            user=self.user,
+            total_value=Decimal("300.00"),
+            kits_count=2,
+            reason=CollectionValueSnapshot.REASON_KIT_ADDED,
+            related_userkit=kit_b,
+        )
+        CollectionValueSnapshot.objects.create(
+            user=self.user,
+            total_value=Decimal("600.00"),
+            kits_count=3,
+            reason=CollectionValueSnapshot.REASON_KIT_ADDED,
+            related_userkit=kit_c,
+        )
+
+        response = self.client.get(reverse("my-collection-value-history"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["results"]), 2)
+        first_point, second_point = response.data["results"]
+        self.assertTrue(first_point["created_at"].startswith("2026-06-01"))
+        self.assertEqual(first_point["total_value"], "100.00")
+        self.assertEqual(first_point["kits_count"], 1)
+        self.assertTrue(second_point["created_at"].startswith("2026-06-05"))
+        self.assertEqual(second_point["total_value"], "300.00")
+        self.assertEqual(second_point["kits_count"], 2)
+        self.assertFalse(any(point["created_at"].startswith("2026-06-10") for point in response.data["results"]))
+
+    def test_history_endpoint_rebuilds_when_snapshot_dates_are_stale_but_totals_match(self):
+        kit_a = self.create_user_kit(manual_value=Decimal("100.00"))
+        kit_b = self.create_user_kit(manual_value=Decimal("200.00"))
+        kit_c = self.create_user_kit(
+            manual_value=Decimal("300.00"),
+            is_hidden_by_moderation=True,
+        )
+        added_at_a = timezone.make_aware(datetime(2026, 6, 1, 10, 0, 0))
+        added_at_b = timezone.make_aware(datetime(2026, 6, 5, 10, 0, 0))
+        added_at_c = timezone.make_aware(datetime(2026, 6, 10, 10, 0, 0))
+        UserKit.objects.filter(pk=kit_a.pk).update(added_at=added_at_a)
+        UserKit.objects.filter(pk=kit_b.pk).update(added_at=added_at_b)
+        UserKit.objects.filter(pk=kit_c.pk).update(added_at=added_at_c)
+        first_snapshot = CollectionValueSnapshot.objects.create(
+            user=self.user,
+            total_value=Decimal("100.00"),
+            kits_count=1,
+            reason=CollectionValueSnapshot.REASON_INITIAL,
+            related_userkit=kit_a,
+        )
+        stale_second_snapshot = CollectionValueSnapshot.objects.create(
+            user=self.user,
+            total_value=Decimal("300.00"),
+            kits_count=2,
+            reason=CollectionValueSnapshot.REASON_KIT_ADDED,
+            related_userkit=kit_c,
+        )
+        CollectionValueSnapshot.objects.filter(pk=first_snapshot.pk).update(created_at=added_at_a)
+        CollectionValueSnapshot.objects.filter(pk=stale_second_snapshot.pk).update(created_at=added_at_c)
+
+        response = self.client.get(reverse("my-collection-value-history"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["results"]), 2)
+        self.assertTrue(response.data["results"][0]["created_at"].startswith("2026-06-01"))
+        self.assertTrue(response.data["results"][1]["created_at"].startswith("2026-06-05"))
 
     def test_update_other_fields_preserves_in_the_collection(self):
         user_kit = UserKit.objects.create(
@@ -5691,6 +5820,7 @@ class MyCollectionExportAPITests(APITestCase):
         self.assertIn("ROI %", sheet1_xml)
         self.assertIn("Total kits", sheet2_xml)
         self.assertIn("Total collection value", sheet2_xml)
+        self.assertNotIn("2022/2023", sheet1_xml)
 
     def test_invalid_format_is_rejected(self):
         self.authenticate(self.owner)
@@ -5813,6 +5943,13 @@ class AdminKitReportModerationAPITests(APITestCase):
         )
 
     def test_remove_kit_hides_public_surfaces_and_resolves_reports(self):
+        CollectionValueSnapshot.objects.create(
+            user=self.owner,
+            total_value=Decimal("120.00"),
+            kits_count=1,
+            reason=CollectionValueSnapshot.REASON_KIT_ADDED,
+            related_userkit=self.user_kit,
+        )
         self.authenticate(self.moderator)
         response = self.client.post(
             self.remove_url,
@@ -5844,6 +5981,11 @@ class AdminKitReportModerationAPITests(APITestCase):
                 kit=self.user_kit,
             ).exists()
         )
+        snapshots = list(CollectionValueSnapshot.objects.filter(user=self.owner))
+        self.assertEqual(len(snapshots), 1)
+        self.assertEqual(snapshots[0].reason, CollectionValueSnapshot.REASON_INITIAL)
+        self.assertEqual(snapshots[0].total_value, Decimal("0.00"))
+        self.assertEqual(snapshots[0].kits_count, 0)
 
         self.client.force_authenticate(user=None)
         public_collection = self.client.get(reverse("api-user-collection", args=[self.owner.username]))
@@ -5865,6 +6007,75 @@ class AdminKitReportModerationAPITests(APITestCase):
         feed = self.client.get(reverse("following-feed"))
         self.assertEqual(feed.status_code, 200)
         self.assertFalse(any(item["id"] == self.user_kit.id for item in feed.data["results"]))
+
+    def test_remove_kit_rebuilds_history_without_collapsing_visible_older_kits(self):
+        older_kit_a = UserKit.objects.create(
+            user=self.owner,
+            kit=self.kit,
+            shirt_technology="REPLICA",
+            shirt_version=ShirtVersion.objects.get(code="REPLICA"),
+            condition="VERY_GOOD",
+            size="M",
+            manual_value=Decimal("100.00"),
+            in_the_collection=True,
+        )
+        older_kit_b = UserKit.objects.create(
+            user=self.owner,
+            kit=self.kit,
+            shirt_technology="REPLICA",
+            shirt_version=ShirtVersion.objects.get(code="REPLICA"),
+            condition="GOOD",
+            size="S",
+            manual_value=Decimal("200.00"),
+            in_the_collection=True,
+        )
+        added_at_a = timezone.make_aware(datetime(2026, 6, 1, 10, 0, 0))
+        added_at_b = timezone.make_aware(datetime(2026, 6, 5, 10, 0, 0))
+        added_at_c = timezone.make_aware(datetime(2026, 6, 10, 10, 0, 0))
+        UserKit.objects.filter(pk=older_kit_a.pk).update(added_at=added_at_a)
+        UserKit.objects.filter(pk=older_kit_b.pk).update(added_at=added_at_b)
+        UserKit.objects.filter(pk=self.user_kit.pk).update(added_at=added_at_c)
+        first_snapshot = CollectionValueSnapshot.objects.create(
+            user=self.owner,
+            total_value=Decimal("100.00"),
+            kits_count=1,
+            reason=CollectionValueSnapshot.REASON_INITIAL,
+            related_userkit=older_kit_a,
+        )
+        second_snapshot = CollectionValueSnapshot.objects.create(
+            user=self.owner,
+            total_value=Decimal("300.00"),
+            kits_count=2,
+            reason=CollectionValueSnapshot.REASON_KIT_ADDED,
+            related_userkit=older_kit_b,
+        )
+        third_snapshot = CollectionValueSnapshot.objects.create(
+            user=self.owner,
+            total_value=Decimal("433.00"),
+            kits_count=3,
+            reason=CollectionValueSnapshot.REASON_KIT_ADDED,
+            related_userkit=self.user_kit,
+        )
+        CollectionValueSnapshot.objects.filter(pk=first_snapshot.pk).update(created_at=added_at_a)
+        CollectionValueSnapshot.objects.filter(pk=second_snapshot.pk).update(created_at=added_at_b)
+        CollectionValueSnapshot.objects.filter(pk=third_snapshot.pk).update(created_at=added_at_c)
+
+        self.authenticate(self.moderator)
+        response = self.client.post(
+            self.remove_url,
+            {"note": "Offensive upload."},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        snapshots = list(CollectionValueSnapshot.objects.filter(user=self.owner).order_by("created_at", "id"))
+        self.assertEqual(len(snapshots), 2)
+        self.assertEqual(snapshots[0].created_at.date().isoformat(), "2026-06-01")
+        self.assertEqual(snapshots[0].total_value, Decimal("100.00"))
+        self.assertEqual(snapshots[0].kits_count, 1)
+        self.assertEqual(snapshots[1].created_at.date().isoformat(), "2026-06-05")
+        self.assertEqual(snapshots[1].total_value, Decimal("300.00"))
+        self.assertEqual(snapshots[1].kits_count, 2)
 
     def test_remove_kit_creates_notification_even_when_actor_is_owner(self):
         owned_kit = UserKit.objects.create(

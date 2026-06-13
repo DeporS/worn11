@@ -502,11 +502,23 @@
 	width: 100%;
 	min-height: 280px;
 	position: relative;
+	padding-bottom: 0.4rem;
 }
 
 .collection-value-axis {
 	stroke: rgba(100, 116, 139, 0.35);
 	stroke-width: 1;
+}
+
+.collection-value-axis-tick {
+	stroke: rgba(100, 116, 139, 0.42);
+	stroke-width: 1;
+}
+
+.collection-value-grid-line {
+	stroke: rgba(148, 163, 184, 0.16);
+	stroke-width: 1;
+	stroke-dasharray: 4 5;
 }
 
 .collection-value-line {
@@ -526,6 +538,11 @@
 .collection-value-axis-label {
 	fill: #64748b;
 	font-size: 12px;
+	font-weight: 500;
+}
+
+.collection-value-axis-label-y {
+	font-variant-numeric: tabular-nums;
 }
 
 .collection-value-chart-point-details {
@@ -794,6 +811,10 @@
 	.collection-value-modal-header,
 	.collection-value-modal-body {
 		padding-inline: 1rem;
+	}
+
+	.collection-value-axis-label {
+		font-size: 11px;
 	}
 
 	.collection-value-pro-actions {
@@ -1346,11 +1367,15 @@
 		flex-direction: column;
 		width: 100%;
 		align-items: center;
+		justify-content: flex-start !important;
+		gap: 0.45rem !important;
+		min-height: 0 !important;
 	}
 
 	.profile-name-row {
 		justify-content: center;
-		gap: 0.5rem !important;
+		gap: 0.35rem !important;
+		row-gap: 0.3rem;
 	}
 
 	.profile-username {
@@ -1362,6 +1387,7 @@
 	.profile-meta-row {
 		justify-content: center;
 		text-align: center;
+		margin-top: 0;
 	}
 
 	.profile-actions {
@@ -1369,7 +1395,7 @@
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 0.75rem;
 		width: 100%;
-		margin-top: 0.85rem;
+		margin-top: 0.5rem;
 		margin-left: 0 !important;
 		justify-self: stretch;
 	}
@@ -1379,6 +1405,12 @@
 		width: 100%;
 		justify-content: center;
 		min-width: 0;
+	}
+
+	.profile-edit-button {
+		width: auto;
+		padding: 0.35rem;
+		margin-top: 0;
 	}
 
 	.profile-action-button {

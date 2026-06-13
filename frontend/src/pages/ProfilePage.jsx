@@ -363,7 +363,6 @@ const ProfilePage = ({ user }) => {
 						<UserAvatar user={profileData} size={80} />
 						<div
 							className="d-flex flex-column justify-content-center profile-name-block"
-							style={{ minHeight: "80px" }}
 						>
 							<div className="d-flex align-items-center gap-1 flex-wrap profile-name-row">
 								{/* Username and edit button */}
