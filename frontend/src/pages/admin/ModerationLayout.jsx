@@ -1,13 +1,32 @@
+import { useCallback, useEffect, useState } from "react";
 import { Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { canAccessModeration } from "../../utils/permissions";
 import ModerationNavigation from "../../components/admin/ModerationNavigation";
+import { getAdminModerationSummary } from "../../services/api";
 
 const ModerationLayout = ({ user }) => {
 	const { t } = useTranslation();
+	const [queueCounts, setQueueCounts] = useState(null);
+	const canAccess = canAccessModeration(user);
 
-	if (!canAccessModeration(user)) {
+	const refreshModerationSummary = useCallback(async () => {
+		try {
+			const summary = await getAdminModerationSummary();
+			setQueueCounts(summary || null);
+		} catch (error) {
+			setQueueCounts(null);
+		}
+	}, []);
+
+	useEffect(() => {
+		if (canAccess) {
+			refreshModerationSummary();
+		}
+	}, [canAccess, refreshModerationSummary]);
+
+	if (!canAccess) {
 		return (
 			<div className="container py-5 moderation-layout">
 				<div className="moderation-placeholder moderation-placeholder--denied">
@@ -25,11 +44,11 @@ const ModerationLayout = ({ user }) => {
 				<div>
 					<h1 className="fw-bold mb-1">{t("moderation.title")}</h1>
 				</div>
-				<ModerationNavigation user={user} />
+				<ModerationNavigation user={user} queueCounts={queueCounts} />
 			</header>
 
 			<div className="moderation-content">
-				<Outlet />
+				<Outlet context={{ refreshModerationSummary }} />
 			</div>
 		</div>
 	);

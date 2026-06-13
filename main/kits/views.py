@@ -1944,6 +1944,26 @@ class AdminKitTypeSuggestionsAPI(APIView):
         return Response(serializer.data)
 
 
+class AdminModerationSummaryAPI(APIView):
+    permission_classes = [IsAuthenticated, IsStaffOrModerator]
+
+    def get(self, request):
+        kit_type_suggestions_pending = TeamSeasonKitType.objects.filter(
+            status=TeamSeasonKitType.STATUS_PENDING,
+            team__is_verified=True,
+        ).count()
+        team_verification_pending = Team.objects.filter(is_verified=False).count()
+        kit_report_groups_pending = UserKit.objects.filter(
+            reports__status='pending',
+        ).distinct().count()
+
+        return Response({
+            'kit_type_suggestions_pending': kit_type_suggestions_pending,
+            'team_verification_pending': team_verification_pending,
+            'kit_report_groups_pending': kit_report_groups_pending,
+        })
+
+
 class AdminTeamSeasonKitTypeApproveAPI(APIView):
     permission_classes = [IsAuthenticated, IsStaffOrModerator]
 

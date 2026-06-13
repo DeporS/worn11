@@ -1771,6 +1771,156 @@ class AdminKitTypeModerationAPITests(APITestCase):
         self.assertEqual(response.data, [])
 
 
+class AdminModerationSummaryAPITests(APITestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.regular_user = User.objects.create_user(
+            username='summary_regular_user',
+            password='password123',
+        )
+        self.moderator_user = User.objects.create_user(
+            username='summary_moderator',
+            password='password123',
+        )
+        self.moderator_user.profile.is_moderator = True
+        self.moderator_user.profile.save(update_fields=['is_moderator'])
+        self.staff_user = User.objects.create_user(
+            username='summary_staff',
+            password='password123',
+            is_staff=True,
+        )
+        self.superuser = User.objects.create_superuser(
+            username='summary_superuser',
+            email='summary-super@example.com',
+            password='password123',
+        )
+
+        self.pending_creator = User.objects.create_user(
+            username='summary_creator',
+            password='password123',
+        )
+
+        self.verified_team = Team.objects.create(name='Summary Verified FC', is_verified=True)
+        self.unverified_team = Team.objects.create(name='Summary Pending FC', is_verified=False)
+
+        self.pending_kit_type = KitType.objects.create(
+            name='Summary Pending Type',
+            slug='summary-pending-type',
+            category=KitType.CATEGORY_OTHER,
+            status=KitType.STATUS_PENDING,
+            default_visibility=KitType.VISIBILITY_NONE,
+            created_by=self.pending_creator,
+        )
+        self.approved_kit_type = KitType.objects.create(
+            name='Summary Approved Type',
+            slug='summary-approved-type',
+            category=KitType.CATEGORY_OTHER,
+            status=KitType.STATUS_APPROVED,
+            default_visibility=KitType.VISIBILITY_NONE,
+            created_by=self.pending_creator,
+        )
+        TeamSeasonKitType.objects.create(
+            team=self.verified_team,
+            season='2024/2025',
+            kit_type=self.pending_kit_type,
+            status=TeamSeasonKitType.STATUS_PENDING,
+            source=TeamSeasonKitType.SOURCE_UPLOAD,
+            created_by=self.pending_creator,
+        )
+        TeamSeasonKitType.objects.create(
+            team=self.unverified_team,
+            season='2024/2025',
+            kit_type=self.approved_kit_type,
+            status=TeamSeasonKitType.STATUS_PENDING,
+            source=TeamSeasonKitType.SOURCE_UPLOAD,
+            created_by=self.pending_creator,
+        )
+
+        self.report_team = Team.objects.create(name='Summary Reports FC', is_verified=True)
+        self.report_kit_type = Kit.objects.create(
+            team=self.report_team,
+            season='2024/2025',
+            kit_type='Home',
+            estimated_price=Decimal('99.00'),
+        )
+        self.report_owner = User.objects.create_user(
+            username='summary_report_owner',
+            password='password123',
+        )
+        self.reported_kit = UserKit.objects.create(
+            user=self.report_owner,
+            kit=self.report_kit_type,
+            shirt_technology='REPLICA',
+            shirt_version=ShirtVersion.objects.get(code='REPLICA'),
+            condition='VERY_GOOD',
+            size='L',
+        )
+        KitReport.objects.create(
+            kit=self.reported_kit,
+            reporter=self.pending_creator,
+            reason='spam',
+            description='First pending report.',
+        )
+        KitReport.objects.create(
+            kit=self.reported_kit,
+            reporter=self.moderator_user,
+            reason='prohibited_content',
+            description='Second pending report.',
+        )
+        resolved_kit = UserKit.objects.create(
+            user=self.report_owner,
+            kit=Kit.objects.create(
+                team=self.report_team,
+                season='2023/2024',
+                kit_type='Away',
+                estimated_price=Decimal('88.00'),
+            ),
+            shirt_technology='REPLICA',
+            shirt_version=ShirtVersion.objects.get(code='REPLICA'),
+            condition='VERY_GOOD',
+            size='L',
+        )
+        KitReport.objects.create(
+            kit=resolved_kit,
+            reporter=self.staff_user,
+            reason='other',
+            description='Dismissed report.',
+            status='resolved',
+        )
+
+        self.url = reverse('admin-moderation-summary')
+
+    def test_anonymous_user_cannot_access_summary(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 401)
+
+    def test_regular_user_cannot_access_summary(self):
+        self.client.force_authenticate(user=self.regular_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 403)
+
+    def test_moderator_can_access_summary(self):
+        self.client.force_authenticate(user=self.moderator_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['kit_type_suggestions_pending'], 1)
+        self.assertEqual(response.data['team_verification_pending'], 1)
+        self.assertEqual(response.data['kit_report_groups_pending'], 1)
+
+    def test_staff_can_access_summary(self):
+        self.client.force_authenticate(user=self.staff_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['kit_type_suggestions_pending'], 1)
+        self.assertEqual(response.data['team_verification_pending'], 1)
+        self.assertEqual(response.data['kit_report_groups_pending'], 1)
+
+    def test_superuser_can_access_summary(self):
+        self.client.force_authenticate(user=self.superuser)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+
+
 class AdminTeamModerationAPITests(APITestCase):
     def setUp(self):
         self.client = APIClient()

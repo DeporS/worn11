@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useOutletContext } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import Swal from "sweetalert2";
 
@@ -70,6 +71,7 @@ const getReporterSummary = (reporters, t) => {
 
 const AdminReportsPage = () => {
 	const { t, i18n } = useTranslation();
+	const { refreshModerationSummary } = useOutletContext() || {};
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState("");
 	const [notice, setNotice] = useState("");
@@ -184,6 +186,7 @@ const AdminReportsPage = () => {
 			await dismissAdminKitReport(group.id, { note: result.value || "" });
 			setNotice(t("moderation.reports.dismissSuccess"));
 			await refreshAfterAction(group.id);
+			await refreshModerationSummary?.();
 		} catch (actionError) {
 			console.error("Failed to dismiss kit reports", actionError);
 			const message =
@@ -232,6 +235,7 @@ const AdminReportsPage = () => {
 			await removeAdminReportedKit(group.id, { note: result.value });
 			setNotice(t("moderation.reports.removeSuccess"));
 			await refreshAfterAction(group.id);
+			await refreshModerationSummary?.();
 		} catch (actionError) {
 			console.error("Failed to remove reported kit", actionError);
 			const message =

@@ -1,10 +1,15 @@
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { canAccessCatalog } from "../../utils/permissions";
 
-const ModerationNavigation = ({ user }) => {
+const ModerationNavigation = ({ user, queueCounts }) => {
 	const { t } = useTranslation();
 	const showCatalog = canAccessCatalog(user);
+	const kitTypeCount = queueCounts?.kit_type_suggestions_pending || 0;
+	const teamCount = queueCounts?.team_verification_pending || 0;
+	const reportCount = queueCounts?.kit_report_groups_pending || 0;
+
+	const renderCount = (count) => (count > 0 ? ` (${count})` : "");
 
 	const getLinkClassName = (variant) => ({ isActive }) =>
 		[
@@ -19,12 +24,15 @@ const ModerationNavigation = ({ user }) => {
 		<nav className="moderation-navigation" aria-label={t("moderation.title")}>
 			<NavLink to="/admin/kit-types" className={getLinkClassName("moderation")}>
 				{t("moderation.nav.kitTypes")}
+				{renderCount(kitTypeCount)}
 			</NavLink>
 			<NavLink to="/admin/teams" className={getLinkClassName("moderation")}>
 				{t("moderation.nav.teamVerification")}
+				{renderCount(teamCount)}
 			</NavLink>
 			<NavLink to="/admin/reports" className={getLinkClassName("moderation")}>
 				{t("moderation.nav.kitReports")}
+				{renderCount(reportCount)}
 			</NavLink>
 			{showCatalog ? (
 				<>

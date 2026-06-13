@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useEffect } from "react";
+import { useOutletContext } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import Swal from "sweetalert2";
 
@@ -62,6 +63,7 @@ const buildInitialForm = (team, previousForm = {}) => ({
 
 const AdminTeamsPage = () => {
 	const { t } = useTranslation();
+	const { refreshModerationSummary } = useOutletContext() || {};
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState("");
 	const [notice, setNotice] = useState("");
@@ -512,6 +514,7 @@ const AdminTeamsPage = () => {
 			});
 			removeTeamFromQueue(teamId);
 			setNotice(t("moderation.teams.approveSuccess"));
+			await refreshModerationSummary?.();
 		} catch (actionError) {
 			console.error("Failed to approve team", actionError);
 			const payload = actionError?.response?.data || {};
@@ -618,6 +621,7 @@ const AdminTeamsPage = () => {
 					? `${t("moderation.teams.mergeSuccess")} (${mergedCount})`
 					: t("moderation.teams.mergeSuccess"),
 			);
+			await refreshModerationSummary?.();
 		} catch (actionError) {
 			console.error("Failed to merge team", actionError);
 			const payload = actionError?.response?.data || {};
@@ -659,6 +663,7 @@ const AdminTeamsPage = () => {
 			await rejectTeam(teamId);
 			removeTeamFromQueue(teamId);
 			setNotice(t("moderation.teams.rejectSuccess"));
+			await refreshModerationSummary?.();
 		} catch (actionError) {
 			console.error("Failed to reject team", actionError);
 			const payload = actionError?.response?.data || {};
@@ -774,6 +779,7 @@ const AdminTeamsPage = () => {
 			await deleteTeamContent(teamId, result.value);
 			removeTeamFromQueue(teamId);
 			setNotice(t("moderation.teams.deleteSuccess"));
+			await refreshModerationSummary?.();
 		} catch (actionError) {
 			console.error("Failed to delete team content", actionError);
 			const payload = actionError?.response?.data || {};

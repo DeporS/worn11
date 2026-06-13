@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useOutletContext } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import Swal from "sweetalert2";
 
@@ -65,6 +66,7 @@ const getUndoBlockText = (action, t) => {
 
 const AdminKitTypesPage = ({ user }) => {
 	const { t, i18n } = useTranslation();
+	const { refreshModerationSummary } = useOutletContext() || {};
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState("");
 	const [items, setItems] = useState([]);
@@ -147,6 +149,7 @@ const AdminKitTypesPage = ({ user }) => {
 		try {
 			await approveAdminTeamSeasonKitType(item.id);
 			await refreshModerationData();
+			await refreshModerationSummary?.();
 		} catch (actionError) {
 			console.error("Failed to approve admin suggestion", actionError);
 			Swal.fire(t("common.error"), t("admin.actionError"), "error");
@@ -170,6 +173,7 @@ const AdminKitTypesPage = ({ user }) => {
 		try {
 			await rejectAdminTeamSeasonKitType(item.id);
 			await refreshModerationData();
+			await refreshModerationSummary?.();
 		} catch (actionError) {
 			console.error("Failed to reject admin suggestion", actionError);
 			Swal.fire(t("common.error"), t("admin.actionError"), "error");
@@ -199,6 +203,7 @@ const AdminKitTypesPage = ({ user }) => {
 		try {
 			await mergeAdminTeamSeasonKitType(item.id, Number(targetKitTypeId));
 			await refreshModerationData();
+			await refreshModerationSummary?.();
 		} catch (actionError) {
 			console.error("Failed to merge admin suggestion", actionError);
 			Swal.fire(t("common.error"), t("admin.actionError"), "error");
@@ -222,6 +227,7 @@ const AdminKitTypesPage = ({ user }) => {
 		try {
 			await undoAdminKitTypeModerationAction(action.id);
 			await refreshModerationData();
+			await refreshModerationSummary?.();
 			Swal.fire(
 				t("common.success"),
 				t("moderation.undoSuccess"),

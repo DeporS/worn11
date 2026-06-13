@@ -373,6 +373,11 @@ export const getAdminKitReports = async ({
 	return response.data;
 };
 
+export const getAdminModerationSummary = async () => {
+	const response = await api.get("/admin/moderation/summary/");
+	return response.data;
+};
+
 export const getAdminKitReportDetail = async (id) => {
 	const response = await api.get(`/admin/reports/${id}/`);
 	return response.data;
