@@ -126,14 +126,10 @@ const NotificationsDropdown = ({
 	};
 
 	const handleNotificationClick = (notification) => {
-		if (
-			["kit_like", "kit_comment", "comment_like", "comment_reply", "moderation_kit_removed"].includes(notification.type) &&
-			notification.kit?.owner_username &&
-			notification.kit?.id
-		) {
-			navigate(`/profile/${notification.kit.owner_username}/kits/${notification.kit.id}`);
-		} else if (notification.type === "follow" && notification.actor?.username) {
-			navigate(`/profile/${notification.actor.username}`);
+		if (notification.target_path) {
+			navigate(notification.target_path);
+		} else if (notification.type === "moderation_kit_removed" && notification.kit?.id) {
+			navigate(`/removed-kits/${notification.kit.id}`);
 		}
 
 		closeDropdown();
@@ -174,7 +170,9 @@ const NotificationsDropdown = ({
 		}
 
 		if (notification.type === "moderation_kit_removed") {
-			return t("notifications.kitRemovedByModeration");
+			return t("notifications.moderationKitRemoved", {
+				kit: notification.kit?.title || "",
+			});
 		}
 
 		return notification.actor?.username || "";
@@ -274,6 +272,13 @@ const NotificationsDropdown = ({
 											<div className="fw-medium text-dark">
 												{getMessage(notification)}
 											</div>
+											{notification.type === "moderation_kit_removed" && notification.moderation_note ? (
+												<div className="small text-muted text-truncate mt-1">
+													{t("notifications.moderationNote", {
+														note: notification.moderation_note,
+													})}
+												</div>
+											) : null}
 											{notification.kit ? (
 												<div className="small text-muted text-truncate">
 													{[

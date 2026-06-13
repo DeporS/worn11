@@ -75,6 +75,8 @@
 		"commentedOnYourKit": "{{username}} skomentował Twoją koszulkę",
 		"likedYourComment": "{{username}} polubił Twój komentarz",
 		"repliedToYourComment": "{{username}} odpowiedział na Twój komentarz",
+		"moderationKitRemoved": "Twoja koszulka „{{kit}}” została usunięta przez moderację.",
+		"moderationNote": "Notatka moderatora: {{note}}",
 		"kitRemovedByModeration": "Twoja koszulka została usunięta przez moderację",
 		"unreadLabel": "Nieprzeczytane powiadomienia",
 		"open": "Otwórz powiadomienia",
@@ -578,6 +580,7 @@
 			"reportCount_one": "{{count}} zgłoszenie",
 			"reportCount_other": "{{count}} zgłoszeń",
 			"owner": "Właściciel",
+			"reportedBy": "Zgłoszone przez",
 			"reporter": "Zgłaszający",
 			"reason": "Powód",
 			"latestReport": "Ostatnie zgłoszenie",
@@ -607,10 +610,19 @@
 			"removeNotePlaceholder": "Wymagana notatka widoczna w historii moderacji",
 			"statusLabel": "Status",
 			"noPreview": "Brak podglądu",
+			"moreReporters": "+ {{count}} więcej",
+			"unknownUser": "Nieznany użytkownik",
 			"actionType": {
 				"dismiss": "odrzucił zgłoszenia",
 				"remove_kit": "usunął koszulkę"
 			}
+		},
+		"removedKit": {
+			"title": "Koszulka usunięta przez moderację",
+			"description": "Ta koszulka nie jest już widoczna na Twoim profilu.",
+			"removedAt": "Usunięto",
+			"note": "Notatka moderatora",
+			"noAccess": "Nie masz dostępu do tej usuniętej koszulki."
 		},
 		"comingSoon": "Wkrótce",
 		"recentActions": "Ostatnie działania moderacyjne",

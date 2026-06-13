@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import AdminUserLink from "../../components/admin/AdminUserLink";
 import CatalogImagePreview from "../../components/admin/CatalogImagePreview";
 import CatalogModal from "../../components/admin/CatalogModal";
 import {
@@ -300,7 +301,13 @@ const AdminLeaguesPage = () => {
 											</span>
 										</td>
 										<td>{league.teams_count}</td>
-										<td>{league.created_by || "N/A"}</td>
+										<td>
+											<AdminUserLink
+												username={league.created_by}
+												displayName={league.created_by}
+												fallback="N/A"
+											/>
+										</td>
 										<td>{formatDate(league.created_at)}</td>
 										<td className="text-end">
 											<button

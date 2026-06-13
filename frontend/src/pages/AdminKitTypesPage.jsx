@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import Swal from "sweetalert2";
 
+import AdminUserLink from "../components/admin/AdminUserLink";
 import api, {
 	approveAdminTeamSeasonKitType,
 	getAdminKitTypeModerationActions,
@@ -341,8 +342,11 @@ const AdminKitTypesPage = ({ user }) => {
 												<strong>
 													{t("admin.createdByLabel")}
 												</strong>{" "}
-												{item.created_by_username ||
-													"—"}
+												<AdminUserLink
+													username={item.created_by_username}
+													displayName={item.created_by_username}
+													fallback="—"
+												/>
 											</div>
 											<div>
 												<strong>
@@ -491,7 +495,11 @@ const AdminKitTypesPage = ({ user }) => {
 												</div>
 												<div className="admin-recent-action-meta">
 													<span>
-														{action.actor_username}
+														<AdminUserLink
+															username={action.actor_username}
+															displayName={action.actor_username}
+															fallback="—"
+														/>
 													</span>
 													<span>
 														{formatDate(

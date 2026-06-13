@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import AdminUserLink from "../../components/admin/AdminUserLink";
 import CatalogImagePreview from "../../components/admin/CatalogImagePreview";
 import CatalogModal from "../../components/admin/CatalogModal";
 import {
@@ -261,7 +262,13 @@ const AdminCountriesPage = () => {
 										</td>
 										<td>{country.leagues_count}</td>
 										<td>{country.teams_count}</td>
-										<td>{country.created_by || "N/A"}</td>
+										<td>
+											<AdminUserLink
+												username={country.created_by}
+												displayName={country.created_by}
+												fallback="N/A"
+											/>
+										</td>
 										<td>{formatDate(country.created_at)}</td>
 										<td className="text-end">
 											<button
@@ -302,7 +309,14 @@ const AdminCountriesPage = () => {
 								<div className="catalog-card-meta">
 									<span>{t("admin.catalog.leagues")}: {country.leagues_count}</span>
 									<span>{t("admin.catalog.teams")}: {country.teams_count}</span>
-									<span>{t("admin.catalog.createdBy")}: {country.created_by || "N/A"}</span>
+									<span>
+										{t("admin.catalog.createdBy")}:{` `}
+										<AdminUserLink
+											username={country.created_by}
+											displayName={country.created_by}
+											fallback="N/A"
+										/>
+									</span>
 								</div>
 								<div className="catalog-card-actions">
 									<button

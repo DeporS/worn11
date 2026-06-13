@@ -6,6 +6,7 @@ from .views import (
     MyCollectionAPI,
     MyCollectionDetailAPI,
     PublicUserKitDetailAPI,
+    RemovedUserKitDetailAPI,
     ExploreKitsAPI,
     FollowingFeedAPI,
     UserCollectionAPI,
@@ -77,6 +78,7 @@ from .views_auth import GoogleLogin
 urlpatterns = [
     path('my-collection/', MyCollectionAPI.as_view(), name='api-my-collection'),
     path('my-collection/<int:pk>/', MyCollectionDetailAPI.as_view(), name='api-my-collection-detail'),
+    path('my/removed-kits/<int:userkit_id>/', RemovedUserKitDetailAPI.as_view(), name='removed-kit-detail'),
     path('catalog/', KitCatalogAPI.as_view(), name='api-catalog'),
     path('explore/kits/', ExploreKitsAPI.as_view(), name='explore-kits'),
     path('feed/following/', FollowingFeedAPI.as_view(), name='following-feed'),

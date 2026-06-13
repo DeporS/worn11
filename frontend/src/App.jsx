@@ -17,6 +17,7 @@ import KitVariantsPage from "./pages/KitVariantsPage";
 import KitDetailPage from "./pages/KitDetailPage";
 import MessagesPage from "./pages/MessagesPage";
 import FeedPage from "./pages/FeedPage";
+import RemovedKitDetailPage from "./pages/RemovedKitDetailPage";
 import AdminKitTypesPage from "./pages/AdminKitTypesPage";
 import ModerationLayout from "./pages/admin/ModerationLayout";
 import AdminCatalogLayout from "./pages/admin/AdminCatalogLayout";
@@ -190,6 +191,14 @@ function App() {
 					<Route
 						path="/profile/:username/kits/:kitId"
 						element={<KitDetailPage user={user} />}
+					/>
+					<Route
+						path="/removed-kits/:userKitId"
+						element={
+							<AuthGate authLoading={authLoading} user={user}>
+								<RemovedKitDetailPage />
+							</AuthGate>
+						}
 					/>
 					<Route
 						path="/messages"

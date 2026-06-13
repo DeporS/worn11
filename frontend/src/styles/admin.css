@@ -83,6 +83,30 @@
 	outline-offset: 2px;
 }
 
+.admin-user-link {
+	display: inline-flex;
+	max-width: 100%;
+	min-width: 0;
+	font-weight: 600;
+	color: #0d6efd;
+	text-decoration: none;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+	transition: color 0.15s ease, text-decoration-color 0.15s ease;
+}
+
+.admin-user-link:hover,
+.admin-user-link:focus-visible {
+	color: #0a58ca;
+	text-decoration: underline;
+}
+
+.admin-user-link:focus-visible {
+	outline: 2px solid rgba(13, 110, 253, 0.35);
+	outline-offset: 2px;
+	border-radius: 0.25rem;
+}
+
 .moderation-navigation-spacer {
 	display: inline-block;
 	width: 0.85rem;
@@ -296,6 +320,20 @@
 	color: #6c757d;
 }
 
+.admin-report-card-reporter-summary {
+	display: inline-flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.35rem;
+	min-width: 0;
+}
+
+.admin-report-reporter-chip {
+	display: inline-flex;
+	align-items: center;
+	min-width: 0;
+}
+
 .admin-report-card-reasons {
 	display: flex;
 	flex-wrap: wrap;
@@ -377,6 +415,10 @@
 	gap: 0.5rem;
 	font-size: 0.92rem;
 	color: #495057;
+}
+
+.admin-report-detail-row .admin-user-link {
+	min-width: 0;
 }
 
 .admin-report-detail-row + .admin-report-detail-row {

@@ -5269,6 +5269,7 @@ class AdminKitReportModerationAPITests(APITestCase):
         self.detail_url = reverse("admin-kit-report-detail", args=[self.user_kit.id])
         self.dismiss_url = reverse("admin-kit-report-dismiss", args=[self.user_kit.id])
         self.remove_url = reverse("admin-kit-report-remove-kit", args=[self.user_kit.id])
+        self.removed_detail_url = reverse("removed-kit-detail", args=[self.user_kit.id])
 
     def authenticate(self, user):
         self.client.force_authenticate(user=user)
@@ -5293,6 +5294,11 @@ class AdminKitReportModerationAPITests(APITestCase):
         self.assertEqual(payload["report_count"], 2)
         self.assertTrue(payload["has_pending_reports"])
         self.assertIn("spam", payload["reasons"])
+        self.assertEqual(
+            {reporter["username"] for reporter in payload["reporters"]},
+            {self.reporter.username, self.other_reporter.username},
+        )
+        self.assertNotIn("email", payload["reporters"][0])
 
     def test_staff_can_fetch_report_detail(self):
         self.authenticate(self.staff_user)
@@ -5302,6 +5308,7 @@ class AdminKitReportModerationAPITests(APITestCase):
         self.assertEqual(len(response.data["reports"]), 2)
         reporter_usernames = {item["reporter"]["username"] for item in response.data["reports"]}
         self.assertEqual(reporter_usernames, {self.reporter.username, self.other_reporter.username})
+        self.assertNotIn("email", response.data["reports"][0]["reporter"])
 
     def test_dismiss_marks_pending_reports_dismissed_without_hiding_kit(self):
         self.authenticate(self.moderator)
@@ -5376,7 +5383,42 @@ class AdminKitReportModerationAPITests(APITestCase):
         self.assertEqual(feed.status_code, 200)
         self.assertFalse(any(item["id"] == self.user_kit.id for item in feed.data["results"]))
 
-    def test_owner_can_still_view_hidden_kit_but_cannot_edit_it(self):
+    def test_remove_kit_creates_notification_even_when_actor_is_owner(self):
+        owned_kit = UserKit.objects.create(
+            user=self.moderator,
+            kit=self.kit,
+            shirt_technology="REPLICA",
+            shirt_version=ShirtVersion.objects.get(code="REPLICA"),
+            condition="VERY_GOOD",
+            size="L",
+            in_the_collection=True,
+        )
+        KitReport.objects.create(
+            kit=owned_kit,
+            reporter=self.viewer,
+            reason="spam",
+            description="Spam report.",
+        )
+        owner_remove_url = reverse("admin-kit-report-remove-kit", args=[owned_kit.id])
+        self.client.force_authenticate(user=self.moderator)
+        response = self.client.post(
+            owner_remove_url,
+            {"note": "Self removal moderation note."},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(
+            Notification.objects.filter(
+                recipient=self.moderator,
+                actor=self.moderator,
+                type="moderation_kit_removed",
+                kit=owned_kit,
+                read_at__isnull=True,
+            ).exists()
+        )
+
+    def test_owner_normal_collection_excludes_hidden_kit_and_removed_detail_allows_owner(self):
         self.user_kit.is_hidden_by_moderation = True
         self.user_kit.hidden_by_moderation_at = timezone.now()
         self.user_kit.hidden_by_moderation_by = self.moderator
@@ -5391,21 +5433,77 @@ class AdminKitReportModerationAPITests(APITestCase):
         )
 
         self.client.force_authenticate(user=self.owner)
+        my_collection_response = self.client.get(reverse("api-my-collection"))
+        self.assertEqual(my_collection_response.status_code, 200)
+        self.assertEqual(my_collection_response.data["results"] if isinstance(my_collection_response.data, dict) and "results" in my_collection_response.data else my_collection_response.data, [])
+
         collection_response = self.client.get(reverse("api-user-collection", args=[self.owner.username]))
         self.assertEqual(collection_response.status_code, 200)
-        self.assertEqual(collection_response.data[0]["id"], self.user_kit.id)
-        self.assertTrue(collection_response.data[0]["is_hidden_by_moderation"])
+        self.assertEqual(collection_response.data, [])
 
         detail_response = self.client.get(reverse("kit-detail", args=[self.user_kit.id]))
-        self.assertEqual(detail_response.status_code, 200)
-        self.assertTrue(detail_response.data["is_hidden_by_moderation"])
+        self.assertEqual(detail_response.status_code, 404)
+
+        stats_response = self.client.get(reverse("user-stats", args=[self.owner.username]))
+        self.assertEqual(stats_response.status_code, 200)
+        self.assertEqual(stats_response.data["total_kits"], 0)
+
+        removed_detail_response = self.client.get(self.removed_detail_url)
+        self.assertEqual(removed_detail_response.status_code, 200)
+        self.assertEqual(removed_detail_response.data["id"], self.user_kit.id)
+        self.assertEqual(removed_detail_response.data["moderation_note"], "Removed for review")
+        self.assertTrue(removed_detail_response.data["removed_by_moderation"])
+        self.assertNotIn("reporter", removed_detail_response.data)
 
         patch_response = self.client.patch(
             reverse("api-my-collection-detail", args=[self.user_kit.id]),
             {"condition": "GOOD"},
             format="json",
         )
-        self.assertEqual(patch_response.status_code, 403)
+        self.assertEqual(patch_response.status_code, 404)
+
+    def test_removed_kit_detail_allows_staff_and_moderator(self):
+        self.user_kit.is_hidden_by_moderation = True
+        self.user_kit.hidden_by_moderation_at = timezone.now()
+        self.user_kit.hidden_by_moderation_by = self.moderator
+        self.user_kit.moderation_hidden_reason = "Removed by moderator"
+        self.user_kit.save(
+            update_fields=[
+                "is_hidden_by_moderation",
+                "hidden_by_moderation_at",
+                "hidden_by_moderation_by",
+                "moderation_hidden_reason",
+            ]
+        )
+
+        self.client.force_authenticate(user=self.moderator)
+        moderator_response = self.client.get(self.removed_detail_url)
+        self.assertEqual(moderator_response.status_code, 200)
+
+        self.client.force_authenticate(user=self.staff_user)
+        staff_response = self.client.get(self.removed_detail_url)
+        self.assertEqual(staff_response.status_code, 200)
+
+    def test_removed_kit_detail_denies_anonymous_and_other_user(self):
+        self.user_kit.is_hidden_by_moderation = True
+        self.user_kit.hidden_by_moderation_at = timezone.now()
+        self.user_kit.hidden_by_moderation_by = self.moderator
+        self.user_kit.moderation_hidden_reason = "Removed privately"
+        self.user_kit.save(
+            update_fields=[
+                "is_hidden_by_moderation",
+                "hidden_by_moderation_at",
+                "hidden_by_moderation_by",
+                "moderation_hidden_reason",
+            ]
+        )
+
+        anonymous_response = self.client.get(self.removed_detail_url)
+        self.assertEqual(anonymous_response.status_code, 401)
+
+        self.client.force_authenticate(user=self.viewer)
+        other_user_response = self.client.get(self.removed_detail_url)
+        self.assertEqual(other_user_response.status_code, 403)
 
     def test_pending_filter_excludes_dismissed_group(self):
         self.report_one.status = "dismissed"
@@ -7444,6 +7542,7 @@ class NotificationAPITests(APITestCase):
         self.assertEqual(kit_payload["season"], "2024/2025")
         self.assertEqual(kit_payload["kit_type"], "Home")
         self.assertIsNone(response.data["results"][0]["comment"])
+        self.assertEqual(response.data["results"][0]["target_path"], f"/profile/{self.owner.username}/kits/{self.user_kit.id}")
 
     def test_kit_like_notification_payload_includes_preview_image_if_available(self):
         Notification.objects.create(
@@ -7475,6 +7574,44 @@ class NotificationAPITests(APITestCase):
         self.assertEqual(response.status_code, 200)
         returned_types = {item["type"] for item in response.data["results"]}
         self.assertTrue({"kit_comment", "comment_like", "comment_reply"}.issubset(returned_types))
+
+    def test_moderation_removed_notification_payload_includes_removed_target_and_note(self):
+        self.user_kit.is_hidden_by_moderation = True
+        self.user_kit.hidden_by_moderation_at = timezone.now()
+        self.user_kit.hidden_by_moderation_by = self.actor
+        self.user_kit.moderation_hidden_reason = "Offensive image."
+        self.user_kit.save(
+            update_fields=[
+                "is_hidden_by_moderation",
+                "hidden_by_moderation_at",
+                "hidden_by_moderation_by",
+                "moderation_hidden_reason",
+            ]
+        )
+        Notification.objects.create(
+            recipient=self.owner,
+            actor=self.actor,
+            type="moderation_kit_removed",
+            kit=self.user_kit,
+        )
+        self.client.force_authenticate(user=self.owner)
+
+        response = self.client.get(self.list_url)
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.data["results"][0]
+        self.assertEqual(payload["type"], "moderation_kit_removed")
+        self.assertEqual(payload["target_path"], f"/removed-kits/{self.user_kit.id}")
+        self.assertEqual(payload["moderation_note"], "Offensive image.")
+        self.assertEqual(payload["kit"]["title"], "Notify FC 2024/2025 Home")
+        self.assertNotIn("reporter", payload)
+
+        self.client.force_authenticate(user=self.other_user)
+        other_user_response = self.client.get(self.list_url)
+        self.assertEqual(other_user_response.status_code, 200)
+        self.assertFalse(
+            any(item["type"] == "moderation_kit_removed" for item in other_user_response.data["results"])
+        )
 
     def test_notification_list_pagination_with_limit_and_before_works(self):
         oldest = Notification.objects.create(recipient=self.owner, actor=self.actor, type="follow")

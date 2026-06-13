@@ -63,6 +63,18 @@ def build_unique_kit_type_slug(name):
     return candidate
 
 
+def build_userkit_title(userkit):
+    if userkit is None or getattr(userkit, 'kit', None) is None:
+        return ''
+
+    parts = [
+        getattr(getattr(userkit.kit, 'team', None), 'name', ''),
+        userkit.kit.season,
+        userkit.kit.kit_type,
+    ]
+    return ' '.join(part for part in parts if part).strip()
+
+
 def get_or_create_pending_kit_type(*, legacy_name, created_by=None):
     cleaned_name = ' '.join((legacy_name or '').strip().split())
     if not cleaned_name:
@@ -259,6 +271,7 @@ class AdminKitReportGroupListSerializer(serializers.ModelSerializer):
     pending_report_count = serializers.SerializerMethodField()
     latest_report_at = serializers.SerializerMethodField()
     reasons = serializers.SerializerMethodField()
+    reporters = serializers.SerializerMethodField()
     latest_reports = serializers.SerializerMethodField()
     has_pending_reports = serializers.SerializerMethodField()
 
@@ -277,6 +290,7 @@ class AdminKitReportGroupListSerializer(serializers.ModelSerializer):
             'pending_report_count',
             'latest_report_at',
             'reasons',
+            'reporters',
             'latest_reports',
             'has_pending_reports',
         ]
@@ -310,6 +324,20 @@ class AdminKitReportGroupListSerializer(serializers.ModelSerializer):
             if report.reason not in seen:
                 seen.append(report.reason)
         return seen
+
+    def get_reporters(self, obj):
+        reporters = []
+        seen = set()
+        for report in self._get_reports(obj):
+            reporter = getattr(report, 'reporter', None)
+            if reporter is None or reporter.id in seen:
+                continue
+            seen.add(reporter.id)
+            reporters.append({
+                'id': reporter.id,
+                'username': reporter.username,
+            })
+        return reporters
 
     def get_latest_reports(self, obj):
         reports = self._get_reports(obj)[:3]
@@ -469,11 +497,15 @@ class NotificationKitSerializer(serializers.ModelSerializer):
     team_name = serializers.CharField(source='kit.team.name', read_only=True)
     season = serializers.CharField(source='kit.season', read_only=True)
     kit_type = serializers.CharField(source='kit.kit_type', read_only=True)
+    title = serializers.SerializerMethodField()
     preview_image = serializers.SerializerMethodField()
 
     class Meta:
         model = UserKit
-        fields = ['id', 'owner_username', 'team_name', 'season', 'kit_type', 'preview_image']
+        fields = ['id', 'owner_username', 'team_name', 'season', 'kit_type', 'title', 'preview_image']
+
+    def get_title(self, obj):
+        return build_userkit_title(obj)
 
     def get_preview_image(self, obj):
         preview_image = None
@@ -514,13 +546,80 @@ class NotificationSerializer(serializers.ModelSerializer):
     kit = NotificationKitSerializer(read_only=True)
     comment = NotificationCommentSerializer(read_only=True)
     is_read = serializers.SerializerMethodField()
+    moderation_note = serializers.SerializerMethodField()
+    target_path = serializers.SerializerMethodField()
 
     class Meta:
         model = Notification
-        fields = ['id', 'type', 'actor', 'kit', 'comment', 'created_at', 'read_at', 'is_read']
+        fields = ['id', 'type', 'actor', 'kit', 'comment', 'moderation_note', 'target_path', 'created_at', 'read_at', 'is_read']
 
     def get_is_read(self, obj):
         return obj.read_at is not None
+
+    def get_moderation_note(self, obj):
+        if obj.type != 'moderation_kit_removed' or obj.kit_id is None:
+            return ''
+        return (obj.kit.moderation_hidden_reason or '').strip()
+
+    def get_target_path(self, obj):
+        if obj.type == 'moderation_kit_removed' and obj.kit_id is not None:
+            return f'/removed-kits/{obj.kit_id}'
+
+        if obj.type in {'kit_like', 'kit_comment', 'comment_like', 'comment_reply'} and obj.kit_id is not None:
+            owner_username = getattr(getattr(obj, 'kit', None), 'user', None).username if getattr(getattr(obj, 'kit', None), 'user', None) else ''
+            if owner_username:
+                return f'/profile/{owner_username}/kits/{obj.kit_id}'
+
+        if obj.type == 'follow' and obj.actor_id is not None:
+            return f'/profile/{obj.actor.username}'
+
+        return ''
+
+
+class RemovedKitDetailSerializer(serializers.ModelSerializer):
+    images = serializers.SerializerMethodField()
+    team = serializers.CharField(source='kit.team.name', read_only=True)
+    title = serializers.SerializerMethodField()
+    season = serializers.CharField(source='kit.season', read_only=True)
+    kit_type = serializers.CharField(source='kit.kit_type', read_only=True)
+    removed_at = serializers.DateTimeField(source='hidden_by_moderation_at', read_only=True)
+    removed_by_moderation = serializers.SerializerMethodField()
+    moderation_note = serializers.CharField(source='moderation_hidden_reason', read_only=True)
+    moderation_reason = serializers.CharField(source='moderation_hidden_reason', read_only=True)
+    can_restore = serializers.SerializerMethodField()
+    can_edit = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UserKit
+        fields = [
+            'id',
+            'title',
+            'team',
+            'season',
+            'kit_type',
+            'images',
+            'removed_at',
+            'removed_by_moderation',
+            'moderation_note',
+            'moderation_reason',
+            'can_restore',
+            'can_edit',
+        ]
+
+    def get_title(self, obj):
+        return build_userkit_title(obj)
+
+    def get_images(self, obj):
+        return UserKitImageSerializer(obj.images.all(), many=True, context=self.context).data
+
+    def get_removed_by_moderation(self, obj):
+        return bool(obj.is_hidden_by_moderation)
+
+    def get_can_restore(self, obj):
+        return False
+
+    def get_can_edit(self, obj):
+        return False
 
 
 class CollectionValueSnapshotSerializer(serializers.ModelSerializer):

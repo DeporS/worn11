@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import Swal from "sweetalert2";
 
+import AdminUserLink from "../../components/admin/AdminUserLink";
 import {
 	dismissAdminKitReport,
 	getAdminKitReportDetail,
@@ -30,6 +31,41 @@ const getGroupStatus = (group) => {
 	if (group?.has_pending_reports) return "pending";
 	if (group?.is_hidden_by_moderation) return "resolved";
 	return "dismissed";
+};
+
+const getReporterSummary = (reporters, t) => {
+	const list = Array.isArray(reporters) ? reporters : [];
+	const visibleReporters = list.slice(0, 2);
+	const moreCount = list.length - visibleReporters.length;
+
+	if (visibleReporters.length === 0) {
+		return (
+			<span className="text-muted">
+				{t("moderation.reports.unknownUser")}
+			</span>
+		);
+	}
+
+	return (
+		<>
+			{visibleReporters.map((reporter, index) => (
+				<span key={reporter.id || reporter.username || index} className="admin-report-reporter-chip">
+					{index > 0 ? ", " : ""}
+					<AdminUserLink
+						username={reporter.username}
+						displayName={reporter.username ? `@${reporter.username}` : undefined}
+						fallback={t("moderation.reports.unknownUser")}
+					/>
+				</span>
+			))}
+			{moreCount > 0 ? (
+				<span className="text-muted">
+					{visibleReporters.length > 0 ? ", " : ""}
+					{t("moderation.reports.moreReporters", { count: moreCount })}
+				</span>
+			) : null}
+		</>
+	);
 };
 
 const AdminReportsPage = () => {
@@ -311,7 +347,16 @@ const AdminReportsPage = () => {
 
 										<div className="admin-report-card-meta">
 											<span>
-												<strong>{t("moderation.reports.owner")}:</strong> @{group.owner_username}
+												<strong>{t("moderation.reports.owner")}:</strong>{" "}
+												<AdminUserLink
+													username={group.owner_username}
+													displayName={group.owner_username ? `@${group.owner_username}` : undefined}
+													fallback={t("moderation.reports.unknownUser")}
+												/>
+											</span>
+											<span className="admin-report-card-reporter-summary">
+												<strong>{t("moderation.reports.reportedBy")}:</strong>{" "}
+												{getReporterSummary(group.reporters, t)}
 											</span>
 											<span>
 												<strong>{t("moderation.reports.latestReport")}:</strong>{" "}
@@ -374,7 +419,12 @@ const AdminReportsPage = () => {
 														{(detail.reports || []).map((report) => (
 															<div key={report.id} className="admin-report-detail-item">
 																<div className="admin-report-detail-row">
-																	<strong>{t("moderation.reports.reporter")}:</strong> @{report.reporter?.username}
+																	<strong>{t("moderation.reports.reporter")}:</strong>{" "}
+																	<AdminUserLink
+																		username={report.reporter?.username}
+																		displayName={report.reporter?.username ? `@${report.reporter.username}` : undefined}
+																		fallback={t("moderation.reports.unknownUser")}
+																	/>
 																</div>
 																<div className="admin-report-detail-row">
 																	<strong>{t("moderation.reports.reason")}:</strong> {t(`report.reasons.${report.reason}`)}
@@ -405,7 +455,11 @@ const AdminReportsPage = () => {
 															{detail.moderation_actions.map((action) => (
 																<div key={action.id} className="admin-report-detail-item">
 																	<div className="admin-report-detail-row">
-																		<strong>{action.actor_username}</strong>
+																		<AdminUserLink
+																			username={action.actor_username}
+																			displayName={action.actor_username || undefined}
+																			fallback={t("moderation.reports.unknownUser")}
+																		/>
 																		<span>{t(`moderation.reports.actionType.${action.action_type}`)}</span>
 																		<span>{formatDate(action.created_at, i18n.language)}</span>
 																	</div>

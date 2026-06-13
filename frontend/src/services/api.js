@@ -289,6 +289,11 @@ export const getKitDetail = async (kitId) => {
 	return response.data;
 };
 
+export const getRemovedKitDetail = async (kitId) => {
+	const response = await api.get(`/my/removed-kits/${kitId}/`);
+	return response.data;
+};
+
 export const getKitComments = async (kitId) => {
 	const response = await api.get(`/kits/${kitId}/comments/`);
 	return response.data;

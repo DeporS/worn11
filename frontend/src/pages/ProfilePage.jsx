@@ -86,7 +86,11 @@ const ProfilePage = ({ user }) => {
 			getUserStats(profileUsername),
 		])
 			.then(([kitsData, statsData]) => {
-				setMyKits(kitsData);
+				setMyKits(
+					(Array.isArray(kitsData) ? kitsData : []).filter(
+						(item) => item?.is_hidden_by_moderation !== true,
+					),
+				);
 				applyStatsData(statsData);
 			})
 			.catch((err) => {

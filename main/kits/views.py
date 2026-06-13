@@ -21,7 +21,7 @@ import re
 
 from .models import League, UserKit, UserKitImage, WishlistItem, Kit, KitType, KitTypeAlias, TeamSeasonKitType, KitTypeModerationAction, TeamModerationAction, ShirtVersion, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country, Follow, KitComment, KitCommentLike, KitReport, KitReportModerationAction, Conversation, Message, Notification, CollectionValueSnapshot, calculate_collection_total_value, record_collection_value_snapshot, build_team_slug, normalize_wishlist_kit_type
 from .permissions import IsStaffOrModerator, IsStaffOrSuperuser, can_undo_moderation_action, moderation_action_is_currently_undoable, is_staff_or_moderator
-from .serializers import LeagueSerializer, UserKitSerializer, WishlistItemSerializer, WishlistToggleSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer, CountrySerializer, KitCommentSerializer, KitCommentWriteSerializer, KitReportSerializer, AdminKitReportDecisionSerializer, AdminKitReportGroupListSerializer, AdminKitReportGroupDetailSerializer, ConversationListSerializer, ConversationDetailSerializer, ConversationStartSerializer, MessageSerializer, MessageWriteSerializer, KitSearchSuggestionSerializer, NotificationSerializer, CollectionValueSnapshotSerializer, AdminKitTypeSuggestionSerializer, AdminKitTypeMergeSerializer, TeamModerationListSerializer, TeamModerationMergeSerializer, TeamModerationActionSerializer, KitTypeModerationActionSerializer, ApprovedTeamSeasonKitTypeSerializer, normalize_catalog_name, AdminCountryCreateSerializer, AdminLeagueCreateSerializer, TeamModerationApproveSerializer, TeamModerationDeleteContentSerializer, CatalogCountrySerializer, CatalogCountryWriteSerializer, CatalogLeagueSerializer, CatalogLeagueWriteSerializer, CatalogTeamSerializer, CatalogTeamWriteSerializer
+from .serializers import LeagueSerializer, UserKitSerializer, WishlistItemSerializer, WishlistToggleSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer, CountrySerializer, KitCommentSerializer, KitCommentWriteSerializer, KitReportSerializer, AdminKitReportDecisionSerializer, AdminKitReportGroupListSerializer, AdminKitReportGroupDetailSerializer, ConversationListSerializer, ConversationDetailSerializer, ConversationStartSerializer, MessageSerializer, MessageWriteSerializer, KitSearchSuggestionSerializer, NotificationSerializer, RemovedKitDetailSerializer, CollectionValueSnapshotSerializer, AdminKitTypeSuggestionSerializer, AdminKitTypeMergeSerializer, TeamModerationListSerializer, TeamModerationMergeSerializer, TeamModerationActionSerializer, KitTypeModerationActionSerializer, ApprovedTeamSeasonKitTypeSerializer, normalize_catalog_name, AdminCountryCreateSerializer, AdminLeagueCreateSerializer, TeamModerationApproveSerializer, TeamModerationDeleteContentSerializer, CatalogCountrySerializer, CatalogCountryWriteSerializer, CatalogLeagueSerializer, CatalogLeagueWriteSerializer, CatalogTeamSerializer, CatalogTeamWriteSerializer
 from .team_moderation import TeamModerationConflict, TEAM_MERGE_UNDO_BLOCK_REASON, TEAM_REJECT_UNDO_BLOCK_REASON, approve_team, build_team_reject_block_reason, delete_team_and_associated_content, get_team_usage, merge_teams_safely, normalize_team_name_for_matching, reject_unused_team, team_name_tokens
 
 
@@ -706,14 +706,10 @@ def get_public_user_kits_queryset():
 
 
 def get_profile_collection_queryset(username, viewer):
-    queryset = UserKit.objects.filter(user__username=username)
-    is_owner = bool(
-        viewer
-        and viewer.is_authenticated
-        and viewer.username == username
+    queryset = UserKit.objects.filter(
+        user__username=username,
+        is_hidden_by_moderation=False,
     )
-    if not is_owner:
-        queryset = queryset.filter(is_hidden_by_moderation=False)
 
     return queryset.select_related(
         'kit',
@@ -762,9 +758,6 @@ def get_accessible_comment_or_404(comment_id, viewer):
 
 
 def calculate_collection_total_value_for_viewer(owner, viewer):
-    if viewer and viewer.is_authenticated and viewer == owner:
-        return calculate_collection_total_value(owner)
-
     stats = UserKit.objects.filter(
         user=owner,
         in_the_collection=True,
@@ -833,7 +826,10 @@ class MyCollectionAPI(generics.ListCreateAPIView):
 
     def get_queryset(self):
         # Return only kits of the logged-in user
-        return UserKit.objects.filter(user=self.request.user)\
+        return UserKit.objects.filter(
+            user=self.request.user,
+            is_hidden_by_moderation=False,
+        )\
             .select_related('kit', 'kit__team', 'kit__kit_type_ref', 'shirt_version', 'user', 'user__profile')\
             .annotate(likes_count=Count('likes', distinct=True), comments_count=Count('comments', distinct=True))\
             .order_by('-added_at')
@@ -891,7 +887,10 @@ class MyCollectionDetailAPI(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return UserKit.objects.filter(user=self.request.user)\
+        return UserKit.objects.filter(
+            user=self.request.user,
+            is_hidden_by_moderation=False,
+        )\
             .select_related('kit', 'kit__team', 'kit__kit_type_ref', 'shirt_version')\
             .prefetch_related('images')\
             .annotate(likes_count=Count('likes', distinct=True), comments_count=Count('comments', distinct=True))\
@@ -966,7 +965,7 @@ class PublicUserKitDetailAPI(generics.RetrieveAPIView):
     def get_queryset(self):
         return get_accessible_userkit_queryset(
             self.request.user,
-            include_owner_hidden=True,
+            include_owner_hidden=False,
             include_moderator_hidden=True,
         ).filter(in_the_collection=True).select_related(
             'kit',
@@ -982,6 +981,31 @@ class PublicUserKitDetailAPI(generics.RetrieveAPIView):
             likes_count=Count('likes', distinct=True),
             comments_count=Count('comments', distinct=True),
         )
+
+
+class RemovedUserKitDetailAPI(generics.RetrieveAPIView):
+    serializer_class = RemovedKitDetailSerializer
+    permission_classes = [IsAuthenticated]
+    lookup_url_kwarg = 'userkit_id'
+
+    def get_queryset(self):
+        return UserKit.objects.filter(
+            is_hidden_by_moderation=True,
+        ).select_related(
+            'kit',
+            'kit__team',
+            'user',
+            'hidden_by_moderation_by',
+        ).prefetch_related(
+            'images',
+        )
+
+    def get_object(self):
+        userkit = super().get_object()
+        user = self.request.user
+        if userkit.user_id == user.id or is_staff_or_moderator(user):
+            return userkit
+        raise PermissionDenied('You do not have access to this removed kit.')
 
 
 class ExploreKitsAPI(generics.ListAPIView):
@@ -2410,8 +2434,7 @@ class AdminKitReportRemoveKitAPI(APIView):
                 previous_state=previous_state,
                 resulting_state=snapshot_userkit_moderation_state(userkit),
             )
-            if userkit.user_id != request.user.id:
-                notify_kit_owner_about_moderation_removal(actor=request.user, userkit=userkit)
+            notify_kit_owner_about_moderation_removal(actor=request.user, userkit=userkit)
 
         return Response({
             'kit_id': userkit.id,

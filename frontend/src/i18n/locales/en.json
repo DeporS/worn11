@@ -75,6 +75,8 @@
 		"commentedOnYourKit": "{{username}} commented on your kit",
 		"likedYourComment": "{{username}} liked your comment",
 		"repliedToYourComment": "{{username}} replied to your comment",
+		"moderationKitRemoved": "Your kit “{{kit}}” was removed by moderation.",
+		"moderationNote": "Moderator note: {{note}}",
 		"kitRemovedByModeration": "Your kit was removed by moderation",
 		"unreadLabel": "Unread notifications",
 		"open": "Open notifications",
@@ -578,6 +580,7 @@
 			"reportCount_one": "{{count}} report",
 			"reportCount_other": "{{count}} reports",
 			"owner": "Owner",
+			"reportedBy": "Reported by",
 			"reporter": "Reporter",
 			"reason": "Reason",
 			"latestReport": "Latest report",
@@ -607,10 +610,19 @@
 			"removeNotePlaceholder": "Required note shown in moderation history",
 			"statusLabel": "Status",
 			"noPreview": "No preview image",
+			"moreReporters": "+ {{count}} more",
+			"unknownUser": "Unknown user",
 			"actionType": {
 				"dismiss": "dismissed reports",
 				"remove_kit": "removed kit"
 			}
+		},
+		"removedKit": {
+			"title": "Kit removed by moderation",
+			"description": "This kit is no longer visible on your profile.",
+			"removedAt": "Removed at",
+			"note": "Moderator note",
+			"noAccess": "You do not have access to this removed kit."
 		},
 		"comingSoon": "Coming soon",
 		"recentActions": "Recent moderation actions",
