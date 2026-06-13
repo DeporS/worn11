@@ -27,3 +27,27 @@
     opacity: 0.85;
     transform: translateY(-1px);
 }
+
+.money-input::-webkit-outer-spin-button,
+.money-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.money-input {
+    -moz-appearance: textfield;
+}
+
+.purchase-tracking-upgrade-link {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    color: #2563eb;
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.purchase-tracking-upgrade-link:hover {
+    text-decoration: underline;
+}

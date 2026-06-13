@@ -45,6 +45,14 @@ def is_staff_or_superuser(user):
     return bool(user.is_staff or user.is_superuser)
 
 
+def has_pro_access(user):
+    if not user or not user.is_authenticated:
+        return False
+
+    profile = getattr(user, 'profile', None)
+    return bool(profile and profile.is_pro)
+
+
 def can_view_collection_value(viewer, owner):
     if owner is None:
         return False

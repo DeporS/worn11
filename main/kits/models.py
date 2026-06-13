@@ -4,6 +4,7 @@ from django.contrib.auth.models import User
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
+from django.core.validators import MinValueValidator
 from django.db.models import Q, Sum, Count
 from django.db.models.functions import Lower
 from django.utils import timezone
@@ -657,6 +658,14 @@ class UserKit(models.Model):
         max_digits=10, decimal_places=2, null=True, blank=True,
         help_text="Set your own value for the kit. If empty, the system will calculate it automatically."
     )
+    purchase_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
+    purchase_date = models.DateField(null=True, blank=True)
 
     final_value = models.DecimalField(
         max_digits=10, decimal_places=2, default=0,
@@ -685,6 +694,17 @@ class UserKit(models.Model):
             return AUTOMATED_VALUATION_UNAVAILABLE_MESSAGE
 
         return None
+
+    def get_profit_loss(self):
+        if self.purchase_price is None or self.purchase_price <= 0 or self.final_value is None:
+            return None
+        return (self.final_value - self.purchase_price).quantize(Decimal('0.01'))
+
+    def get_roi_percent(self):
+        profit_loss = self.get_profit_loss()
+        if profit_loss is None or self.purchase_price is None or self.purchase_price <= 0:
+            return None
+        return ((profit_loss / self.purchase_price) * Decimal('100')).quantize(Decimal('0.01'))
 
     def save(self, *args, **kwargs):
         # Calculate final value if manual_value is not set

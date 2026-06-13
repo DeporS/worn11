@@ -91,6 +91,28 @@ export const getMyCollectionValueHistory = async () => {
 	return response.data;
 };
 
+export const exportMyCollection = async ({
+	format = "csv",
+	includeSold = true,
+} = {}) => {
+	const response = await api.get("/me/collection/export/", {
+		params: {
+			format,
+			include_sold: includeSold,
+		},
+		responseType: "blob",
+	});
+
+	const contentDisposition = response.headers["content-disposition"] || "";
+	const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/i);
+	return {
+		blob: response.data,
+		filename:
+			filenameMatch?.[1] ||
+			`worn11-collection.${format === "xlsx" ? "xlsx" : "csv"}`,
+	};
+};
+
 export const getMyWishlist = async () => {
 	const response = await api.get("/me/wishlist/");
 	return response.data;

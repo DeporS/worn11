@@ -1,12 +1,14 @@
 from rest_framework import serializers
+from datetime import timedelta
 from .models import Country, League, Team, Kit, KitType, KitTypeAlias, TeamSeasonKitType, KitTypeModerationAction, TeamModerationAction, UserKit, UserKitImage, WishlistItem, User, Profile, KitComment, KitReport, KitReportModerationAction, Conversation, Message, Notification, CollectionValueSnapshot, ShirtVersion, CANONICAL_WISHLIST_KIT_TYPES, build_team_slug, normalize_wishlist_kit_type
 from django.contrib.auth.models import User
 from dj_rest_auth.serializers import UserDetailsSerializer
 from django.utils.text import slugify
+from django.utils import timezone
 import re
 import json
 from urllib.parse import urlencode
-from .permissions import can_undo_moderation_action, can_view_collection_value, moderation_action_is_currently_undoable, is_staff_or_moderator
+from .permissions import can_undo_moderation_action, can_view_collection_value, has_pro_access, moderation_action_is_currently_undoable, is_staff_or_moderator
 from .team_season_suggestions import ensure_team_season_suggestion
 
 
@@ -1413,6 +1415,7 @@ class UserKitImageSerializer(serializers.ModelSerializer):
 class UserKitSerializer(serializers.ModelSerializer):
     PRIVATE_NOTE_MAX_LENGTH = 2000
     LEGACY_VERSION_CODES = {'REPLICA', 'PLAYER_ISSUE', 'MATCH_WORN'}
+    PURCHASE_TRACKING_PRO_ERROR = 'Purchase tracking is a Pro feature.'
 
     # Read-only nested serializers
     kit = KitSerializer(read_only=True)
@@ -1433,6 +1436,8 @@ class UserKitSerializer(serializers.ModelSerializer):
     valuation_warning = serializers.SerializerMethodField()
     has_private_note = serializers.SerializerMethodField()
     can_view_kit_values = serializers.SerializerMethodField()
+    profit_loss = serializers.SerializerMethodField()
+    roi_percent = serializers.SerializerMethodField()
 
     # Write-only fields for creating/updating UserKit
     team_name = serializers.CharField(write_only=True)
@@ -1460,13 +1465,13 @@ class UserKitSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'user', 
             # Read-only fields
-            'kit', 'images', 'condition_display', 'technology_display', 'shirt_version_id', 'shirt_version_code', 'shirt_version_display', 'shirt_version_manual_value_recommended', 'shirt_version_valuation_note', 'final_value', 'size_display', 'added_at', 'is_owner', 'owner_id', 'owner_username', 'owner_avatar', 'can_view_kit_values', 'is_hidden_by_moderation',
+            'kit', 'images', 'condition_display', 'technology_display', 'shirt_version_id', 'shirt_version_code', 'shirt_version_display', 'shirt_version_manual_value_recommended', 'shirt_version_valuation_note', 'final_value', 'size_display', 'added_at', 'is_owner', 'owner_id', 'owner_username', 'owner_avatar', 'can_view_kit_values', 'is_hidden_by_moderation', 'profit_loss', 'roi_percent',
             # Write-only fields
             'team_name', 'season', 'kit_type', 'kit_type_id', 'kit_type_slug', 'new_images', 'deleted_images', 'images_order',
             # Modifiable fields
-            'condition', 'shirt_technology', 'size', 'for_sale', 'manual_value', 'likes_count', 'comments_count', 'is_liked', 'valuation_warning', 'player_name', 'player_number', 'private_note', 'offer_link', 'in_the_collection', 'has_private_note'
+            'condition', 'shirt_technology', 'size', 'for_sale', 'manual_value', 'purchase_price', 'purchase_date', 'likes_count', 'comments_count', 'is_liked', 'valuation_warning', 'player_name', 'player_number', 'private_note', 'offer_link', 'in_the_collection', 'has_private_note'
         ]
-        read_only_fields = ['user', 'final_value', 'kit', 'images', 'condition_display', 'technology_display', 'shirt_version_id', 'shirt_version_code', 'shirt_version_display', 'shirt_version_manual_value_recommended', 'shirt_version_valuation_note', 'size_display', 'added_at', 'is_owner', 'owner_id', 'owner_username', 'owner_avatar', 'can_view_kit_values', 'is_hidden_by_moderation', 'likes_count', 'comments_count', 'is_liked', 'valuation_warning', 'has_private_note']
+        read_only_fields = ['user', 'final_value', 'kit', 'images', 'condition_display', 'technology_display', 'shirt_version_id', 'shirt_version_code', 'shirt_version_display', 'shirt_version_manual_value_recommended', 'shirt_version_valuation_note', 'size_display', 'added_at', 'is_owner', 'owner_id', 'owner_username', 'owner_avatar', 'can_view_kit_values', 'is_hidden_by_moderation', 'likes_count', 'comments_count', 'is_liked', 'valuation_warning', 'has_private_note', 'profit_loss', 'roi_percent']
         extra_kwargs = {
             'shirt_technology': {'required': False},
         }
@@ -1510,6 +1515,12 @@ class UserKitSerializer(serializers.ModelSerializer):
     def get_has_private_note(self, obj):
         return bool((obj.private_note or '').strip()) if self.get_is_owner(obj) else False
 
+    def get_profit_loss(self, obj):
+        return obj.get_profit_loss() if self.get_is_owner(obj) else None
+
+    def get_roi_percent(self, obj):
+        return obj.get_roi_percent() if self.get_is_owner(obj) else None
+
     def validate_private_note(self, value):
         cleaned = (value or '').strip()
         if len(cleaned) > self.PRIVATE_NOTE_MAX_LENGTH:
@@ -1518,8 +1529,37 @@ class UserKitSerializer(serializers.ModelSerializer):
             )
         return cleaned
 
+    def validate_purchase_price(self, value):
+        if value is not None and value < 0:
+            raise serializers.ValidationError('Purchase price cannot be negative.')
+        return value
+
+    def validate_purchase_date(self, value):
+        if value is None:
+            return value
+
+        latest_allowed_date = timezone.localdate() + timedelta(days=1)
+        if value > latest_allowed_date:
+            raise serializers.ValidationError('Purchase date cannot be in the future.')
+        return value
+
+    def _purchase_tracking_field_errors(self):
+        errors = {}
+        for field in ('purchase_price', 'purchase_date'):
+            raw_value = self.initial_data.get(field, serializers.empty)
+            if raw_value not in (serializers.empty, None, ''):
+                errors[field] = self.PURCHASE_TRACKING_PRO_ERROR
+        return errors
+
     def validate(self, attrs):
         attrs = super().validate(attrs)
+        request = self.context.get('request')
+
+        if not has_pro_access(getattr(request, 'user', None)):
+            purchase_tracking_errors = self._purchase_tracking_field_errors()
+            if purchase_tracking_errors:
+                raise serializers.ValidationError(purchase_tracking_errors)
+
         raw_type_id = attrs.pop('kit_type_id', None)
         raw_type_slug = attrs.pop('kit_type_slug', None)
         legacy_type = attrs.get('kit_type')
@@ -1603,6 +1643,10 @@ class UserKitSerializer(serializers.ModelSerializer):
         if self.get_is_owner(instance):
             representation['has_private_note'] = bool((instance.private_note or '').strip())
         else:
+            representation.pop('purchase_price', None)
+            representation.pop('purchase_date', None)
+            representation.pop('profit_loss', None)
+            representation.pop('roi_percent', None)
             representation.pop('private_note', None)
             representation.pop('has_private_note', None)
 

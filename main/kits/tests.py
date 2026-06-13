@@ -1,8 +1,11 @@
+import csv
 from decimal import Decimal
 from datetime import timedelta
 from importlib import import_module
+from io import BytesIO, StringIO
 from urllib.parse import urlencode
 from unittest.mock import patch
+from zipfile import ZipFile
 
 from django.apps import apps as django_apps
 from django.contrib.auth.models import User
@@ -4427,6 +4430,183 @@ class UserKitPrivateNoteTests(APITestCase):
         self.assertIn("private_note", response.data)
 
 
+class UserKitPurchaseTrackingTests(APITestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.owner = User.objects.create_user(username="purchase_owner", password="password123")
+        self.other_user = User.objects.create_user(username="purchase_other", password="password123")
+        self.team = Team.objects.create(name="Purchase Tracking FC", is_verified=True)
+        self.kit = Kit.objects.create(
+            team=self.team,
+            season="2024/2025",
+            kit_type="Home",
+            estimated_price=Decimal("120.00"),
+        )
+        self.user_kit = UserKit.objects.create(
+            user=self.owner,
+            kit=self.kit,
+            shirt_technology="REPLICA",
+            shirt_version=ShirtVersion.objects.get(code="REPLICA"),
+            condition="VERY_GOOD",
+            size="L",
+            purchase_price=Decimal("80.00"),
+            purchase_date=timezone.localdate() - timedelta(days=10),
+        )
+
+    def authenticate(self, user):
+        self.client.force_authenticate(user=user)
+
+    def create_payload(self, **overrides):
+        payload = {
+            "team_name": self.team.name,
+            "season": "2025/2026",
+            "kit_type": "Away",
+            "size": "L",
+            "condition": "VERY_GOOD",
+            "shirt_version_code": "REPLICA",
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_non_pro_cannot_set_purchase_tracking_on_create(self):
+        self.authenticate(self.owner)
+
+        response = self.client.post(
+            reverse("api-my-collection"),
+            self.create_payload(
+                purchase_price="55.50",
+                purchase_date=str(timezone.localdate()),
+            ),
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["purchase_price"][0], "Purchase tracking is a Pro feature.")
+        self.assertEqual(response.data["purchase_date"][0], "Purchase tracking is a Pro feature.")
+
+    def test_non_pro_cannot_update_purchase_tracking(self):
+        self.authenticate(self.owner)
+
+        response = self.client.patch(
+            reverse("api-my-collection-detail", args=[self.user_kit.id]),
+            {"purchase_price": "99.99"},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["purchase_price"][0], "Purchase tracking is a Pro feature.")
+
+    def test_pro_user_can_set_purchase_tracking_on_create(self):
+        self.owner.profile.is_pro = True
+        self.owner.profile.save(update_fields=["is_pro"])
+        self.authenticate(self.owner)
+
+        response = self.client.post(
+            reverse("api-my-collection"),
+            self.create_payload(
+                purchase_price="55.50",
+                purchase_date=str(timezone.localdate()),
+            ),
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        created = UserKit.objects.get(pk=response.data["id"])
+        self.assertEqual(created.purchase_price, Decimal("55.50"))
+        self.assertEqual(str(created.purchase_date), str(timezone.localdate()))
+        self.assertEqual(response.data["purchase_price"], "55.50")
+        self.assertEqual(response.data["purchase_date"], str(timezone.localdate()))
+
+    def test_pro_user_can_update_purchase_tracking(self):
+        self.owner.profile.is_pro = True
+        self.owner.profile.save(update_fields=["is_pro"])
+        self.authenticate(self.owner)
+
+        response = self.client.patch(
+            reverse("api-my-collection-detail", args=[self.user_kit.id]),
+            {
+                "purchase_price": "90.00",
+                "purchase_date": str(timezone.localdate() - timedelta(days=2)),
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.user_kit.refresh_from_db()
+        self.assertEqual(self.user_kit.purchase_price, Decimal("90.00"))
+        self.assertEqual(str(self.user_kit.purchase_date), str(timezone.localdate() - timedelta(days=2)))
+
+    def test_owner_can_see_purchase_tracking_and_computed_fields(self):
+        self.owner.profile.is_pro = True
+        self.owner.profile.save(update_fields=["is_pro"])
+        self.user_kit.manual_value = Decimal("110.00")
+        self.user_kit.final_value = Decimal("120.00")
+        self.user_kit.save(update_fields=["manual_value", "final_value"])
+        self.authenticate(self.owner)
+
+        response = self.client.get(reverse("api-my-collection-detail", args=[self.user_kit.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["purchase_price"], "80.00")
+        self.assertEqual(response.data["purchase_date"], str(self.user_kit.purchase_date))
+        self.assertEqual(response.data["profit_loss"], Decimal("30.00"))
+        self.assertEqual(response.data["roi_percent"], Decimal("37.50"))
+
+    def test_non_owner_cannot_see_purchase_tracking_even_when_collection_value_is_public(self):
+        self.owner.profile.show_collection_value_publicly = True
+        self.owner.profile.save(update_fields=["show_collection_value_publicly"])
+        self.authenticate(self.other_user)
+
+        profile_response = self.client.get(reverse("api-user-collection", args=[self.owner.username]))
+        self.assertEqual(profile_response.status_code, 200)
+        self.assertNotIn("purchase_price", profile_response.data[0])
+        self.assertNotIn("purchase_date", profile_response.data[0])
+        self.assertNotIn("profit_loss", profile_response.data[0])
+        self.assertNotIn("roi_percent", profile_response.data[0])
+
+        detail_response = self.client.get(reverse("kit-detail", args=[self.user_kit.id]))
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertNotIn("purchase_price", detail_response.data)
+        self.assertNotIn("purchase_date", detail_response.data)
+        self.assertNotIn("profit_loss", detail_response.data)
+        self.assertNotIn("roi_percent", detail_response.data)
+
+    def test_anonymous_public_detail_does_not_show_purchase_tracking(self):
+        response = self.client.get(reverse("kit-detail", args=[self.user_kit.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("purchase_price", response.data)
+        self.assertNotIn("purchase_date", response.data)
+
+    def test_purchase_price_cannot_be_negative(self):
+        self.owner.profile.is_pro = True
+        self.owner.profile.save(update_fields=["is_pro"])
+        self.authenticate(self.owner)
+
+        response = self.client.patch(
+            reverse("api-my-collection-detail", args=[self.user_kit.id]),
+            {"purchase_price": "-1.00"},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("purchase_price", response.data)
+
+    def test_purchase_date_cannot_be_more_than_one_day_in_future(self):
+        self.owner.profile.is_pro = True
+        self.owner.profile.save(update_fields=["is_pro"])
+        self.authenticate(self.owner)
+
+        response = self.client.patch(
+            reverse("api-my-collection-detail", args=[self.user_kit.id]),
+            {"purchase_date": str(timezone.localdate() + timedelta(days=2))},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("purchase_date", response.data)
+
+
 class UserKitValuePrivacyTests(APITestCase):
     def setUp(self):
         self.client = APIClient()
@@ -5363,6 +5543,159 @@ class KitReportAPITests(APITestCase):
         self.assertEqual(response.status_code, 201)
         report = KitReport.objects.get(kit=self.user_kit, reporter=self.user)
         self.assertEqual(report.description, "Something else is wrong here.")
+
+
+class MyCollectionExportAPITests(APITestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.owner = User.objects.create_user(username="export_owner", password="password123")
+        self.other_user = User.objects.create_user(username="export_other", password="password123")
+        self.owner.profile.is_pro = True
+        self.owner.profile.save(update_fields=["is_pro"])
+        self.team = Team.objects.create(name="Export FC", is_verified=True)
+        self.kit = Kit.objects.create(
+            team=self.team,
+            season="2024/2025",
+            kit_type="Home",
+            estimated_price=Decimal("100.00"),
+        )
+        self.export_kit = UserKit.objects.create(
+            user=self.owner,
+            kit=self.kit,
+            shirt_technology="REPLICA",
+            shirt_version=ShirtVersion.objects.get(code="REPLICA"),
+            condition="VERY_GOOD",
+            size="L",
+            manual_value=Decimal("110.00"),
+            purchase_price=Decimal("80.00"),
+            purchase_date=timezone.localdate() - timedelta(days=7),
+            for_sale=True,
+        )
+        self.export_kit.final_value = Decimal("110.00")
+        self.export_kit.save(update_fields=["final_value"])
+        UserKitImage.objects.create(
+            user_kit=self.export_kit,
+            image=SimpleUploadedFile("export.jpg", b"export-image", content_type="image/jpeg"),
+            order=0,
+        )
+        self.sold_kit = UserKit.objects.create(
+            user=self.owner,
+            kit=Kit.objects.create(
+                team=self.team,
+                season="2023/2024",
+                kit_type="Away",
+                estimated_price=Decimal("60.00"),
+            ),
+            shirt_technology="REPLICA",
+            shirt_version=ShirtVersion.objects.get(code="REPLICA"),
+            condition="GOOD",
+            size="M",
+            in_the_collection=False,
+            purchase_price=Decimal("45.00"),
+        )
+        self.sold_kit.final_value = Decimal("60.00")
+        self.sold_kit.save(update_fields=["final_value"])
+        self.hidden_kit = UserKit.objects.create(
+            user=self.owner,
+            kit=Kit.objects.create(
+                team=self.team,
+                season="2022/2023",
+                kit_type="Third",
+                estimated_price=Decimal("50.00"),
+            ),
+            shirt_technology="REPLICA",
+            shirt_version=ShirtVersion.objects.get(code="REPLICA"),
+            condition="GOOD",
+            size="S",
+            is_hidden_by_moderation=True,
+        )
+        self.other_user_kit = UserKit.objects.create(
+            user=self.other_user,
+            kit=Kit.objects.create(
+                team=self.team,
+                season="2021/2022",
+                kit_type="Fourth",
+                estimated_price=Decimal("75.00"),
+            ),
+            shirt_technology="REPLICA",
+            shirt_version=ShirtVersion.objects.get(code="REPLICA"),
+            condition="VERY_GOOD",
+            size="L",
+        )
+        self.url = reverse("my-collection-export")
+
+    def authenticate(self, user):
+        self.client.force_authenticate(user=user)
+
+    def _workbook_xml_strings(self, response):
+        with ZipFile(BytesIO(response.content)) as workbook:
+            workbook_xml = workbook.read("xl/workbook.xml").decode("utf-8")
+            sheet1_xml = workbook.read("xl/worksheets/sheet1.xml").decode("utf-8")
+            sheet2_xml = workbook.read("xl/worksheets/sheet2.xml").decode("utf-8")
+        return workbook_xml, sheet1_xml, sheet2_xml
+
+    def test_anonymous_cannot_export(self):
+        response = self.client.get(self.url, {"format": "csv"})
+        self.assertEqual(response.status_code, 401)
+
+    def test_non_pro_user_gets_forbidden(self):
+        self.other_user.profile.is_pro = False
+        self.other_user.profile.save(update_fields=["is_pro"])
+        self.authenticate(self.other_user)
+        response = self.client.get(self.url, {"format": "csv"})
+        self.assertEqual(response.status_code, 403)
+
+    def test_pro_user_can_export_csv_with_purchase_tracking_and_owner_values(self):
+        self.authenticate(self.owner)
+        response = self.client.get(self.url, {"format": "csv"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "text/csv; charset=utf-8")
+        rows = list(csv.DictReader(StringIO(response.content.decode("utf-8"))))
+        self.assertEqual(len(rows), 2)
+        export_row = next(row for row in rows if row["Season"] == "2024/2025")
+        self.assertEqual(export_row["Team"], "Export FC")
+        self.assertIn("Purchase price", export_row)
+        self.assertEqual(export_row["Manual value"], "110.00")
+        self.assertEqual(export_row["Final value"], "110.00")
+        self.assertEqual(export_row["Purchase price"], "80.00")
+        self.assertEqual(export_row["Purchase date"], str(timezone.localdate() - timedelta(days=7)))
+        self.assertEqual(export_row["Profit / loss"], "30.00")
+        self.assertEqual(export_row["ROI %"], "37.50")
+        self.assertIn("/media/", export_row["Image URLs"])
+        csv_text = response.content.decode("utf-8")
+        self.assertNotIn("2022/2023", csv_text)
+        self.assertNotIn("2021/2022", csv_text)
+
+    def test_export_can_exclude_sold_items(self):
+        self.authenticate(self.owner)
+        response = self.client.get(self.url, {"format": "csv", "include_sold": "false"})
+
+        rows = list(csv.DictReader(StringIO(response.content.decode("utf-8"))))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["Status"], "In collection")
+
+    def test_pro_user_can_export_xlsx_with_collection_and_summary_sheets(self):
+        self.authenticate(self.owner)
+        response = self.client.get(self.url, {"format": "xlsx"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response["Content-Type"],
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        workbook_xml, sheet1_xml, sheet2_xml = self._workbook_xml_strings(response)
+        self.assertIn('name="Collection"', workbook_xml)
+        self.assertIn('name="Summary"', workbook_xml)
+        self.assertIn("Purchase price", sheet1_xml)
+        self.assertIn("ROI %", sheet1_xml)
+        self.assertIn("Total kits", sheet2_xml)
+        self.assertIn("Total collection value", sheet2_xml)
+
+    def test_invalid_format_is_rejected(self):
+        self.authenticate(self.owner)
+        response = self.client.get(self.url, {"format": "pdf"})
+        self.assertEqual(response.status_code, 400)
 
 
 class AdminKitReportModerationAPITests(APITestCase):

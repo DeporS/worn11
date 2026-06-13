@@ -298,7 +298,8 @@
 }
 
 .profile-owner-collection-actions .profile-wishlist-link,
-.profile-owner-collection-actions .profile-add-kit-link {
+.profile-owner-collection-actions .profile-add-kit-link,
+.profile-owner-collection-actions .profile-export-link {
 	width: fit-content;
 }
 
@@ -1390,7 +1391,8 @@
 	}
 
 	.profile-owner-collection-actions .profile-wishlist-link,
-	.profile-owner-collection-actions .profile-add-kit-link {
+	.profile-owner-collection-actions .profile-add-kit-link,
+	.profile-owner-collection-actions .profile-export-link {
 		width: 100%;
 		justify-content: center;
 	}

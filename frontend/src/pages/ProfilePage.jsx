@@ -7,6 +7,7 @@ import {
 	getFollowersList,
 	getFollowingList,
 	startConversation,
+	exportMyCollection,
 } from "../services/api";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import Swal from "sweetalert2";
@@ -270,6 +271,74 @@ const ProfilePage = ({ user }) => {
 		}
 
 		setIsValueHistoryProModalOpen(true);
+	};
+
+	const triggerCollectionDownload = ({ blob, filename }) => {
+		const downloadUrl = window.URL.createObjectURL(blob);
+		const link = document.createElement("a");
+		link.href = downloadUrl;
+		link.download = filename;
+		document.body.appendChild(link);
+		link.click();
+		link.remove();
+		window.URL.revokeObjectURL(downloadUrl);
+	};
+
+	const showExportUpsell = () => {
+		Swal.fire({
+			title: t("profile.exportCollection"),
+			text: t("profile.exportProOnly"),
+			icon: "info",
+			showCancelButton: true,
+			confirmButtonText: t("forms.getPro"),
+			cancelButtonText: t("common.cancel"),
+			confirmButtonColor: "#2563eb",
+		}).then((result) => {
+			if (result.isConfirmed) {
+				navigate("/get-pro");
+			}
+		});
+	};
+
+	const handleExportCollectionClick = async () => {
+		if (!isOwner) {
+			return;
+		}
+
+		if (!profileData?.is_pro) {
+			showExportUpsell();
+			return;
+		}
+
+		const choice = await Swal.fire({
+			title: t("profile.exportCollection"),
+			text: t("profile.exportPreparing"),
+			showCancelButton: true,
+			showDenyButton: true,
+			confirmButtonText: t("profile.exportCsv"),
+			denyButtonText: t("profile.exportExcel"),
+			cancelButtonText: t("common.cancel"),
+			confirmButtonColor: "#2563eb",
+			denyButtonColor: "#0f172a",
+		});
+
+		if (!choice.isConfirmed && !choice.isDenied) {
+			return;
+		}
+
+		const format = choice.isDenied ? "xlsx" : "csv";
+
+		try {
+			const download = await exportMyCollection({ format });
+			triggerCollectionDownload(download);
+		} catch (error) {
+			if (error?.response?.status === 403) {
+				showExportUpsell();
+				return;
+			}
+			console.error("Failed to export collection", error);
+			Swal.fire(t("common.error"), t("profile.exportError"), "error");
+		}
 	};
 
 	const canViewCollectionValue = Boolean(profileData?.can_view_collection_value);
@@ -799,6 +868,18 @@ const ProfilePage = ({ user }) => {
 						<i className="bi bi-bookmark-heart me-2"></i>
 						{t("wishlist.open")}
 					</Link>
+					{isOwner ? (
+						<button
+							type="button"
+							onClick={handleExportCollectionClick}
+							className={`btn rounded-pill px-4 py-2 profile-export-link ${
+								profileData?.is_pro ? "btn-outline-primary" : "btn-outline-secondary"
+							}`}
+						>
+							<i className="bi bi-download me-2"></i>
+							{t("profile.exportCollection")}
+						</button>
+					) : null}
 					{isOwner ? (
 						<Link to="/add-kit" className="add-ghost profile-add-kit-link">
 							{t("profile.addKit")}

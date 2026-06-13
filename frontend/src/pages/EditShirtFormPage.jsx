@@ -8,11 +8,7 @@ import Swal from "sweetalert2";
 
 import "../styles/photos.css";
 
-const LEGACY_VERSION_CODES = new Set([
-	"REPLICA",
-	"PLAYER_ISSUE",
-	"MATCH_WORN",
-]);
+const LEGACY_VERSION_CODES = new Set(["REPLICA", "PLAYER_ISSUE", "MATCH_WORN"]);
 
 const getShirtVersionOptions = (options) => {
 	const shirtVersions = Array.isArray(options.shirt_versions)
@@ -73,6 +69,8 @@ const EditShirtFormPage = () => {
 	const [playerNumber, setPlayerNumber] = useState("");
 	const [privateNote, setPrivateNote] = useState("");
 	const [offerLink, setOfferLink] = useState("");
+	const [purchasePrice, setPurchasePrice] = useState("");
+	const [purchaseDate, setPurchaseDate] = useState("");
 
 	const [inCollection, setInCollection] = useState(true);
 
@@ -123,13 +121,11 @@ const EditShirtFormPage = () => {
 		const fetchOptionsAndUser = async () => {
 			try {
 				const optionsRes = await api.get("/options/");
-					const { sizes, conditions } = optionsRes.data;
+				const { sizes, conditions } = optionsRes.data;
 				setSizeOptions(sizes);
-					setConditionOptions(conditions);
-					setTechnologyOptions(
-						getShirtVersionOptions(optionsRes.data),
-					);
-					setTypeOptions(getKitTypeOptions(optionsRes.data));
+				setConditionOptions(conditions);
+				setTechnologyOptions(getShirtVersionOptions(optionsRes.data));
+				setTypeOptions(getKitTypeOptions(optionsRes.data));
 
 				const userRes = await api.get("/auth/user/");
 				if (userRes.data.profile?.is_pro === true) {
@@ -150,7 +146,7 @@ const EditShirtFormPage = () => {
 
 				setTeamName(kit.team.name);
 				setSeason(kit.season);
-					setKitType(kit.kit_type_display || kit.kit_type);
+				setKitType(kit.kit_type_display || kit.kit_type);
 				setSize(data.size);
 				setCondition(data.condition);
 				setTechnology(data.shirt_version_code || data.shirt_technology);
@@ -162,6 +158,10 @@ const EditShirtFormPage = () => {
 				setPlayerNumber(data.player_number || "");
 				setPrivateNote(data.private_note || "");
 				setOfferLink(data.offer_link || "");
+				setPurchasePrice(
+					data.purchase_price ? data.purchase_price.toString() : "",
+				);
+				setPurchaseDate(data.purchase_date || "");
 				setInCollection(data.in_the_collection);
 
 				if (data.images && Array.isArray(data.images)) {
@@ -214,13 +214,9 @@ const EditShirtFormPage = () => {
 
 			if (totalFiles > MAX_PHOTOS) {
 				if (!isPro) {
-					alert(
-						t("forms.freeUserPhotoLimitAlert"),
-					);
+					alert(t("forms.freeUserPhotoLimitAlert"));
 				} else {
-					alert(
-						t("forms.proPhotoLimitAlert", { count: MAX_PHOTOS }),
-					);
+					alert(t("forms.proPhotoLimitAlert", { count: MAX_PHOTOS }));
 				}
 				return;
 			}
@@ -353,9 +349,7 @@ const EditShirtFormPage = () => {
 			(playerName.trim() !== "" && playerNumber.trim() === "") ||
 			(playerName.trim() === "" && playerNumber.trim() !== "")
 		) {
-			setPrintError(
-				t("forms.printFieldsRequired"),
-			);
+			setPrintError(t("forms.printFieldsRequired"));
 			setLoading(false);
 			return;
 		}
@@ -390,6 +384,10 @@ const EditShirtFormPage = () => {
 		formData.append("private_note", privateNote);
 		formData.append("offer_link", offerLink);
 		formData.append("in_the_collection", inCollection);
+		if (isPro) {
+			formData.append("purchase_price", purchasePrice);
+			formData.append("purchase_date", purchaseDate);
+		}
 
 		// --- COMPLEX IMAGE HANDLING FOR EDIT ---
 		const fullOrder = [];
@@ -412,9 +410,13 @@ const EditShirtFormPage = () => {
 		formData.append("images_order", JSON.stringify(fullOrder));
 
 		try {
-			const response = await api.patch(`/my-collection/${id}/`, formData, {
-				headers: { "Content-Type": "multipart/form-data" },
-			});
+			const response = await api.patch(
+				`/my-collection/${id}/`,
+				formData,
+				{
+					headers: { "Content-Type": "multipart/form-data" },
+				},
+			);
 			if (response?.data?.valuation_warning) {
 				await Swal.fire({
 					icon: "info",
@@ -435,9 +437,13 @@ const EditShirtFormPage = () => {
 		return (
 			<div className="container py-5 text-center">
 				<div className="spinner-border text-primary" role="status">
-					<span className="visually-hidden">{t("common.loading")}</span>
+					<span className="visually-hidden">
+						{t("common.loading")}
+					</span>
 				</div>
-				<p className="mt-2 text-muted">{t("forms.loadingKitDetails")}</p>
+				<p className="mt-2 text-muted">
+					{t("forms.loadingKitDetails")}
+				</p>
 			</div>
 		);
 	}
@@ -705,11 +711,15 @@ const EditShirtFormPage = () => {
 												>
 													{inCollection ? (
 														<span className="text-primary">
-															{t("forms.inMyCollection")}
+															{t(
+																"forms.inMyCollection",
+															)}
 														</span>
 													) : (
 														<span className="text-muted">
-															{t("forms.noLongerOwned")}
+															{t(
+																"forms.noLongerOwned",
+															)}
 														</span>
 													)}
 												</label>
@@ -721,8 +731,12 @@ const EditShirtFormPage = () => {
 												style={{ fontSize: "0.75rem" }}
 											>
 												{inCollection
-													? t("forms.inCollectionHelp")
-													: t("forms.historyOnlyHelp")}
+													? t(
+															"forms.inCollectionHelp",
+														)
+													: t(
+															"forms.historyOnlyHelp",
+														)}
 											</span>
 										</div>
 									</div>
@@ -758,7 +772,9 @@ const EditShirtFormPage = () => {
 														rel="noopener noreferrer"
 														className="pro-link"
 													>
-														{t("forms.needMoreGoPro")}
+														{t(
+															"forms.needMoreGoPro",
+														)}
 													</a>
 												</small>
 											)}
@@ -970,7 +986,9 @@ const EditShirtFormPage = () => {
 																	"10px",
 															}}
 														>
-															{t("forms.addPhoto")}
+															{t(
+																"forms.addPhoto",
+															)}
 														</small>
 													</motion.div>
 												)}
@@ -1011,7 +1029,9 @@ const EditShirtFormPage = () => {
 																			"10px",
 																	}}
 																>
-																	{t("forms.unlockPro")}
+																	{t(
+																		"forms.unlockPro",
+																	)}
 																</small>
 															</motion.div>
 														</motion.a>
@@ -1022,8 +1042,12 @@ const EditShirtFormPage = () => {
 
 									<div className="form-text mt-2">
 										{!isPro
-											? t("forms.photosLimitFree", { count: MAX_PHOTOS })
-											: t("forms.photosLimitPro", { count: MAX_PHOTOS })}
+											? t("forms.photosLimitFree", {
+													count: MAX_PHOTOS,
+												})
+											: t("forms.photosLimitPro", {
+													count: MAX_PHOTOS,
+												})}
 									</div>
 								</div>
 
@@ -1123,24 +1147,28 @@ const EditShirtFormPage = () => {
 															>
 																{opt.label}
 															</option>
-																),
-															)}
-														</select>
-														<label htmlFor="floatingTech">
-															{t("forms.technology")}
-														</label>
-													</div>
+														),
+													)}
+												</select>
+												<label htmlFor="floatingTech">
+													{t("forms.technology")}
+												</label>
+											</div>
 											{/* <div className="form-text">
 												{t("forms.technologyHelp")}
 											</div> */}
 											{selectedShirtVersion?.manualValueRecommended && (
 												<div className="form-text text-warning-emphasis">
-													{t("forms.shirtVersionManualValueRecommended")}
+													{t(
+														"forms.shirtVersionManualValueRecommended",
+													)}
 												</div>
 											)}
 											{selectedShirtVersion?.valuationNote && (
 												<div className="form-text">
-													{selectedShirtVersion.valuationNote}
+													{
+														selectedShirtVersion.valuationNote
+													}
 												</div>
 											)}
 											{/* Error */}
@@ -1303,7 +1331,8 @@ const EditShirtFormPage = () => {
 											<div className="form-floating">
 												<input
 													type="number"
-													className="form-control"
+													className="form-control money-input"
+													inputMode="decimal"
 													id="floatingPrice"
 													placeholder="Auto"
 													value={manualValue}
@@ -1347,10 +1376,14 @@ const EditShirtFormPage = () => {
 													>
 														{forSale ? (
 															<span className="text-success">
-																{t("forms.forSale")}
+																{t(
+																	"forms.forSale",
+																)}
 															</span>
 														) : (
-															t("forms.notForSale")
+															t(
+																"forms.notForSale",
+															)
 														)}
 													</label>
 												</div>
@@ -1361,6 +1394,87 @@ const EditShirtFormPage = () => {
 									<div className="form-text mt-2 small">
 										{t("forms.leaveValueBlank")}
 									</div>
+								</div>
+
+								<div
+									className="mb-4 p-3 rounded border bg-light border-light"
+									style={{ transition: "all 0.3s ease" }}
+								>
+									<div className="d-flex align-items-center gap-2 mb-2 text-muted">
+										<i className="bi bi-receipt fs-5"></i>
+										<span
+											className="fw-bold text-uppercase"
+											style={{
+												fontSize: "0.75rem",
+												letterSpacing: "1px",
+											}}
+										>
+											{t("forms.purchaseTracking")}
+										</span>
+									</div>
+
+									{isPro ? (
+										<div className="row g-2">
+											<div className="col-md-6">
+												<div className="form-floating">
+													<input
+														type="number"
+														step="0.01"
+														min="0"
+														className="form-control money-input"
+														inputMode="decimal"
+														id="floatingPurchasePrice"
+														placeholder="0.00"
+														value={purchasePrice}
+														onChange={(e) =>
+															setPurchasePrice(
+																e.target.value,
+															)
+														}
+													/>
+													<label htmlFor="floatingPurchasePrice">
+														{t("kit.purchasePrice")}
+													</label>
+												</div>
+											</div>
+											<div className="col-md-6">
+												<div className="form-floating">
+													<input
+														type="date"
+														className="form-control"
+														id="floatingPurchaseDate"
+														value={purchaseDate}
+														onChange={(e) =>
+															setPurchaseDate(
+																e.target.value,
+															)
+														}
+													/>
+													<label htmlFor="floatingPurchaseDate">
+														{t(
+															"forms.purchaseDate",
+														)}
+													</label>
+												</div>
+											</div>
+										</div>
+									) : (
+										<div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 p-3 rounded bg-white border">
+											<div>
+												<div className="fw-semibold text-dark small mb-1">
+													{t(
+														"kit.purchaseTrackingProOnly",
+													)}
+												</div>
+												{/* <a
+													href="/get-pro"
+													className="purchase-tracking-upgrade-link"
+												>
+													{t("kit.upgradeToPro")}
+												</a> */}
+											</div>
+										</div>
+									)}
 								</div>
 
 								{/* Offer Link */}
@@ -1433,18 +1547,24 @@ const EditShirtFormPage = () => {
 										<textarea
 											className="form-control"
 											id="floatingPrivateNote"
-											placeholder={t("forms.privateNotePlaceholder")}
+											placeholder={t(
+												"forms.privateNotePlaceholder",
+											)}
 											style={{ minHeight: "140px" }}
 											maxLength={2000}
 											value={privateNote}
-											onChange={(e) => setPrivateNote(e.target.value)}
+											onChange={(e) =>
+												setPrivateNote(e.target.value)
+											}
 										/>
 										<label htmlFor="floatingPrivateNote">
 											{t("forms.privateNote")}
 										</label>
 									</div>
 									<div className="form-text mt-2 small d-flex justify-content-between gap-3">
-										<span>{t("forms.privateNoteHelp")}</span>
+										<span>
+											{t("forms.privateNoteHelp")}
+										</span>
 										<span>{privateNote.length}/2000</span>
 									</div>
 								</div>

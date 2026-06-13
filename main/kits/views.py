@@ -6,21 +6,29 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.parsers import JSONParser
 from rest_framework.exceptions import ValidationError, PermissionDenied
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.negotiation import DefaultContentNegotiation
 
 from rest_framework.throttling import ScopedRateThrottle
 from .throttles import KitCreationThrottle
 
+import csv
+from datetime import date, datetime
+from decimal import Decimal, ROUND_HALF_UP
+from io import BytesIO
+from xml.sax.saxutils import escape
+from zipfile import ZIP_DEFLATED, ZipFile
 from django.shortcuts import get_object_or_404
 from django.db import IntegrityError, transaction
 from django.db.models import Sum, Count, Exists, OuterRef, Value, BooleanField, Prefetch, Q, Subquery, Max
 from django.contrib.auth.models import User
+from django.http import HttpResponse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from urllib.parse import urlencode
 import re
 
 from .models import League, UserKit, UserKitImage, WishlistItem, Kit, KitType, KitTypeAlias, TeamSeasonKitType, KitTypeModerationAction, TeamModerationAction, ShirtVersion, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country, Follow, KitComment, KitCommentLike, KitReport, KitReportModerationAction, Conversation, Message, Notification, CollectionValueSnapshot, calculate_collection_total_value, record_collection_value_snapshot, build_team_slug, normalize_wishlist_kit_type
-from .permissions import IsStaffOrModerator, IsStaffOrSuperuser, can_undo_moderation_action, moderation_action_is_currently_undoable, is_staff_or_moderator
+from .permissions import IsStaffOrModerator, IsStaffOrSuperuser, can_undo_moderation_action, has_pro_access, moderation_action_is_currently_undoable, is_staff_or_moderator
 from .serializers import LeagueSerializer, UserKitSerializer, WishlistItemSerializer, WishlistToggleSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer, CountrySerializer, KitCommentSerializer, KitCommentWriteSerializer, KitReportSerializer, AdminKitReportDecisionSerializer, AdminKitReportGroupListSerializer, AdminKitReportGroupDetailSerializer, ConversationListSerializer, ConversationDetailSerializer, ConversationStartSerializer, MessageSerializer, MessageWriteSerializer, KitSearchSuggestionSerializer, NotificationSerializer, RemovedKitDetailSerializer, CollectionValueSnapshotSerializer, AdminKitTypeSuggestionSerializer, AdminKitTypeMergeSerializer, TeamModerationListSerializer, TeamModerationMergeSerializer, TeamModerationActionSerializer, KitTypeModerationActionSerializer, ApprovedTeamSeasonKitTypeSerializer, normalize_catalog_name, AdminCountryCreateSerializer, AdminLeagueCreateSerializer, TeamModerationApproveSerializer, TeamModerationDeleteContentSerializer, CatalogCountrySerializer, CatalogCountryWriteSerializer, CatalogLeagueSerializer, CatalogLeagueWriteSerializer, CatalogTeamSerializer, CatalogTeamWriteSerializer
 from .team_moderation import TeamModerationConflict, TEAM_MERGE_UNDO_BLOCK_REASON, TEAM_REJECT_UNDO_BLOCK_REASON, approve_team, build_team_reject_block_reason, delete_team_and_associated_content, get_team_usage, merge_teams_safely, normalize_team_name_for_matching, reject_unused_team, team_name_tokens
 
@@ -803,6 +811,394 @@ def get_following_feed_queryset(user):
         '-id',
     )
 
+
+def get_owner_export_queryset(user, *, include_sold=True):
+    queryset = UserKit.objects.filter(
+        user=user,
+        is_hidden_by_moderation=False,
+    ).select_related(
+        'kit',
+        'kit__team',
+        'kit__kit_type_ref',
+        'shirt_version',
+        'user',
+    ).prefetch_related(
+        'images',
+    ).order_by('-added_at', '-id')
+
+    if not include_sold:
+        queryset = queryset.filter(in_the_collection=True)
+
+    return queryset
+
+
+def _build_public_profile_url(request, userkit):
+    path = f"/profile/{userkit.user.username}?highlightKit={userkit.id}"
+    try:
+        return request.build_absolute_uri(path)
+    except Exception:
+        return path
+
+
+def _build_image_urls(request, userkit):
+    image_urls = []
+    for image in userkit.images.all():
+        if not image.image:
+            continue
+        try:
+            image_urls.append(request.build_absolute_uri(image.image.url))
+        except Exception:
+            image_urls.append(image.image.url)
+    return '; '.join(image_urls)
+
+
+def _build_export_status(userkit):
+    return 'In collection' if userkit.in_the_collection else 'Sold'
+
+
+def _build_export_row(request, userkit):
+    estimated_value = getattr(getattr(userkit, 'kit', None), 'estimated_price', None)
+    final_value = userkit.final_value
+    purchase_price = userkit.purchase_price
+    profit_loss = userkit.get_profit_loss()
+    roi_percent = userkit.get_roi_percent()
+
+    return {
+        'Team': userkit.kit.team.name,
+        'Season': userkit.kit.season,
+        'Kit type': userkit.kit.kit_type,
+        'Size': userkit.get_size_display(),
+        'Condition': userkit.get_condition_display(),
+        'Technology': userkit.get_shirt_technology_display(),
+        'Status': _build_export_status(userkit),
+        'In collection': 'Yes' if userkit.in_the_collection else 'No',
+        'For sale': 'Yes' if userkit.for_sale else 'No',
+        'External URL': userkit.offer_link or '',
+        'Estimated value': estimated_value,
+        'Manual value': userkit.manual_value,
+        'Final value': final_value,
+        'Purchase price': purchase_price,
+        'Purchase date': userkit.purchase_date,
+        'Profit / loss': profit_loss,
+        'ROI %': roi_percent,
+        'Added at': timezone.localtime(userkit.added_at),
+        'Public URL': _build_public_profile_url(request, userkit),
+        'Image URLs': _build_image_urls(request, userkit),
+    }
+
+
+EXPORT_COLUMNS = [
+    'Team',
+    'Season',
+    'Kit type',
+    'Size',
+    'Condition',
+    'Technology',
+    'Status',
+    'In collection',
+    'For sale',
+    'External URL',
+    'Estimated value',
+    'Manual value',
+    'Final value',
+    'Purchase price',
+    'Purchase date',
+    'Profit / loss',
+    'ROI %',
+    'Added at',
+    'Public URL',
+    'Image URLs',
+]
+
+EXPORT_DECIMAL_ZERO = Decimal('0.00')
+EXPORT_PERCENT_ZERO = Decimal('0.00')
+
+
+def _parse_bool_query_param(value, default=True):
+    if value is None:
+        return default
+    return str(value).strip().lower() not in {'0', 'false', 'no', 'off'}
+
+
+def _sum_decimal(values):
+    total = Decimal('0')
+    for value in values:
+        if value is not None:
+            total += Decimal(value)
+    return total.quantize(Decimal('0.01'))
+
+
+def _average_decimal(values):
+    normalized = [Decimal(value) for value in values if value is not None]
+    if not normalized:
+        return None
+    return (sum(normalized) / Decimal(len(normalized))).quantize(
+        Decimal('0.01'),
+        rounding=ROUND_HALF_UP,
+    )
+
+
+def _build_export_summary(userkits):
+    owned_kits = [item for item in userkits if item.in_the_collection]
+    sold_kits = [item for item in userkits if not item.in_the_collection]
+    owned_final_values = [item.final_value for item in owned_kits if item.final_value is not None]
+    purchase_prices = [item.purchase_price for item in userkits if item.purchase_price is not None]
+    profit_losses = [item.get_profit_loss() for item in userkits if item.get_profit_loss() is not None]
+    roi_values = [item.get_roi_percent() for item in userkits if item.get_roi_percent() is not None]
+
+    return [
+        ('Total kits', len(userkits)),
+        ('Owned kits', len(owned_kits)),
+        ('Sold / no longer owned kits', len(sold_kits)),
+        ('Total collection value', _sum_decimal(owned_final_values) if owned_final_values else EXPORT_DECIMAL_ZERO),
+        ('Average kit value', _average_decimal(owned_final_values) if owned_final_values else None),
+        ('Total purchase cost', _sum_decimal(purchase_prices) if purchase_prices else EXPORT_DECIMAL_ZERO),
+        ('Total profit/loss', _sum_decimal(profit_losses) if profit_losses else EXPORT_DECIMAL_ZERO),
+        ('Average ROI %', _average_decimal(roi_values) if roi_values else None),
+    ]
+
+
+def _excel_serial_for_date(value):
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        delta = value - datetime(1899, 12, 30, tzinfo=value.tzinfo)
+        return delta.days + (delta.seconds + delta.microseconds / 1_000_000) / 86400
+    if isinstance(value, date):
+        return (value - date(1899, 12, 30)).days
+    return None
+
+
+def _xml_cell(value, *, style_index=0):
+    style_attr = f' s="{style_index}"' if style_index else ''
+    if value in (None, ''):
+        return f'<c{style_attr}/>'
+    if isinstance(value, bool):
+        return f'<c{style_attr} t="b"><v>{1 if value else 0}</v></c>'
+    if isinstance(value, (int, float, Decimal)):
+        return f'<c{style_attr}><v>{value}</v></c>'
+    if isinstance(value, datetime):
+        serial = _excel_serial_for_date(value)
+        return f'<c{style_attr}><v>{serial}</v></c>'
+    if isinstance(value, date):
+        serial = _excel_serial_for_date(value)
+        return f'<c{style_attr}><v>{serial}</v></c>'
+    return f'<c{style_attr} t="inlineStr"><is><t>{escape(str(value))}</t></is></c>'
+
+
+def _build_sheet_xml(rows, *, column_widths=None, freeze_top_row=False, autofilter_range=None):
+    cols_xml = ''
+    if column_widths:
+        cols_xml = '<cols>' + ''.join(
+            f'<col min="{index}" max="{index}" width="{width}" customWidth="1"/>'
+            for index, width in enumerate(column_widths, start=1)
+        ) + '</cols>'
+
+    sheet_views = '<sheetViews><sheetView workbookViewId="0"/>'
+    if freeze_top_row:
+        sheet_views = (
+            '<sheetViews>'
+            '<sheetView workbookViewId="0">'
+            '<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>'
+            '<selection pane="bottomLeft" activeCell="A2" sqref="A2"/>'
+            '</sheetView>'
+            '</sheetViews>'
+        )
+    else:
+        sheet_views += '</sheetViews>'
+
+    row_xml = []
+    for row_index, row in enumerate(rows, start=1):
+        cells_xml = ''.join(
+            _xml_cell(cell.get('value'), style_index=cell.get('style', 0))
+            for cell in row
+        )
+        row_xml.append(f'<row r="{row_index}">{cells_xml}</row>')
+
+    autofilter_xml = (
+        f'<autoFilter ref="{autofilter_range}"/>'
+        if autofilter_range
+        else ''
+    )
+
+    return (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        f'{sheet_views}'
+        f'{cols_xml}'
+        f'<sheetData>{"".join(row_xml)}</sheetData>'
+        f'{autofilter_xml}'
+        '</worksheet>'
+    )
+
+
+def _build_collection_sheet_rows(export_rows):
+    rows = [[{'value': column, 'style': 1} for column in EXPORT_COLUMNS]]
+
+    for row in export_rows:
+        rows.append([
+            {'value': row['Team']},
+            {'value': row['Season']},
+            {'value': row['Kit type']},
+            {'value': row['Size']},
+            {'value': row['Condition']},
+            {'value': row['Technology']},
+            {'value': row['Status']},
+            {'value': row['In collection']},
+            {'value': row['For sale']},
+            {'value': row['External URL']},
+            {'value': row['Estimated value'], 'style': 4 if row['Estimated value'] is not None else 0},
+            {'value': row['Manual value'], 'style': 4 if row['Manual value'] is not None else 0},
+            {'value': row['Final value'], 'style': 4 if row['Final value'] is not None else 0},
+            {'value': row['Purchase price'], 'style': 4 if row['Purchase price'] is not None else 0},
+            {'value': row['Purchase date'], 'style': 2 if row['Purchase date'] is not None else 0},
+            {'value': row['Profit / loss'], 'style': 4 if row['Profit / loss'] is not None else 0},
+            {'value': row['ROI %'], 'style': 5 if row['ROI %'] is not None else 0},
+            {'value': row['Added at'], 'style': 3 if row['Added at'] is not None else 0},
+            {'value': row['Public URL']},
+            {'value': row['Image URLs']},
+        ])
+    return rows
+
+
+def _build_summary_sheet_rows(summary_rows):
+    rows = [[{'value': 'Metric', 'style': 1}, {'value': 'Value', 'style': 1}]]
+    currency_metrics = {'Total collection value', 'Average kit value', 'Total purchase cost', 'Total profit/loss'}
+    percent_metrics = {'Average ROI %'}
+
+    for label, value in summary_rows:
+        style = 0
+        if label in currency_metrics and value is not None:
+            style = 4
+        elif label in percent_metrics and value is not None:
+            style = 5
+        rows.append([
+            {'value': label},
+            {'value': value, 'style': style},
+        ])
+    return rows
+
+
+def build_collection_export_xlsx(export_rows, summary_rows):
+    collection_rows = _build_collection_sheet_rows(export_rows)
+    summary_sheet_rows = _build_summary_sheet_rows(summary_rows)
+
+    collection_sheet_xml = _build_sheet_xml(
+        collection_rows,
+        column_widths=[22, 14, 20, 10, 16, 18, 14, 14, 12, 34, 16, 16, 16, 16, 14, 16, 12, 22, 34, 42],
+        freeze_top_row=True,
+        autofilter_range=f'A1:T{max(len(collection_rows), 1)}',
+    )
+    summary_sheet_xml = _build_sheet_xml(
+        summary_sheet_rows,
+        column_widths=[28, 18],
+    )
+
+    workbook_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        '<sheets>'
+        '<sheet name="Collection" sheetId="1" r:id="rId1"/>'
+        '<sheet name="Summary" sheetId="2" r:id="rId2"/>'
+        '</sheets>'
+        '</workbook>'
+    )
+    workbook_rels_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
+        '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>'
+        '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+        '</Relationships>'
+    )
+    root_rels_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+        '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>'
+        '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>'
+        '</Relationships>'
+    )
+    content_types_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        '<Default Extension="xml" ContentType="application/xml"/>'
+        '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+        '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+        '<Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+        '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+        '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>'
+        '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>'
+        '</Types>'
+    )
+    styles_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        '<numFmts count="4">'
+        '<numFmt numFmtId="164" formatCode="yyyy-mm-dd"/>'
+        '<numFmt numFmtId="165" formatCode="yyyy-mm-dd hh:mm"/>'
+        '<numFmt numFmtId="166" formatCode="$#,##0.00"/>'
+        '<numFmt numFmtId="167" formatCode="0.00%"/>'
+        '</numFmts>'
+        '<fonts count="2">'
+        '<font><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/></font>'
+        '<font><b/><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/></font>'
+        '</fonts>'
+        '<fills count="3">'
+        '<fill><patternFill patternType="none"/></fill>'
+        '<fill><patternFill patternType="gray125"/></fill>'
+        '<fill><patternFill patternType="solid"><fgColor rgb="FFEFF4FF"/><bgColor indexed="64"/></patternFill></fill>'
+        '</fills>'
+        '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
+        '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+        '<cellXfs count="6">'
+        '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
+        '<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/>'
+        '<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
+        '<xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
+        '<xf numFmtId="166" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
+        '<xf numFmtId="167" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
+        '</cellXfs>'
+        '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
+        '</styleSheet>'
+    )
+    created_at = timezone.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+    core_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" '
+        'xmlns:dc="http://purl.org/dc/elements/1.1/" '
+        'xmlns:dcterms="http://purl.org/dc/terms/" '
+        'xmlns:dcmitype="http://purl.org/dc/dcmitype/" '
+        'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">'
+        '<dc:creator>Worn11</dc:creator>'
+        '<cp:lastModifiedBy>Worn11</cp:lastModifiedBy>'
+        f'<dcterms:created xsi:type="dcterms:W3CDTF">{created_at}</dcterms:created>'
+        f'<dcterms:modified xsi:type="dcterms:W3CDTF">{created_at}</dcterms:modified>'
+        '</cp:coreProperties>'
+    )
+    app_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" '
+        'xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">'
+        '<Application>Worn11</Application>'
+        '</Properties>'
+    )
+
+    output = BytesIO()
+    with ZipFile(output, 'w', ZIP_DEFLATED) as workbook:
+        workbook.writestr('[Content_Types].xml', content_types_xml)
+        workbook.writestr('_rels/.rels', root_rels_xml)
+        workbook.writestr('docProps/core.xml', core_xml)
+        workbook.writestr('docProps/app.xml', app_xml)
+        workbook.writestr('xl/workbook.xml', workbook_xml)
+        workbook.writestr('xl/_rels/workbook.xml.rels', workbook_rels_xml)
+        workbook.writestr('xl/styles.xml', styles_xml)
+        workbook.writestr('xl/worksheets/sheet1.xml', collection_sheet_xml)
+        workbook.writestr('xl/worksheets/sheet2.xml', summary_sheet_xml)
+    return output.getvalue()
+
 # Current user
 class CurrentUserAPI(generics.RetrieveAPIView):
     serializer_class = UserSerializer
@@ -816,6 +1212,12 @@ class StandardResultsSetPagination(PageNumberPagination):
     page_size = 12
     page_size_query_param = 'page_size'
     max_page_size = 100
+
+
+class IgnoreFormatOverrideContentNegotiation(DefaultContentNegotiation):
+    def select_renderer(self, request, renderers, format_suffix=None):
+        renderer = renderers[0]
+        return renderer, renderer.media_type
 
 # Endpoint: My collection + adding new kits
 class MyCollectionAPI(generics.ListCreateAPIView):
@@ -2529,6 +2931,45 @@ class MyCollectionValueHistoryAPI(APIView):
         snapshots = request.user.collection_value_snapshots.order_by('created_at', 'id')
         serializer = CollectionValueSnapshotSerializer(snapshots, many=True)
         return Response({'results': serializer.data})
+
+
+class MyCollectionExportAPI(APIView):
+    permission_classes = [IsAuthenticated]
+    content_negotiation_class = IgnoreFormatOverrideContentNegotiation
+
+    def get(self, request):
+        if not has_pro_access(request.user):
+            raise PermissionDenied('Collection export is available for Pro members only.')
+
+        export_format = (request.query_params.get('format') or 'csv').strip().lower()
+        if export_format not in {'csv', 'xlsx'}:
+            raise ValidationError({'format': 'Unsupported export format. Use csv or xlsx.'})
+
+        include_sold = _parse_bool_query_param(
+            request.query_params.get('include_sold'),
+            default=True,
+        )
+        userkits = list(get_owner_export_queryset(request.user, include_sold=include_sold))
+        export_rows = [_build_export_row(request, userkit) for userkit in userkits]
+        summary_rows = _build_export_summary(userkits)
+        export_date = timezone.localdate().isoformat()
+
+        if export_format == 'csv':
+            response = HttpResponse(content_type='text/csv; charset=utf-8')
+            response['Content-Disposition'] = f'attachment; filename="worn11-collection-{export_date}.csv"'
+            writer = csv.DictWriter(response, fieldnames=EXPORT_COLUMNS)
+            writer.writeheader()
+            for row in export_rows:
+                writer.writerow(row)
+            return response
+
+        xlsx_bytes = build_collection_export_xlsx(export_rows, summary_rows)
+        response = HttpResponse(
+            xlsx_bytes,
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response['Content-Disposition'] = f'attachment; filename="worn11-collection-{export_date}.xlsx"'
+        return response
 
 
 class WishlistListMixin:

@@ -177,7 +177,18 @@
 		"followerCount_one": "{{count}} obserwujący",
 		"followerCount_other": "{{count}} obserwujących",
 		"kitsCount_one": "{{count}} koszulka",
-		"kitsCount_other": "{{count}} koszulek"
+		"kitsCount_other": "{{count}} koszulek",
+		"exportCollection": "Eksportuj kolekcję",
+		"exportCsv": "Pobierz CSV",
+		"exportExcel": "Pobierz Excel",
+		"exportProOnly": "Eksport kolekcji jest funkcją Pro.",
+		"exportError": "Nie udało się wyeksportować kolekcji.",
+		"exportPreparing": "Wybierz format pliku."
+	},
+	"kit": {
+		"purchasePrice": "Cena zakupu ($)",
+		"purchaseTrackingProOnly": "Śledzenie zakupu jest funkcją Pro.",
+		"upgradeToPro": "Przejdź na Pro"
 	},
 	"collectionValue": {
 		"title": "Wartość kolekcji w czasie",
@@ -322,6 +333,9 @@
 		"privateNoteLabel": "Prywatna notatka (Opcjonalnie)",
 		"privateNotePlaceholder": "Dodaj szczegóły zakupu, wspomnienia, sprzedawcę, uwagi o rozmiarze...",
 		"privateNoteHelp": "Tylko Ty widzisz tę notatkę.",
+		"purchaseTracking": "Śledzenie zakupu",
+		"purchaseDate": "Data zakupu",
+		"getPro": "Przejdź na Pro",
 		"offerLinkOptional": "Link do oferty (Opcjonalnie)",
 		"offerLinkLabel": "Pełny URL do miejsca, gdzie koszulka jest wystawiona",
 		"uploading": "Wysyłanie...",

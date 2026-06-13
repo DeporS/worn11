@@ -177,7 +177,18 @@
 		"followerCount_one": "{{count}} follower",
 		"followerCount_other": "{{count}} followers",
 		"kitsCount_one": "{{count}} kit",
-		"kitsCount_other": "{{count}} kits"
+		"kitsCount_other": "{{count}} kits",
+		"exportCollection": "Export collection",
+		"exportCsv": "Download CSV",
+		"exportExcel": "Download Excel",
+		"exportProOnly": "Collection export is a Pro feature.",
+		"exportError": "Could not export your collection.",
+		"exportPreparing": "Choose a file format."
+	},
+	"kit": {
+		"purchasePrice": "Purchase price ($)",
+		"purchaseTrackingProOnly": "Purchase tracking is a Pro feature.",
+		"upgradeToPro": "Upgrade to Pro"
 	},
 	"collectionValue": {
 		"title": "Collection value over time",
@@ -322,6 +333,9 @@
 		"privateNoteLabel": "Private note (Optional)",
 		"privateNotePlaceholder": "Add purchase details, memories, seller info, sizing notes...",
 		"privateNoteHelp": "Only you can see this note.",
+		"purchaseTracking": "Purchase tracking",
+		"purchaseDate": "Purchase date",
+		"getPro": "Get Pro",
 		"offerLinkOptional": "Offer link (Optional)",
 		"offerLinkLabel": "Full URL to where your kit is listed",
 		"uploading": "Uploading...",
