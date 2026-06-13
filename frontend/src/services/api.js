@@ -353,6 +353,36 @@ export const undoAdminKitTypeModerationAction = async (id) => {
 	return response.data;
 };
 
+export const getAdminKitReports = async ({
+	status = "pending",
+	reason,
+	query,
+} = {}) => {
+	const response = await api.get("/admin/reports/", {
+		params: {
+			status,
+			...(reason ? { reason } : {}),
+			...(query ? { q: query } : {}),
+		},
+	});
+	return response.data;
+};
+
+export const getAdminKitReportDetail = async (id) => {
+	const response = await api.get(`/admin/reports/${id}/`);
+	return response.data;
+};
+
+export const dismissAdminKitReport = async (id, payload) => {
+	const response = await api.post(`/admin/reports/${id}/dismiss/`, payload);
+	return response.data;
+};
+
+export const removeAdminReportedKit = async (id, payload) => {
+	const response = await api.post(`/admin/reports/${id}/remove-kit/`, payload);
+	return response.data;
+};
+
 export const getUnverifiedTeams = async () => {
 	const response = await api.get("/admin/teams/unverified/");
 	return response.data;

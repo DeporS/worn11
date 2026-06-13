@@ -26,6 +26,8 @@ const EditProfilePage = ({ user, setUser }) => {
 	const [websiteLink, setWebsiteLink] = useState(null);
 	const [name, setName] = useState("");
 	const [surname, setSurname] = useState("");
+	const [showCollectionValuePublicly, setShowCollectionValuePublicly] =
+		useState(false);
 
 	// Country selection states
 	const [countriesList, setCountriesList] = useState([]); // Countries fetched from backend
@@ -77,6 +79,9 @@ const EditProfilePage = ({ user, setUser }) => {
 			setWebsiteLink(user.profile.website_link || "");
 			setName(user.profile.name || "");
 			setSurname(user.profile.surname || "");
+			setShowCollectionValuePublicly(
+				Boolean(user.profile.show_collection_value_publicly),
+			);
 
 			// Set country on mount if exists
 			if (user.profile.country_info) {
@@ -169,11 +174,12 @@ const EditProfilePage = ({ user, setUser }) => {
 		}
 
 		if (value) {
-			const filtered = countriesList.filter((c) =>
-				c.name.toLowerCase().includes(value.toLowerCase()) ||
-				localizeCountryName(c.name, t)
-					.toLowerCase()
-					.includes(value.toLowerCase()),
+			const filtered = countriesList.filter(
+				(c) =>
+					c.name.toLowerCase().includes(value.toLowerCase()) ||
+					localizeCountryName(c.name, t)
+						.toLowerCase()
+						.includes(value.toLowerCase()),
 			);
 			setFilteredCountries(filtered);
 		} else {
@@ -216,6 +222,10 @@ const EditProfilePage = ({ user, setUser }) => {
 		formData.append("website_link", websiteLink || "");
 		formData.append("name", name || "");
 		formData.append("surname", surname || "");
+		formData.append(
+			"show_collection_value_publicly",
+			showCollectionValuePublicly ? "true" : "false",
+		);
 
 		// Append country ID if selected, otherwise send empty to clear it
 		if (selectedCountry) {
@@ -255,7 +265,10 @@ const EditProfilePage = ({ user, setUser }) => {
 		}
 	};
 
-	if (!user) return <div className="text-center mt-5">{t("editProfile.loading")}</div>;
+	if (!user)
+		return (
+			<div className="text-center mt-5">{t("editProfile.loading")}</div>
+		);
 
 	return (
 		<div className="container py-5">
@@ -288,7 +301,9 @@ const EditProfilePage = ({ user, setUser }) => {
 										{previewUrl ? (
 											<img
 												src={previewUrl}
-												alt={t("editProfile.avatarPreview")}
+												alt={t(
+													"editProfile.avatarPreview",
+												)}
 												className="w-100 h-100"
 												style={{ objectFit: "cover" }}
 											/>
@@ -322,7 +337,9 @@ const EditProfilePage = ({ user, setUser }) => {
 												className="badge bg-secondary ms-2"
 												style={{ fontSize: "0.7rem" }}
 											>
-												{t("editProfile.changeLimitReached")}
+												{t(
+													"editProfile.changeLimitReached",
+												)}
 											</span>
 										)}
 									</label>
@@ -378,7 +395,9 @@ const EditProfilePage = ({ user, setUser }) => {
 											<input
 												type="text"
 												className="form-control border-start-0"
-												placeholder={t("editProfile.name")}
+												placeholder={t(
+													"editProfile.name",
+												)}
 												value={name}
 												onChange={(e) =>
 													setName(e.target.value)
@@ -397,7 +416,9 @@ const EditProfilePage = ({ user, setUser }) => {
 											<input
 												type="text"
 												className="form-control border-start-0"
-												placeholder={t("editProfile.surname")}
+												placeholder={t(
+													"editProfile.surname",
+												)}
 												value={surname}
 												onChange={(e) =>
 													setSurname(e.target.value)
@@ -434,7 +455,9 @@ const EditProfilePage = ({ user, setUser }) => {
 										<input
 											type="text"
 											className="form-control border-start-0 ps-2"
-											placeholder={t("editProfile.countryPlaceholder")}
+											placeholder={t(
+												"editProfile.countryPlaceholder",
+											)}
 											value={countrySearch}
 											onChange={handleCountrySearch}
 											// Show list on input click:
@@ -449,7 +472,10 @@ const EditProfilePage = ({ user, setUser }) => {
 																		.includes(
 																			countrySearch.toLowerCase(),
 																		) ||
-																	localizeCountryName(c.name, t)
+																	localizeCountryName(
+																		c.name,
+																		t,
+																	)
 																		.toLowerCase()
 																		.includes(
 																			countrySearch.toLowerCase(),
@@ -507,7 +533,10 @@ const EditProfilePage = ({ user, setUser }) => {
 																	}}
 																/>
 															)}
-															{localizeCountryName(c.name, t)}
+															{localizeCountryName(
+																c.name,
+																t,
+															)}
 														</button>
 													</li>
 												))}
@@ -515,15 +544,54 @@ const EditProfilePage = ({ user, setUser }) => {
 										)}
 								</div>
 
-								{/* BIO SECTION */}
+								{/* COLLECTION */}
 								<div className="mb-3">
+									<label className="form-label fw-bold">
+										{t("editProfile.collection")}
+									</label>
+									<div className="mb-4">
+										<div className="form-check form-switch">
+											<input
+												id="show-collection-value-publicly"
+												type="checkbox"
+												className="form-check-input"
+												checked={
+													showCollectionValuePublicly
+												}
+												onChange={(e) =>
+													setShowCollectionValuePublicly(
+														e.target.checked,
+													)
+												}
+											/>
+											<label
+												className="form-check-label small fw-bold text-muted"
+												htmlFor="show-collection-value-publicly"
+											>
+												{t(
+													"editProfile.showCollectionValuePublicly",
+												)}
+											</label>
+										</div>
+										<div className="form-text">
+											{t(
+												"editProfile.showCollectionValuePubliclyHelp",
+											)}
+										</div>
+									</div>
+								</div>
+
+								{/* BIO SECTION */}
+								<div className="mb-4">
 									<label className="form-label fw-bold">
 										{t("editProfile.bio")}
 									</label>
 									<textarea
 										className="form-control"
 										rows="4"
-										placeholder={t("editProfile.bioPlaceholder")}
+										placeholder={t(
+											"editProfile.bioPlaceholder",
+										)}
 										value={bio}
 										onChange={(e) => setBio(e.target.value)}
 										maxLength={500}
@@ -534,7 +602,9 @@ const EditProfilePage = ({ user, setUser }) => {
 								</div>
 
 								{/* --- CONTACT INFO --- */}
-								<h5 className="fw-bold mb-3">{t("editProfile.contactInfo")}</h5>
+								<h5 className="fw-bold mb-3">
+									{t("editProfile.contactInfo")}
+								</h5>
 								<div className="mb-3">
 									<label className="form-label small fw-bold text-muted">
 										{t("editProfile.publicContactEmail")}
@@ -554,7 +624,9 @@ const EditProfilePage = ({ user, setUser }) => {
 										/>
 									</div>
 									<div className="form-text">
-										{t("editProfile.publicContactEmailHelp")}
+										{t(
+											"editProfile.publicContactEmailHelp",
+										)}
 									</div>
 								</div>
 
@@ -579,7 +651,7 @@ const EditProfilePage = ({ user, setUser }) => {
 								</div>
 
 								{/* --- SOCIAL MEDIA --- */}
-								<h5 className="fw-bold mb-3 mt-4">
+								<h5 className="fw-bold mb-3 mt-5">
 									{t("editProfile.socialMedia")}
 								</h5>
 								<div className="row">
@@ -631,7 +703,7 @@ const EditProfilePage = ({ user, setUser }) => {
 								</div>
 
 								{/* --- MARKETPLACES --- */}
-								<h5 className="fw-bold mb-3 mt-4">
+								<h5 className="fw-bold mb-3 mt-5">
 									{t("editProfile.marketplaces")}
 								</h5>
 

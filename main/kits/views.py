@@ -12,16 +12,16 @@ from .throttles import KitCreationThrottle
 
 from django.shortcuts import get_object_or_404
 from django.db import IntegrityError, transaction
-from django.db.models import Sum, Count, Exists, OuterRef, Value, BooleanField, Prefetch, Q, Subquery
+from django.db.models import Sum, Count, Exists, OuterRef, Value, BooleanField, Prefetch, Q, Subquery, Max
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from urllib.parse import urlencode
 import re
 
-from .models import League, UserKit, UserKitImage, WishlistItem, Kit, KitType, KitTypeAlias, TeamSeasonKitType, KitTypeModerationAction, TeamModerationAction, ShirtVersion, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country, Follow, KitComment, KitCommentLike, KitReport, Conversation, Message, Notification, CollectionValueSnapshot, calculate_collection_total_value, record_collection_value_snapshot, build_team_slug, normalize_wishlist_kit_type
+from .models import League, UserKit, UserKitImage, WishlistItem, Kit, KitType, KitTypeAlias, TeamSeasonKitType, KitTypeModerationAction, TeamModerationAction, ShirtVersion, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country, Follow, KitComment, KitCommentLike, KitReport, KitReportModerationAction, Conversation, Message, Notification, CollectionValueSnapshot, calculate_collection_total_value, record_collection_value_snapshot, build_team_slug, normalize_wishlist_kit_type
 from .permissions import IsStaffOrModerator, IsStaffOrSuperuser, can_undo_moderation_action, moderation_action_is_currently_undoable, is_staff_or_moderator
-from .serializers import LeagueSerializer, UserKitSerializer, WishlistItemSerializer, WishlistToggleSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer, CountrySerializer, KitCommentSerializer, KitCommentWriteSerializer, KitReportSerializer, ConversationListSerializer, ConversationDetailSerializer, ConversationStartSerializer, MessageSerializer, MessageWriteSerializer, KitSearchSuggestionSerializer, NotificationSerializer, CollectionValueSnapshotSerializer, AdminKitTypeSuggestionSerializer, AdminKitTypeMergeSerializer, TeamModerationListSerializer, TeamModerationMergeSerializer, TeamModerationActionSerializer, KitTypeModerationActionSerializer, ApprovedTeamSeasonKitTypeSerializer, normalize_catalog_name, AdminCountryCreateSerializer, AdminLeagueCreateSerializer, TeamModerationApproveSerializer, TeamModerationDeleteContentSerializer, CatalogCountrySerializer, CatalogCountryWriteSerializer, CatalogLeagueSerializer, CatalogLeagueWriteSerializer, CatalogTeamSerializer, CatalogTeamWriteSerializer
+from .serializers import LeagueSerializer, UserKitSerializer, WishlistItemSerializer, WishlistToggleSerializer, KitSerializer, TeamSerializer, UserSearchSerializer, ProfileSerializer, UserSerializer, UserStatsProfileSerializer, CountrySerializer, KitCommentSerializer, KitCommentWriteSerializer, KitReportSerializer, AdminKitReportDecisionSerializer, AdminKitReportGroupListSerializer, AdminKitReportGroupDetailSerializer, ConversationListSerializer, ConversationDetailSerializer, ConversationStartSerializer, MessageSerializer, MessageWriteSerializer, KitSearchSuggestionSerializer, NotificationSerializer, CollectionValueSnapshotSerializer, AdminKitTypeSuggestionSerializer, AdminKitTypeMergeSerializer, TeamModerationListSerializer, TeamModerationMergeSerializer, TeamModerationActionSerializer, KitTypeModerationActionSerializer, ApprovedTeamSeasonKitTypeSerializer, normalize_catalog_name, AdminCountryCreateSerializer, AdminLeagueCreateSerializer, TeamModerationApproveSerializer, TeamModerationDeleteContentSerializer, CatalogCountrySerializer, CatalogCountryWriteSerializer, CatalogLeagueSerializer, CatalogLeagueWriteSerializer, CatalogTeamSerializer, CatalogTeamWriteSerializer
 from .team_moderation import TeamModerationConflict, TEAM_MERGE_UNDO_BLOCK_REASON, TEAM_REJECT_UNDO_BLOCK_REASON, approve_team, build_team_reject_block_reason, delete_team_and_associated_content, get_team_usage, merge_teams_safely, normalize_team_name_for_matching, reject_unused_team, team_name_tokens
 
 
@@ -549,6 +549,8 @@ def build_wishlist_preview_map(items, request=None):
         type_filter |= get_wishlist_type_filter(requested_type)
 
     matching_kits = UserKit.objects.filter(
+        is_hidden_by_moderation=False,
+        in_the_collection=True,
         kit__team_id__in=team_ids,
         kit__season__in=seasons,
     ).filter(
@@ -686,18 +688,94 @@ def get_user_notifications_queryset(user):
 def get_public_user_kits_queryset():
     return UserKit.objects.filter(
         in_the_collection=True,
+        is_hidden_by_moderation=False,
     ).select_related(
         'kit',
         'kit__team',
         'kit__kit_type_ref',
         'shirt_version',
         'user',
+        'user__profile',
     ).prefetch_related(
         'images',
         'likes',
     ).annotate(
         likes_count=Count('likes', distinct=True),
         comments_count=Count('comments', distinct=True),
+    )
+
+
+def get_profile_collection_queryset(username, viewer):
+    queryset = UserKit.objects.filter(user__username=username)
+    is_owner = bool(
+        viewer
+        and viewer.is_authenticated
+        and viewer.username == username
+    )
+    if not is_owner:
+        queryset = queryset.filter(is_hidden_by_moderation=False)
+
+    return queryset.select_related(
+        'kit',
+        'kit__team',
+        'kit__kit_type_ref',
+        'shirt_version',
+        'user',
+        'user__profile',
+    ).prefetch_related(
+        'images',
+    ).annotate(
+        likes_count=Count('likes', distinct=True),
+        comments_count=Count('comments', distinct=True),
+    ).order_by('-added_at')
+
+
+def get_accessible_userkit_queryset(viewer, *, include_owner_hidden=False, include_moderator_hidden=False):
+    queryset = UserKit.objects.all()
+
+    if include_moderator_hidden and is_staff_or_moderator(viewer):
+        return queryset
+
+    visibility_filter = Q(is_hidden_by_moderation=False)
+    if include_owner_hidden and viewer and viewer.is_authenticated:
+        visibility_filter |= Q(user=viewer)
+
+    return queryset.filter(visibility_filter)
+
+
+def get_accessible_userkit_or_404(userkit_id, viewer, *, include_owner_hidden=False, include_moderator_hidden=False):
+    queryset = get_accessible_userkit_queryset(
+        viewer,
+        include_owner_hidden=include_owner_hidden,
+        include_moderator_hidden=include_moderator_hidden,
+    )
+    return get_object_or_404(queryset, pk=userkit_id)
+
+
+def get_accessible_comment_or_404(comment_id, viewer):
+    comment = get_object_or_404(KitComment.objects.select_related('kit', 'user'), pk=comment_id)
+    if comment.kit.is_hidden_by_moderation:
+        is_owner = bool(viewer and viewer.is_authenticated and comment.kit.user_id == viewer.id)
+        if not is_owner and not is_staff_or_moderator(viewer):
+            raise PermissionDenied('Kit not found.')
+    return comment
+
+
+def calculate_collection_total_value_for_viewer(owner, viewer):
+    if viewer and viewer.is_authenticated and viewer == owner:
+        return calculate_collection_total_value(owner)
+
+    stats = UserKit.objects.filter(
+        user=owner,
+        in_the_collection=True,
+        is_hidden_by_moderation=False,
+    ).aggregate(
+        total_value=Sum('final_value'),
+        kits_count=Count('id'),
+    )
+    return (
+        stats['total_value'] or 0,
+        stats['kits_count'] or 0,
     )
 
 
@@ -711,6 +789,7 @@ def get_following_feed_queryset(user):
 
     return UserKit.objects.filter(
         user_id__in=followed_user_ids,
+        is_hidden_by_moderation=False,
     ).exclude(
         user=user,
     ).select_related(
@@ -755,7 +834,7 @@ class MyCollectionAPI(generics.ListCreateAPIView):
     def get_queryset(self):
         # Return only kits of the logged-in user
         return UserKit.objects.filter(user=self.request.user)\
-            .select_related('kit', 'kit__team', 'kit__kit_type_ref', 'shirt_version')\
+            .select_related('kit', 'kit__team', 'kit__kit_type_ref', 'shirt_version', 'user', 'user__profile')\
             .annotate(likes_count=Count('likes', distinct=True), comments_count=Count('comments', distinct=True))\
             .order_by('-added_at')
     
@@ -820,6 +899,9 @@ class MyCollectionDetailAPI(generics.RetrieveUpdateDestroyAPIView):
 
     def perform_update(self, serializer):
         instance = self.get_object()
+        if instance.is_hidden_by_moderation:
+            raise PermissionDenied('This kit was removed by moderation and can no longer be edited.')
+
         previous_state = {
             'manual_value': instance.manual_value,
             'in_the_collection': instance.in_the_collection,
@@ -872,12 +954,7 @@ class UserCollectionAPI(generics.ListAPIView):
         # Get username from URL
         username = self.kwargs['username']
 
-        # Return kits of the specified user
-        return UserKit.objects.filter(user__username=username)\
-            .select_related('kit', 'kit__team', 'kit__kit_type_ref', 'shirt_version')\
-            .prefetch_related('images')\
-            .annotate(likes_count=Count('likes', distinct=True), comments_count=Count('comments', distinct=True))\
-            .order_by('-added_at')
+        return get_profile_collection_queryset(username, self.request.user)
 
 
 # Endpoint: Public detail for a specific user kit
@@ -887,7 +964,24 @@ class PublicUserKitDetailAPI(generics.RetrieveAPIView):
     lookup_url_kwarg = 'userkit_id'
 
     def get_queryset(self):
-        return get_public_user_kits_queryset()
+        return get_accessible_userkit_queryset(
+            self.request.user,
+            include_owner_hidden=True,
+            include_moderator_hidden=True,
+        ).filter(in_the_collection=True).select_related(
+            'kit',
+            'kit__team',
+            'kit__kit_type_ref',
+            'shirt_version',
+            'user',
+            'user__profile',
+        ).prefetch_related(
+            'images',
+            'likes',
+        ).annotate(
+            likes_count=Count('likes', distinct=True),
+            comments_count=Count('comments', distinct=True),
+        )
 
 
 class ExploreKitsAPI(generics.ListAPIView):
@@ -2117,6 +2211,216 @@ class AdminKitTypeModerationActionUndoAPI(APIView):
             'undone_by_username': request.user.username,
         })
 
+
+def snapshot_userkit_moderation_state(userkit):
+    return {
+        'is_hidden_by_moderation': userkit.is_hidden_by_moderation,
+        'hidden_by_moderation_at': userkit.hidden_by_moderation_at.isoformat() if userkit.hidden_by_moderation_at else None,
+        'hidden_by_moderation_by_id': userkit.hidden_by_moderation_by_id,
+    }
+
+
+def build_kit_report_moderation_action(*, actor, action_type, userkit, reports, note, previous_state, resulting_state):
+    return KitReportModerationAction.objects.create(
+        actor=actor,
+        action_type=action_type,
+        userkit=userkit,
+        kit_owner=userkit.user,
+        report_ids=[report.id for report in reports],
+        previous_state=previous_state,
+        resulting_state=resulting_state,
+        note=note,
+    )
+
+
+def notify_kit_owner_about_moderation_removal(*, actor, userkit):
+    Notification.objects.create(
+        recipient=userkit.user,
+        actor=actor,
+        type='moderation_kit_removed',
+        kit=userkit,
+    )
+
+
+def get_admin_report_group_queryset(*, status_filter='pending', reason=None, search_query=''):
+    queryset = UserKit.objects.filter(reports__isnull=False)
+
+    if status_filter != 'all':
+        queryset = queryset.filter(reports__status=status_filter)
+    if reason:
+        queryset = queryset.filter(reports__reason=reason)
+    if search_query:
+        queryset = queryset.filter(
+            Q(kit__team__name__icontains=search_query) |
+            Q(kit__season__icontains=search_query) |
+            Q(kit__kit_type__icontains=search_query) |
+            Q(user__username__icontains=search_query) |
+            Q(reports__reporter__username__icontains=search_query) |
+            Q(reports__description__icontains=search_query)
+        )
+
+    reports_queryset = KitReport.objects.select_related('reporter', 'resolved_by').order_by('-created_at', '-id')
+    actions_queryset = KitReportModerationAction.objects.select_related('actor').order_by('-created_at', '-id')
+
+    return queryset.select_related(
+        'kit',
+        'kit__team',
+        'user',
+    ).prefetch_related(
+        Prefetch('images', queryset=UserKitImage.objects.order_by('order', 'created_at', 'id')),
+        Prefetch('reports', queryset=reports_queryset, to_attr='prefetched_report_group_reports'),
+        Prefetch('report_moderation_actions', queryset=actions_queryset, to_attr='prefetched_report_moderation_actions'),
+    ).annotate(
+        latest_report_sort=Max('reports__created_at'),
+    ).distinct().order_by('-latest_report_sort', '-id')
+
+
+class AdminKitReportsAPI(APIView):
+    permission_classes = [IsAuthenticated, IsStaffOrModerator]
+
+    def get(self, request):
+        status_filter = (request.query_params.get('status') or 'pending').strip().lower()
+        if status_filter not in {'pending', 'resolved', 'dismissed', 'all'}:
+            return Response({'status': ['Status filter is invalid.']}, status=status.HTTP_400_BAD_REQUEST)
+
+        reason = (request.query_params.get('reason') or '').strip()
+        search_query = (request.query_params.get('q') or '').strip()
+
+        queryset = get_admin_report_group_queryset(
+            status_filter=status_filter,
+            reason=reason or None,
+            search_query=search_query,
+        )
+        serializer = AdminKitReportGroupListSerializer(queryset, many=True, context={'request': request})
+        return Response(serializer.data)
+
+
+class AdminKitReportDetailAPI(APIView):
+    permission_classes = [IsAuthenticated, IsStaffOrModerator]
+
+    def get(self, request, pk):
+        userkit = get_object_or_404(
+            get_admin_report_group_queryset(status_filter='all'),
+            pk=pk,
+        )
+        serializer = AdminKitReportGroupDetailSerializer(userkit, context={'request': request})
+        return Response(serializer.data)
+
+
+class AdminKitReportDismissAPI(APIView):
+    permission_classes = [IsAuthenticated, IsStaffOrModerator]
+
+    def post(self, request, pk):
+        serializer = AdminKitReportDecisionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        note = serializer.validated_data.get('note', '')
+
+        with transaction.atomic():
+            userkit = get_object_or_404(
+                UserKit.objects.select_for_update().select_related('user'),
+                pk=pk,
+            )
+            pending_reports = list(
+                KitReport.objects.select_for_update().filter(
+                    kit=userkit,
+                    status='pending',
+                ).order_by('-created_at', '-id')
+            )
+            if not pending_reports:
+                return Response({'detail': 'No pending reports found for this kit.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            now = timezone.now()
+            KitReport.objects.filter(id__in=[report.id for report in pending_reports]).update(
+                status='dismissed',
+                resolved_by=request.user,
+                resolution_note=note,
+                updated_at=now,
+            )
+
+            action = build_kit_report_moderation_action(
+                actor=request.user,
+                action_type=KitReportModerationAction.ACTION_DISMISS,
+                userkit=userkit,
+                reports=pending_reports,
+                note=note,
+                previous_state=snapshot_userkit_moderation_state(userkit),
+                resulting_state=snapshot_userkit_moderation_state(userkit),
+            )
+
+        return Response({
+            'kit_id': userkit.id,
+            'status': 'dismissed',
+            'dismissed_report_count': len(pending_reports),
+            'moderation_action_id': action.id,
+        })
+
+
+class AdminKitReportRemoveKitAPI(APIView):
+    permission_classes = [IsAuthenticated, IsStaffOrModerator]
+
+    def post(self, request, pk):
+        serializer = AdminKitReportDecisionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        note = serializer.validated_data.get('note', '')
+        if not note:
+            return Response({'note': ['Moderator note is required.']}, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            userkit = get_object_or_404(
+                UserKit.objects.select_for_update().select_related('user'),
+                pk=pk,
+            )
+            pending_reports = list(
+                KitReport.objects.select_for_update().filter(
+                    kit=userkit,
+                    status='pending',
+                ).order_by('-created_at', '-id')
+            )
+            if not pending_reports:
+                return Response({'detail': 'No pending reports found for this kit.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            previous_state = snapshot_userkit_moderation_state(userkit)
+            now = timezone.now()
+            userkit.is_hidden_by_moderation = True
+            userkit.hidden_by_moderation_at = now
+            userkit.hidden_by_moderation_by = request.user
+            userkit.moderation_hidden_reason = note
+            userkit.save(
+                update_fields=[
+                    'is_hidden_by_moderation',
+                    'hidden_by_moderation_at',
+                    'hidden_by_moderation_by',
+                    'moderation_hidden_reason',
+                ]
+            )
+
+            KitReport.objects.filter(id__in=[report.id for report in pending_reports]).update(
+                status='resolved',
+                resolved_by=request.user,
+                resolution_note=note,
+                updated_at=now,
+            )
+
+            action = build_kit_report_moderation_action(
+                actor=request.user,
+                action_type=KitReportModerationAction.ACTION_REMOVE_KIT,
+                userkit=userkit,
+                reports=pending_reports,
+                note=note,
+                previous_state=previous_state,
+                resulting_state=snapshot_userkit_moderation_state(userkit),
+            )
+            if userkit.user_id != request.user.id:
+                notify_kit_owner_about_moderation_removal(actor=request.user, userkit=userkit)
+
+        return Response({
+            'kit_id': userkit.id,
+            'status': 'resolved',
+            'hidden': True,
+            'resolved_report_count': len(pending_reports),
+            'moderation_action_id': action.id,
+        })
+
 # Endpoint: User collection statistics
 class UserCollectionStatsAPI(APIView):
     permission_classes = [permissions.AllowAny]
@@ -2126,7 +2430,7 @@ class UserCollectionStatsAPI(APIView):
         user = get_object_or_404(User, username=username)
 
         # Calculate stats
-        total_value, total_kits = calculate_collection_total_value(user)
+        total_value, total_kits = calculate_collection_total_value_for_viewer(user, request.user)
 
         # 3Assign calculated data to the user object
         user.total_value = total_value
@@ -2357,6 +2661,7 @@ class KitSearchSuggestionsAPI(generics.ListAPIView):
             type_filter |= get_upload_preview_type_filter(suggested_type)
 
         preview_images = UserKitImage.objects.filter(
+            user_kit__is_hidden_by_moderation=False,
             user_kit__kit__team_id__in=team_ids,
             user_kit__kit__season__in=seasons,
         ).filter(
@@ -2691,7 +2996,12 @@ class ToggleLikeAPI(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk):
-        kit = get_object_or_404(UserKit, pk=pk)
+        kit = get_accessible_userkit_or_404(
+            pk,
+            request.user,
+            include_owner_hidden=True,
+            include_moderator_hidden=True,
+        )
         user = request.user
 
         liked = False
@@ -2725,7 +3035,12 @@ class KitCommentsAPI(APIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request, userkit_id):
-        kit = get_object_or_404(UserKit, pk=userkit_id)
+        kit = get_accessible_userkit_or_404(
+            userkit_id,
+            request.user,
+            include_owner_hidden=True,
+            include_moderator_hidden=True,
+        )
         comments = get_top_level_comments_queryset(request.user).filter(kit=kit)
         serializer = KitCommentSerializer(comments, many=True, context={'request': request})
         return Response(serializer.data)
@@ -2734,7 +3049,12 @@ class KitCommentsAPI(APIView):
         if not request.user.is_authenticated:
             return Response(status=status.HTTP_401_UNAUTHORIZED)
 
-        kit = get_object_or_404(UserKit, pk=userkit_id)
+        kit = get_accessible_userkit_or_404(
+            userkit_id,
+            request.user,
+            include_owner_hidden=True,
+            include_moderator_hidden=True,
+        )
         serializer = KitCommentWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -2755,7 +3075,7 @@ class ReplyToCommentAPI(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, comment_id):
-        target_comment = get_object_or_404(KitComment, pk=comment_id)
+        target_comment = get_accessible_comment_or_404(comment_id, request.user)
         thread_parent = target_comment.parent if target_comment.parent_id is not None else target_comment
 
         serializer = KitCommentWriteSerializer(data=request.data)
@@ -2783,7 +3103,7 @@ class ToggleCommentLikeAPI(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, comment_id):
-        comment = get_object_or_404(KitComment, pk=comment_id)
+        comment = get_accessible_comment_or_404(comment_id, request.user)
         like = KitCommentLike.objects.filter(comment=comment, user=request.user).first()
 
         liked = False
@@ -2821,7 +3141,7 @@ class DeleteCommentAPI(APIView):
     permission_classes = [IsAuthenticated]
 
     def delete(self, request, comment_id):
-        comment = get_object_or_404(KitComment, pk=comment_id)
+        comment = get_accessible_comment_or_404(comment_id, request.user)
         can_delete = comment.user_id == request.user.id or is_staff_or_moderator(request.user)
 
         if not can_delete:
@@ -2838,7 +3158,12 @@ class ReportKitAPI(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, userkit_id):
-        kit = get_object_or_404(UserKit, pk=userkit_id)
+        kit = get_accessible_userkit_or_404(
+            userkit_id,
+            request.user,
+            include_owner_hidden=True,
+            include_moderator_hidden=True,
+        )
 
         if KitReport.objects.filter(kit=kit, reporter=request.user).exists():
             return Response(
@@ -2879,7 +3204,10 @@ class TopKitsByTeamAPI(generics.ListAPIView):
     def get_queryset(self):
         team_id = self.kwargs['team_id']
         
-        return UserKit.objects.filter(kit__team_id=team_id)\
+        return UserKit.objects.filter(
+            kit__team_id=team_id,
+            is_hidden_by_moderation=False,
+        )\
             .select_related('kit', 'kit__team', 'kit__kit_type_ref', 'shirt_version', 'user')\
             .prefetch_related('images', 'likes')\
             .annotate(likes_count=Count('likes', distinct=True), comments_count=Count('comments', distinct=True))\
@@ -2972,7 +3300,10 @@ class KitVariantsAPI(generics.ListAPIView):
         if team is None:
             return UserKit.objects.none()
 
-        queryset = UserKit.objects.filter(kit__team=team)
+        queryset = UserKit.objects.filter(
+            kit__team=team,
+            is_hidden_by_moderation=False,
+        )
 
         if season:
             queryset = queryset.filter(kit__season=season)
@@ -3028,7 +3359,11 @@ class KitLikersListAPI(generics.ListAPIView):
         kit_id = self.kwargs['kit_id']
 
         # Get IDs of users who liked this kit
-        liker_ids = UserKit.objects.filter(id=kit_id).values_list('likes__id', flat=True)
+        liker_ids = get_accessible_userkit_queryset(
+            self.request.user,
+            include_owner_hidden=True,
+            include_moderator_hidden=True,
+        ).filter(id=kit_id).values_list('likes__id', flat=True)
 
         # Return the list of those users, annotating with their kit count
         return User.objects.filter(id__in=liker_ids).annotate(

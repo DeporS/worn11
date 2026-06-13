@@ -187,6 +187,231 @@
 	gap: 1.25rem;
 }
 
+.admin-reports-toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+}
+
+.admin-reports-tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+}
+
+.admin-reports-tab {
+	border: 1px solid rgba(13, 110, 253, 0.18);
+	background: rgba(13, 110, 253, 0.05);
+	color: #495057;
+	border-radius: 999px;
+	padding: 0.45rem 0.9rem;
+	font-weight: 700;
+}
+
+.admin-reports-tab-active {
+	background: rgba(13, 110, 253, 0.12);
+	color: #0d6efd;
+	border-color: rgba(13, 110, 253, 0.36);
+}
+
+.admin-reports-search {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+	align-items: center;
+}
+
+.admin-reports-search .form-control {
+	min-width: min(320px, 80vw);
+}
+
+.admin-reports-list {
+	display: grid;
+	gap: 1rem;
+}
+
+.admin-report-card {
+	border: 1px solid rgba(0, 0, 0, 0.08);
+	border-radius: 1rem;
+	background: #fff;
+	box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+	overflow: hidden;
+}
+
+.admin-report-card-main {
+	display: grid;
+	grid-template-columns: 140px minmax(0, 1fr);
+	gap: 1rem;
+	padding: 1rem;
+}
+
+.admin-report-card-preview {
+	background: #f8f9fa;
+	border-radius: 0.9rem;
+	overflow: hidden;
+	min-height: 160px;
+}
+
+.admin-report-card-image {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	display: block;
+}
+
+.admin-report-card-content {
+	display: flex;
+	flex-direction: column;
+	gap: 0.75rem;
+	min-width: 0;
+}
+
+.admin-report-card-top {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 0.75rem;
+}
+
+.admin-report-card-title {
+	margin: 0;
+	font-size: 1.1rem;
+	font-weight: 700;
+	color: #212529;
+}
+
+.admin-report-card-subtitle {
+	color: #6c757d;
+	font-size: 0.95rem;
+}
+
+.admin-report-card-meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.9rem;
+	font-size: 0.9rem;
+	color: #6c757d;
+}
+
+.admin-report-card-reasons {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.45rem;
+}
+
+.admin-report-reason-pill,
+.admin-report-status {
+	display: inline-flex;
+	align-items: center;
+	border-radius: 999px;
+	padding: 0.28rem 0.68rem;
+	font-size: 0.8rem;
+	font-weight: 700;
+}
+
+.admin-report-reason-pill {
+	background: rgba(15, 23, 42, 0.06);
+	color: #475569;
+}
+
+.admin-report-status--pending {
+	background: rgba(245, 158, 11, 0.12);
+	color: #b45309;
+}
+
+.admin-report-status--resolved {
+	background: rgba(34, 197, 94, 0.12);
+	color: #15803d;
+}
+
+.admin-report-status--dismissed {
+	background: rgba(100, 116, 139, 0.12);
+	color: #475569;
+}
+
+.admin-report-card-snippet {
+	margin: 0;
+	color: #495057;
+}
+
+.admin-report-card-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.65rem;
+}
+
+.admin-report-detail {
+	border-top: 1px solid rgba(0, 0, 0, 0.08);
+	background: #f8fafc;
+	padding: 1rem;
+}
+
+.admin-report-detail-section + .admin-report-detail-section {
+	margin-top: 1rem;
+}
+
+.admin-report-detail-section h4 {
+	font-size: 1rem;
+	font-weight: 700;
+	margin-bottom: 0.75rem;
+}
+
+.admin-report-detail-list {
+	display: grid;
+	gap: 0.75rem;
+}
+
+.admin-report-detail-item {
+	background: #fff;
+	border: 1px solid rgba(0, 0, 0, 0.06);
+	border-radius: 0.85rem;
+	padding: 0.85rem 0.95rem;
+}
+
+.admin-report-detail-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	font-size: 0.92rem;
+	color: #495057;
+}
+
+.admin-report-detail-row + .admin-report-detail-row {
+	margin-top: 0.3rem;
+}
+
+.admin-report-detail-note {
+	margin-top: 0.6rem;
+	color: #212529;
+	white-space: pre-wrap;
+}
+
+.admin-report-detail-note--muted {
+	color: #6c757d;
+}
+
+@media (max-width: 767.98px) {
+	.admin-report-card-main {
+		grid-template-columns: 1fr;
+	}
+
+	.admin-report-card-preview {
+		min-height: 220px;
+	}
+
+	.admin-reports-search {
+		width: 100%;
+	}
+
+	.admin-reports-search .form-control {
+		min-width: 0;
+		width: 100%;
+	}
+}
+
 .admin-suggestion-card {
 	width: 100%;
 	max-width: 320px;

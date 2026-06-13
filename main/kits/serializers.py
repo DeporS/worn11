@@ -1,12 +1,12 @@
 from rest_framework import serializers
-from .models import Country, League, Team, Kit, KitType, KitTypeAlias, TeamSeasonKitType, KitTypeModerationAction, TeamModerationAction, UserKit, UserKitImage, WishlistItem, User, Profile, KitComment, KitReport, Conversation, Message, Notification, CollectionValueSnapshot, ShirtVersion, CANONICAL_WISHLIST_KIT_TYPES, build_team_slug, normalize_wishlist_kit_type
+from .models import Country, League, Team, Kit, KitType, KitTypeAlias, TeamSeasonKitType, KitTypeModerationAction, TeamModerationAction, UserKit, UserKitImage, WishlistItem, User, Profile, KitComment, KitReport, KitReportModerationAction, Conversation, Message, Notification, CollectionValueSnapshot, ShirtVersion, CANONICAL_WISHLIST_KIT_TYPES, build_team_slug, normalize_wishlist_kit_type
 from django.contrib.auth.models import User
 from dj_rest_auth.serializers import UserDetailsSerializer
 from django.utils.text import slugify
 import re
 import json
 from urllib.parse import urlencode
-from .permissions import can_undo_moderation_action, moderation_action_is_currently_undoable, is_staff_or_moderator
+from .permissions import can_undo_moderation_action, can_view_collection_value, moderation_action_is_currently_undoable, is_staff_or_moderator
 from .team_season_suggestions import ensure_team_season_suggestion
 
 
@@ -199,6 +199,144 @@ class KitReportSerializer(serializers.ModelSerializer):
 
         attrs['description'] = description
         return attrs
+
+
+class AdminKitReportDecisionSerializer(serializers.Serializer):
+    note = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+    def validate_note(self, value):
+        return (value or '').strip()
+
+
+class AdminKitReportReporterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'username']
+
+
+class AdminKitReportItemSerializer(serializers.ModelSerializer):
+    reporter = AdminKitReportReporterSerializer(read_only=True)
+    resolved_by_username = serializers.CharField(source='resolved_by.username', read_only=True)
+
+    class Meta:
+        model = KitReport
+        fields = [
+            'id',
+            'reason',
+            'description',
+            'status',
+            'reporter',
+            'resolved_by_username',
+            'resolution_note',
+            'created_at',
+            'updated_at',
+        ]
+
+
+class AdminKitReportModerationActionSerializer(serializers.ModelSerializer):
+    actor_username = serializers.CharField(source='actor.username', read_only=True)
+
+    class Meta:
+        model = KitReportModerationAction
+        fields = [
+            'id',
+            'action_type',
+            'actor_username',
+            'report_ids',
+            'note',
+            'created_at',
+        ]
+
+
+class AdminKitReportGroupListSerializer(serializers.ModelSerializer):
+    owner_id = serializers.IntegerField(source='user.id', read_only=True)
+    owner_username = serializers.CharField(source='user.username', read_only=True)
+    team_name = serializers.CharField(source='kit.team.name', read_only=True)
+    season = serializers.CharField(source='kit.season', read_only=True)
+    kit_type = serializers.CharField(source='kit.kit_type', read_only=True)
+    preview_image = serializers.SerializerMethodField()
+    report_count = serializers.SerializerMethodField()
+    pending_report_count = serializers.SerializerMethodField()
+    latest_report_at = serializers.SerializerMethodField()
+    reasons = serializers.SerializerMethodField()
+    latest_reports = serializers.SerializerMethodField()
+    has_pending_reports = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UserKit
+        fields = [
+            'id',
+            'owner_id',
+            'owner_username',
+            'team_name',
+            'season',
+            'kit_type',
+            'preview_image',
+            'is_hidden_by_moderation',
+            'report_count',
+            'pending_report_count',
+            'latest_report_at',
+            'reasons',
+            'latest_reports',
+            'has_pending_reports',
+        ]
+
+    def _get_reports(self, obj):
+        return list(getattr(obj, 'prefetched_report_group_reports', []))
+
+    def get_preview_image(self, obj):
+        first_image = obj.images.order_by('order', 'created_at', 'id').first()
+        if first_image is None:
+            return None
+        request = self.context.get('request')
+        image_url = first_image.image.url
+        if request is not None:
+            return request.build_absolute_uri(image_url)
+        return image_url
+
+    def get_report_count(self, obj):
+        return len(self._get_reports(obj))
+
+    def get_pending_report_count(self, obj):
+        return sum(1 for report in self._get_reports(obj) if report.status == 'pending')
+
+    def get_latest_report_at(self, obj):
+        reports = self._get_reports(obj)
+        return reports[0].created_at if reports else None
+
+    def get_reasons(self, obj):
+        seen = []
+        for report in self._get_reports(obj):
+            if report.reason not in seen:
+                seen.append(report.reason)
+        return seen
+
+    def get_latest_reports(self, obj):
+        reports = self._get_reports(obj)[:3]
+        return AdminKitReportItemSerializer(reports, many=True).data
+
+    def get_has_pending_reports(self, obj):
+        return any(report.status == 'pending' for report in self._get_reports(obj))
+
+
+class AdminKitReportGroupDetailSerializer(AdminKitReportGroupListSerializer):
+    reports = serializers.SerializerMethodField()
+    moderation_actions = serializers.SerializerMethodField()
+    moderation_hidden_reason = serializers.CharField(read_only=True)
+
+    class Meta(AdminKitReportGroupListSerializer.Meta):
+        fields = AdminKitReportGroupListSerializer.Meta.fields + [
+            'moderation_hidden_reason',
+            'reports',
+            'moderation_actions',
+        ]
+
+    def get_reports(self, obj):
+        return AdminKitReportItemSerializer(self._get_reports(obj), many=True).data
+
+    def get_moderation_actions(self, obj):
+        actions = list(getattr(obj, 'prefetched_report_moderation_actions', []))
+        return AdminKitReportModerationActionSerializer(actions, many=True).data
 
 
 class ConversationUserSerializer(serializers.ModelSerializer):
@@ -1195,6 +1333,7 @@ class UserKitSerializer(serializers.ModelSerializer):
     is_liked = serializers.SerializerMethodField() # To check if the current user liked this UserKit
     valuation_warning = serializers.SerializerMethodField()
     has_private_note = serializers.SerializerMethodField()
+    can_view_kit_values = serializers.SerializerMethodField()
 
     # Write-only fields for creating/updating UserKit
     team_name = serializers.CharField(write_only=True)
@@ -1222,13 +1361,13 @@ class UserKitSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'user', 
             # Read-only fields
-            'kit', 'images', 'condition_display', 'technology_display', 'shirt_version_id', 'shirt_version_code', 'shirt_version_display', 'shirt_version_manual_value_recommended', 'shirt_version_valuation_note', 'final_value', 'size_display', 'added_at', 'is_owner', 'owner_id', 'owner_username', 'owner_avatar',
+            'kit', 'images', 'condition_display', 'technology_display', 'shirt_version_id', 'shirt_version_code', 'shirt_version_display', 'shirt_version_manual_value_recommended', 'shirt_version_valuation_note', 'final_value', 'size_display', 'added_at', 'is_owner', 'owner_id', 'owner_username', 'owner_avatar', 'can_view_kit_values', 'is_hidden_by_moderation',
             # Write-only fields
             'team_name', 'season', 'kit_type', 'kit_type_id', 'kit_type_slug', 'new_images', 'deleted_images', 'images_order',
             # Modifiable fields
             'condition', 'shirt_technology', 'size', 'for_sale', 'manual_value', 'likes_count', 'comments_count', 'is_liked', 'valuation_warning', 'player_name', 'player_number', 'private_note', 'offer_link', 'in_the_collection', 'has_private_note'
         ]
-        read_only_fields = ['user', 'final_value', 'kit', 'images', 'condition_display', 'technology_display', 'shirt_version_id', 'shirt_version_code', 'shirt_version_display', 'shirt_version_manual_value_recommended', 'shirt_version_valuation_note', 'size_display', 'added_at', 'is_owner', 'owner_id', 'owner_username', 'owner_avatar', 'likes_count', 'comments_count', 'is_liked', 'valuation_warning', 'has_private_note']
+        read_only_fields = ['user', 'final_value', 'kit', 'images', 'condition_display', 'technology_display', 'shirt_version_id', 'shirt_version_code', 'shirt_version_display', 'shirt_version_manual_value_recommended', 'shirt_version_valuation_note', 'size_display', 'added_at', 'is_owner', 'owner_id', 'owner_username', 'owner_avatar', 'can_view_kit_values', 'is_hidden_by_moderation', 'likes_count', 'comments_count', 'is_liked', 'valuation_warning', 'has_private_note']
         extra_kwargs = {
             'shirt_technology': {'required': False},
         }
@@ -1246,6 +1385,10 @@ class UserKitSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated:
             return obj.likes.filter(id=request.user.id).exists()
         return False
+
+    def get_can_view_kit_values(self, obj):
+        request = self.context.get('request')
+        return can_view_collection_value(getattr(request, 'user', None), obj.user)
 
     def get_comments_count(self, obj):
         return getattr(obj, 'comments_count', obj.comments.count())
@@ -1350,6 +1493,13 @@ class UserKitSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
+
+        if not self.get_can_view_kit_values(instance):
+            representation['final_value'] = None
+            representation['manual_value'] = None
+            kit_data = representation.get('kit')
+            if isinstance(kit_data, dict):
+                kit_data['estimated_price'] = None
 
         if self.get_is_owner(instance):
             representation['has_private_note'] = bool((instance.private_note or '').strip())
@@ -1522,6 +1672,7 @@ class ProfileSerializer(serializers.ModelSerializer):
             'is_moderator', 
             'has_changed_username',
             'on_vacation', 
+            'show_collection_value_publicly',
             
             # Personal Info
             'avatar', 
@@ -1631,7 +1782,8 @@ class UserSearchSerializer(serializers.ModelSerializer):
 class UserStatsProfileSerializer(serializers.ModelSerializer):
     date_joined = serializers.DateTimeField(read_only=True)
     total_kits = serializers.IntegerField(read_only=True)
-    total_value = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    total_value = serializers.SerializerMethodField()
+    can_view_collection_value = serializers.SerializerMethodField()
 
     # --- Social ---
     followers_count = serializers.IntegerField(read_only=True, default=0)
@@ -1648,6 +1800,10 @@ class UserStatsProfileSerializer(serializers.ModelSerializer):
     is_pro = serializers.BooleanField(source='profile.is_pro', read_only=True)
     is_moderator = serializers.BooleanField(source='profile.is_moderator', read_only=True)
     on_vacation = serializers.BooleanField(source='profile.on_vacation', read_only=True)
+    show_collection_value_publicly = serializers.BooleanField(
+        source='profile.show_collection_value_publicly',
+        read_only=True,
+    )
 
     # --- Preferences (Full Objects for display) ---
     country_info = CountrySerializer(source='profile.country', read_only=True)
@@ -1670,11 +1826,30 @@ class UserStatsProfileSerializer(serializers.ModelSerializer):
     ebay_link = serializers.URLField(source='profile.ebay_link', read_only=True)
     depop_link = serializers.URLField(source='profile.depop_link', read_only=True)
 
+    def _is_owner(self, obj):
+        request = self.context.get('request')
+        return bool(
+            request
+            and request.user.is_authenticated
+            and request.user == obj
+        )
+
+    def get_can_view_collection_value(self, obj):
+        request = self.context.get('request')
+        return can_view_collection_value(getattr(request, 'user', None), obj)
+
+    def get_total_value(self, obj):
+        if not self.get_can_view_collection_value(obj):
+            return None
+        return getattr(obj, 'total_value', None)
+
     class Meta:
         model = User
         fields = [
-            'username', 'email', 'date_joined', 
+            'username', 'date_joined',
             'total_kits', 'total_value',
+            'can_view_collection_value',
+            'show_collection_value_publicly',
 
             # Social
             'followers_count', 'following_count', 'is_followed_by_me',

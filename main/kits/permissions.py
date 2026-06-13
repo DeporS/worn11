@@ -45,6 +45,17 @@ def is_staff_or_superuser(user):
     return bool(user.is_staff or user.is_superuser)
 
 
+def can_view_collection_value(viewer, owner):
+    if owner is None:
+        return False
+
+    if viewer and viewer.is_authenticated and viewer == owner:
+        return True
+
+    profile = getattr(owner, 'profile', None)
+    return bool(profile and profile.show_collection_value_publicly)
+
+
 def can_undo_moderation_action(user, action):
     if not user or not user.is_authenticated:
         return False

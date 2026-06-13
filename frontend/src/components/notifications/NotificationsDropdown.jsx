@@ -127,7 +127,7 @@ const NotificationsDropdown = ({
 
 	const handleNotificationClick = (notification) => {
 		if (
-			["kit_like", "kit_comment", "comment_like", "comment_reply"].includes(notification.type) &&
+			["kit_like", "kit_comment", "comment_like", "comment_reply", "moderation_kit_removed"].includes(notification.type) &&
 			notification.kit?.owner_username &&
 			notification.kit?.id
 		) {
@@ -171,6 +171,10 @@ const NotificationsDropdown = ({
 			return t("notifications.repliedToYourComment", {
 				username: notification.actor?.username || "",
 			});
+		}
+
+		if (notification.type === "moderation_kit_removed") {
+			return t("notifications.kitRemovedByModeration");
 		}
 
 		return notification.actor?.username || "";

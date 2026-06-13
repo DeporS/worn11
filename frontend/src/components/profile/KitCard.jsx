@@ -34,6 +34,9 @@ const KitCard = ({
 	});
 
 	const mainImage = item.images.length > 0 ? item.images[0].image : null;
+	const canShowValue = item.final_value !== null && item.final_value !== undefined;
+	const isSold = item.in_the_collection === false;
+	const isModerationHidden = item.is_hidden_by_moderation === true;
 
 	// Like state
 	const [isLiked, setIsLiked] = useState(() => {
@@ -344,18 +347,30 @@ const KitCard = ({
 								{item.kit.team.name}
 							</h5>
 						</div>
-						<span
-							className={`badge-outline ${!item.in_the_collection ? "text-muted border-secondary" : ""}`}
-							title={
-								item.in_the_collection
-									? t("kitCard.estimatedValue")
-									: t("kitCard.noLongerInCollection")
-							}
-						>
-							{item.in_the_collection
-								? `$${Number(item.final_value).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
-								: "SOLD"}
-						</span>
+						{isModerationHidden ? (
+							<span
+								className="badge-outline text-danger border-danger-subtle"
+								title={t("kitCard.removedByModeration")}
+							>
+								{t("kitCard.removedByModerationBadge")}
+							</span>
+						) : isSold ? (
+							<span
+								className="badge-outline text-muted border-secondary"
+								title={t("kitCard.noLongerInCollection")}
+							>
+								{t("kitCard.sold")}
+							</span>
+						) : canShowValue ? (
+							<span
+								className="badge-outline"
+								title={
+									t("kitCard.estimatedValue")
+								}
+							>
+								${Number(item.final_value).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+							</span>
+						) : null}
 					</div>
 
 					{/* Kit Details */}
@@ -483,6 +498,7 @@ const KitCard = ({
 										className="btn btn-sm edit-button"
 										onClick={handleEditClick}
 										title={t("kitCard.edit")}
+										disabled={isModerationHidden}
 									>
 										✏
 									</button>

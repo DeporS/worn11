@@ -57,6 +57,8 @@ const FeedItemCard = ({ item, onOpenKit }) => {
 	const addedLabel = getFeedTimestampLabel(item.added_at, t, i18n.language);
 	const isInCollection = item.in_the_collection !== false;
 	const canShowSale = isInCollection && item.for_sale;
+	const canShowValue =
+		item.final_value !== null && item.final_value !== undefined;
 	const valueSource =
 		Number(item.final_value ?? 0) > 0
 			? item.final_value
@@ -239,7 +241,7 @@ const FeedItemCard = ({ item, onOpenKit }) => {
 										<div className="text-muted">{seasonText}</div>
 									</div>
 									<div className="d-flex flex-column align-items-end gap-2 flex-shrink-0">
-										{valueLabel ? (
+										{canShowValue && valueLabel ? (
 											<span
 												className="badge border text-dark bg-white"
 												title={t("kitCard.estimatedValue")}

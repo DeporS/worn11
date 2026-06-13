@@ -103,6 +103,7 @@ NOTIFICATION_TYPE_CHOICES = [
     ('kit_comment', 'Kit comment'),
     ('comment_like', 'Comment like'),
     ('comment_reply', 'Comment reply'),
+    ('moderation_kit_removed', 'Moderation kit removed'),
 ]
 
 AUTOMATED_VALUATION_UNAVAILABLE_MESSAGE = (
@@ -167,6 +168,7 @@ class Profile(models.Model):
     is_moderator = models.BooleanField(default=False)  # Moderators can help manage content
     has_changed_username = models.BooleanField(default=False)
     on_vacation = models.BooleanField(default=False)
+    show_collection_value_publicly = models.BooleanField(default=False)
 
     # pro_expiration_date = models.DateTimeField(null=True, blank=True)
 
@@ -660,6 +662,16 @@ class UserKit(models.Model):
         max_digits=10, decimal_places=2, default=0,
         help_text="Final value of the kit, either manual or calculated."
     )
+    is_hidden_by_moderation = models.BooleanField(default=False)
+    hidden_by_moderation_at = models.DateTimeField(null=True, blank=True)
+    hidden_by_moderation_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='moderation_hidden_userkits',
+    )
+    moderation_hidden_reason = models.TextField(blank=True, default='')
 
     def is_automated_valuation_available(self):
         base_price = getattr(self.kit, 'estimated_price', None)
@@ -936,6 +948,55 @@ class KitReport(models.Model):
 
     def __str__(self):
         return f'{self.reporter.username} reported kit {self.kit_id} ({self.reason})'
+
+
+class KitReportModerationAction(models.Model):
+    ACTION_DISMISS = 'dismiss'
+    ACTION_REMOVE_KIT = 'remove_kit'
+    ACTION_CHOICES = [
+        (ACTION_DISMISS, 'Dismiss'),
+        (ACTION_REMOVE_KIT, 'Remove kit'),
+    ]
+
+    actor = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='kit_report_moderation_actions',
+    )
+    action_type = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    userkit = models.ForeignKey(
+        UserKit,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='report_moderation_actions',
+    )
+    kit_owner = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='owned_kit_report_moderation_actions',
+    )
+    report_ids = models.JSONField(default=list, blank=True)
+    previous_state = models.JSONField(default=dict, blank=True)
+    resulting_state = models.JSONField(default=dict, blank=True)
+    note = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [
+            models.Index(fields=['action_type', 'created_at']),
+            models.Index(fields=['created_at', 'id']),
+        ]
+
+    def save(self, *args, **kwargs):
+        self.note = (self.note or '').strip()
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'{self.get_action_type_display()} by {self.actor.username} at {self.created_at}'
 
 
 class Conversation(models.Model):

@@ -67,6 +67,14 @@ const ProfilePage = ({ user }) => {
 	const hasScrolledToHighlightedKitRef = useRef(false);
 	const highlightTimeoutRef = useRef(null);
 
+	const applyStatsData = (statsData) => {
+		setStats(statsData);
+		setProfileData(statsData);
+		setIsFollowing(statsData.is_followed_by_me);
+		setFollowersCount(statsData.followers_count || 0);
+		setFollowingCount(statsData.following_count || 0);
+	};
+
 	useEffect(() => {
 		if (!profileUsername) return;
 
@@ -79,13 +87,7 @@ const ProfilePage = ({ user }) => {
 		])
 			.then(([kitsData, statsData]) => {
 				setMyKits(kitsData);
-				setStats(statsData);
-				setProfileData(statsData);
-
-				// Set following states
-				setIsFollowing(statsData.is_followed_by_me);
-				setFollowersCount(statsData.followers_count || 0);
-				setFollowingCount(statsData.following_count || 0);
+				applyStatsData(statsData);
 			})
 			.catch((err) => {
 				console.error("Failed to load profile", err);
@@ -161,7 +163,7 @@ const ProfilePage = ({ user }) => {
 
 	const handleDeleteSuccess = (deletedKitId) => {
 		setMyKits((prev) => prev.filter((item) => item.id !== deletedKitId));
-		getUserStats(profileUsername).then(setStats);
+		getUserStats(profileUsername).then(applyStatsData);
 	};
 
 	const handleFollowToggle = async () => {
@@ -265,6 +267,18 @@ const ProfilePage = ({ user }) => {
 
 		setIsValueHistoryProModalOpen(true);
 	};
+
+	const canViewCollectionValue = Boolean(profileData?.can_view_collection_value);
+	const isCollectionValuePrivate =
+		isOwner &&
+		canViewCollectionValue &&
+		!profileData?.show_collection_value_publicly;
+	const collectionValueNumber = Number(profileData?.total_value);
+	const formattedCollectionValue = Number.isFinite(collectionValueNumber)
+		? collectionValueNumber.toLocaleString(undefined, {
+				maximumFractionDigits: 0,
+			})
+		: "0";
 
 	return (
 		<div className="container py-5 px-3 px-md-1">
@@ -461,25 +475,43 @@ const ProfilePage = ({ user }) => {
 									{t("profile.kitsInCollection")}
 								</span>
 							</div>
-							{/* Total Value */}
-							<div
-								className={`text-center profile-stat-card ${isOwner ? "profile-stat-card-clickable" : ""}`}
-								title={t("profile.totalValueTitle")}
-								onClick={isOwner ? handleTotalValueClick : undefined}
-							>
+
+							{/* Collection Value */}
+								<div
+									className={`text-center profile-stat-card position-relative ${isOwner ? "profile-stat-card-clickable" : ""}`}
+									title={t("profile.collectionValue")}
+									onClick={isOwner ? handleTotalValueClick : undefined}
+								>
+								{isCollectionValuePrivate ? (
+									<span
+										className="collection-value-privacy-icon"
+										title={t("profile.collectionValueOnlyYou")}
+										aria-label={t("profile.collectionValueOnlyYou")}
+									>
+										<i className="bi bi-lock-fill" aria-hidden="true"></i>
+									</span>
+								) : null}
 								<div className="d-flex justify-content-center align-items-center gap-2">
-									<MoneyBagIcon className="money-bag-icon" />
-									<h4 className="text-success fw-bold mb-0">
-										$
-										{Number(
-											stats.total_value,
-										).toLocaleString(undefined, {
-											maximumFractionDigits: 0,
-										})}
-									</h4>
+									{canViewCollectionValue ? (
+										<>
+											<MoneyBagIcon className="money-bag-icon" />
+											<h4 className="text-success fw-bold mb-0">
+												${formattedCollectionValue}
+											</h4>
+										</>
+									) : (
+										<span
+											className="profile-collection-value-hidden-state"
+											title={t("profile.collectionValueHidden")}
+											aria-label={t("profile.collectionValueHidden")}
+										>
+											<i className="bi bi-lock-fill" aria-hidden="true"></i>
+											<span>{t("profile.collectionValueHidden")}</span>
+										</span>
+									)}
 								</div>
 								<span className="small text-muted d-block">
-									{t("profile.totalValue")}
+									{t("profile.collectionValue")}
 								</span>
 							</div>
 						</div>

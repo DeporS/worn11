@@ -13,7 +13,7 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient, APITestCase
 
-from .models import Country, League, Kit, KitType, KitTypeAlias, TeamSeasonKitType, KitTypeModerationAction, TeamModerationAction, ShirtVersion, Team, UserKit, UserKitImage, WishlistItem, KitComment, KitCommentLike, KitReport, Conversation, Message, Follow, Notification, CollectionValueSnapshot, AUTOMATED_VALUATION_UNAVAILABLE_MESSAGE, TECHNOLOGIE_MULTIPLIERS, calculate_collection_total_value
+from .models import Country, League, Kit, KitType, KitTypeAlias, TeamSeasonKitType, KitTypeModerationAction, TeamModerationAction, ShirtVersion, Team, UserKit, UserKitImage, WishlistItem, KitComment, KitCommentLike, KitReport, KitReportModerationAction, Conversation, Message, Follow, Notification, CollectionValueSnapshot, AUTOMATED_VALUATION_UNAVAILABLE_MESSAGE, TECHNOLOGIE_MULTIPLIERS, calculate_collection_total_value
 from .serializers import KitSerializer, TeamSerializer, UserKitSerializer, WishlistItemSerializer
 
 
@@ -3819,6 +3819,10 @@ class CollectionValueSnapshotTests(APITestCase):
         defaults.update(overrides)
         return UserKit.objects.create(**defaults)
 
+    def test_new_profiles_default_collection_value_visibility_to_private(self):
+        self.assertFalse(self.user.profile.show_collection_value_publicly)
+        self.assertFalse(self.other_user.profile.show_collection_value_publicly)
+
     def test_creating_userkit_records_kit_added_snapshot(self):
         response = self.client.post(
             reverse("api-my-collection"),
@@ -3946,6 +3950,93 @@ class CollectionValueSnapshotTests(APITestCase):
         self.assertEqual(history_response.status_code, 200)
         self.assertEqual(Decimal(stats_response.data["total_value"]), Decimal("220.00"))
         self.assertEqual(Decimal(history_response.data["results"][0]["total_value"]), Decimal("220.00"))
+        self.assertTrue(stats_response.data["can_view_collection_value"])
+        self.assertFalse(stats_response.data["show_collection_value_publicly"])
+
+    def test_anonymous_public_stats_hides_collection_value_by_default(self):
+        self.client.force_authenticate(user=None)
+        self.create_user_kit(manual_value=Decimal("220.00"))
+
+        response = self.client.get(reverse("user-stats", args=[self.user.username]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.data["total_value"])
+        self.assertFalse(response.data["can_view_collection_value"])
+        self.assertFalse(response.data["show_collection_value_publicly"])
+        self.assertNotIn("email", response.data)
+
+    def test_other_authenticated_user_cannot_see_collection_value_by_default(self):
+        self.create_user_kit(manual_value=Decimal("220.00"))
+        self.client.force_authenticate(user=self.other_user)
+
+        response = self.client.get(reverse("user-stats", args=[self.user.username]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.data["total_value"])
+        self.assertFalse(response.data["can_view_collection_value"])
+        self.assertFalse(response.data["show_collection_value_publicly"])
+
+    def test_owner_sees_collection_value_even_when_public_setting_is_false(self):
+        self.user.profile.show_collection_value_publicly = False
+        self.user.profile.save(update_fields=["show_collection_value_publicly"])
+        self.create_user_kit(manual_value=Decimal("220.00"))
+
+        response = self.client.get(reverse("user-stats", args=[self.user.username]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Decimal(response.data["total_value"]), Decimal("220.00"))
+        self.assertTrue(response.data["can_view_collection_value"])
+        self.assertFalse(response.data["show_collection_value_publicly"])
+
+    def test_public_stats_exposes_collection_value_when_user_opted_in(self):
+        self.user.profile.show_collection_value_publicly = True
+        self.user.profile.save(update_fields=["show_collection_value_publicly"])
+        self.create_user_kit(manual_value=Decimal("220.00"))
+        self.client.force_authenticate(user=None)
+
+        response = self.client.get(reverse("user-stats", args=[self.user.username]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Decimal(response.data["total_value"]), Decimal("220.00"))
+        self.assertTrue(response.data["can_view_collection_value"])
+        self.assertTrue(response.data["show_collection_value_publicly"])
+
+    def test_owner_can_update_collection_value_visibility_setting(self):
+        response = self.client.put(
+            reverse("update-profile"),
+            {"show_collection_value_publicly": True},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.user.profile.refresh_from_db()
+        self.assertTrue(self.user.profile.show_collection_value_publicly)
+        self.assertTrue(response.data["show_collection_value_publicly"])
+
+    def test_user_cannot_update_another_users_collection_value_visibility_setting(self):
+        self.client.force_authenticate(user=self.other_user)
+
+        response = self.client.put(
+            reverse("update-profile"),
+            {"show_collection_value_publicly": True},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.user.profile.refresh_from_db()
+        self.other_user.profile.refresh_from_db()
+        self.assertFalse(self.user.profile.show_collection_value_publicly)
+        self.assertTrue(self.other_user.profile.show_collection_value_publicly)
+
+    def test_history_endpoint_remains_private_even_when_public_visibility_enabled(self):
+        self.user.profile.show_collection_value_publicly = True
+        self.user.profile.save(update_fields=["show_collection_value_publicly"])
+        self.create_user_kit(manual_value=Decimal("220.00"))
+        self.client.force_authenticate(user=self.other_user)
+
+        response = self.client.get(reverse("my-collection-value-history"))
+
+        self.assertEqual(response.status_code, 403)
 
     def test_history_endpoint_requires_authentication(self):
         self.client.force_authenticate(user=None)
@@ -4184,6 +4275,205 @@ class UserKitPrivateNoteTests(APITestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("private_note", response.data)
+
+
+class UserKitValuePrivacyTests(APITestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.owner = User.objects.create_user(username="value_owner", password="password123")
+        self.other_user = User.objects.create_user(username="value_other", password="password123")
+        self.team = Team.objects.create(name="Value Privacy FC", is_verified=True)
+        self.kit = Kit.objects.create(
+            team=self.team,
+            season="2024/2025",
+            kit_type="Home",
+            estimated_price=Decimal("90.00"),
+        )
+        self.private_user_kit = UserKit.objects.create(
+            user=self.owner,
+            kit=self.kit,
+            shirt_technology="REPLICA",
+            condition="VERY_GOOD",
+            size="L",
+            manual_value=Decimal("123.45"),
+        )
+        self.private_sold_user_kit = UserKit.objects.create(
+            user=self.owner,
+            kit=Kit.objects.create(
+                team=self.team,
+                season="2023/2024",
+                kit_type="Third",
+                estimated_price=Decimal("75.00"),
+            ),
+            shirt_technology="REPLICA",
+            condition="VERY_GOOD",
+            size="L",
+            manual_value=Decimal("88.00"),
+            in_the_collection=False,
+        )
+        self.public_user_kit = UserKit.objects.create(
+            user=self.owner,
+            kit=Kit.objects.create(
+                team=self.team,
+                season="2025/2026",
+                kit_type="Away",
+                estimated_price=Decimal("110.00"),
+            ),
+            shirt_technology="REPLICA",
+            condition="VERY_GOOD",
+            size="L",
+            manual_value=Decimal("200.00"),
+        )
+        Follow.objects.create(follower=self.other_user, following=self.owner)
+
+    def _assert_hidden_value_payload(self, payload):
+        self.assertTrue(payload["can_view_kit_values"] is False)
+        self.assertIsNone(payload["manual_value"])
+        self.assertIsNone(payload["final_value"])
+        self.assertIsNotNone(payload["kit"])
+        self.assertIsNone(payload["kit"]["estimated_price"])
+
+    def _assert_visible_value_payload(self, payload, manual_value, estimated_price):
+        self.assertTrue(payload["can_view_kit_values"])
+        self.assertEqual(Decimal(payload["manual_value"]), manual_value)
+        self.assertEqual(Decimal(payload["final_value"]), manual_value)
+        self.assertEqual(Decimal(payload["kit"]["estimated_price"]), estimated_price)
+
+    def _get_payload_by_id(self, payloads, kit_id):
+        return next(item for item in payloads if item["id"] == kit_id)
+
+    def test_owner_sees_values_in_own_collection_when_private(self):
+        self.client.force_authenticate(user=self.owner)
+
+        response = self.client.get(reverse("api-user-collection", args=[self.owner.username]))
+
+        self.assertEqual(response.status_code, 200)
+        self._assert_visible_value_payload(
+            self._get_payload_by_id(response.data, self.private_user_kit.id),
+            Decimal("123.45"),
+            Decimal("90.00"),
+        )
+
+    def test_anonymous_cannot_see_values_in_public_collection_when_private(self):
+        response = self.client.get(reverse("api-user-collection", args=[self.owner.username]))
+
+        self.assertEqual(response.status_code, 200)
+        self._assert_hidden_value_payload(
+            self._get_payload_by_id(response.data, self.private_user_kit.id),
+        )
+
+    def test_other_authenticated_user_cannot_see_values_in_public_collection_when_private(self):
+        self.client.force_authenticate(user=self.other_user)
+
+        response = self.client.get(reverse("api-user-collection", args=[self.owner.username]))
+
+        self.assertEqual(response.status_code, 200)
+        self._assert_hidden_value_payload(
+            self._get_payload_by_id(response.data, self.private_user_kit.id),
+        )
+
+    def test_anonymous_sees_values_in_public_collection_when_enabled(self):
+        self.owner.profile.show_collection_value_publicly = True
+        self.owner.profile.save(update_fields=["show_collection_value_publicly"])
+
+        response = self.client.get(reverse("api-user-collection", args=[self.owner.username]))
+
+        self.assertEqual(response.status_code, 200)
+        self._assert_visible_value_payload(
+            self._get_payload_by_id(response.data, self.private_user_kit.id),
+            Decimal("123.45"),
+            Decimal("90.00"),
+        )
+
+    def test_other_authenticated_user_sees_values_in_public_collection_when_enabled(self):
+        self.owner.profile.show_collection_value_publicly = True
+        self.owner.profile.save(update_fields=["show_collection_value_publicly"])
+        self.client.force_authenticate(user=self.other_user)
+
+        response = self.client.get(reverse("api-user-collection", args=[self.owner.username]))
+
+        self.assertEqual(response.status_code, 200)
+        self._assert_visible_value_payload(
+            self._get_payload_by_id(response.data, self.private_user_kit.id),
+            Decimal("123.45"),
+            Decimal("90.00"),
+        )
+
+    def test_public_user_kit_detail_hides_values_when_private(self):
+        response = self.client.get(reverse("kit-detail", args=[self.private_user_kit.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self._assert_hidden_value_payload(response.data)
+
+    def test_public_user_kit_detail_shows_values_when_public(self):
+        self.owner.profile.show_collection_value_publicly = True
+        self.owner.profile.save(update_fields=["show_collection_value_publicly"])
+
+        response = self.client.get(reverse("kit-detail", args=[self.private_user_kit.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self._assert_visible_value_payload(
+            response.data,
+            Decimal("123.45"),
+            Decimal("90.00"),
+        )
+
+    def test_private_sold_kit_keeps_status_but_hides_money_for_other_user(self):
+        self.client.force_authenticate(user=self.other_user)
+
+        response = self.client.get(reverse("api-user-collection", args=[self.owner.username]))
+
+        self.assertEqual(response.status_code, 200)
+        payload = self._get_payload_by_id(response.data, self.private_sold_user_kit.id)
+        self.assertFalse(payload["in_the_collection"])
+        self._assert_hidden_value_payload(payload)
+
+    def test_explore_hides_values_for_private_owner(self):
+        response = self.client.get(reverse("explore-kits"))
+
+        self.assertEqual(response.status_code, 200)
+        self._assert_hidden_value_payload(
+            self._get_payload_by_id(response.data, self.private_user_kit.id),
+        )
+
+    def test_explore_shows_values_for_public_owner(self):
+        self.owner.profile.show_collection_value_publicly = True
+        self.owner.profile.save(update_fields=["show_collection_value_publicly"])
+
+        response = self.client.get(reverse("explore-kits"))
+
+        self.assertEqual(response.status_code, 200)
+        self._assert_visible_value_payload(
+            self._get_payload_by_id(response.data, self.private_user_kit.id),
+            Decimal("123.45"),
+            Decimal("90.00"),
+        )
+
+    def test_feed_hides_values_for_private_owner(self):
+        self.client.force_authenticate(user=self.other_user)
+
+        response = self.client.get(reverse("following-feed"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertGreaterEqual(len(response.data["results"]), 1)
+        self._assert_hidden_value_payload(
+            self._get_payload_by_id(response.data["results"], self.private_user_kit.id),
+        )
+
+    def test_feed_shows_values_for_public_owner(self):
+        self.owner.profile.show_collection_value_publicly = True
+        self.owner.profile.save(update_fields=["show_collection_value_publicly"])
+        self.client.force_authenticate(user=self.other_user)
+
+        response = self.client.get(reverse("following-feed"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertGreaterEqual(len(response.data["results"]), 1)
+        self._assert_visible_value_payload(
+            self._get_payload_by_id(response.data["results"], self.private_user_kit.id),
+            Decimal("123.45"),
+            Decimal("90.00"),
+        )
 
 
 class WishlistItemAPITests(APITestCase):
@@ -4923,6 +5213,216 @@ class KitReportAPITests(APITestCase):
         self.assertEqual(response.status_code, 201)
         report = KitReport.objects.get(kit=self.user_kit, reporter=self.user)
         self.assertEqual(report.description, "Something else is wrong here.")
+
+
+class AdminKitReportModerationAPITests(APITestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.owner = User.objects.create_user(username="reported-owner", password="password123")
+        self.reporter = User.objects.create_user(username="reporter-one", password="password123")
+        self.other_reporter = User.objects.create_user(username="reporter-two", password="password123")
+        self.viewer = User.objects.create_user(username="viewer-user", password="password123")
+        self.moderator = User.objects.create_user(username="kit-moderator", password="password123")
+        self.moderator.profile.is_moderator = True
+        self.moderator.profile.save(update_fields=["is_moderator"])
+        self.staff_user = User.objects.create_user(
+            username="reports-staff",
+            password="password123",
+            is_staff=True,
+        )
+        self.team = Team.objects.create(name="Reports United", is_verified=True)
+        self.kit = Kit.objects.create(
+            team=self.team,
+            season="2024/2025",
+            kit_type="Home",
+            estimated_price=Decimal("120.00"),
+        )
+        self.user_kit = UserKit.objects.create(
+            user=self.owner,
+            kit=self.kit,
+            shirt_technology="REPLICA",
+            shirt_version=ShirtVersion.objects.get(code="REPLICA"),
+            condition="VERY_GOOD",
+            size="L",
+            manual_value=Decimal("133.00"),
+            in_the_collection=True,
+        )
+        UserKitImage.objects.create(
+            user_kit=self.user_kit,
+            image=SimpleUploadedFile("report-preview.jpg", b"report-preview", content_type="image/jpeg"),
+            order=0,
+        )
+        self.report_one = KitReport.objects.create(
+            kit=self.user_kit,
+            reporter=self.reporter,
+            reason="spam",
+            description="Looks like spam.",
+        )
+        self.report_two = KitReport.objects.create(
+            kit=self.user_kit,
+            reporter=self.other_reporter,
+            reason="prohibited_content",
+            description="Contains prohibited content.",
+        )
+        Follow.objects.create(follower=self.viewer, following=self.owner)
+        self.list_url = reverse("admin-kit-reports")
+        self.detail_url = reverse("admin-kit-report-detail", args=[self.user_kit.id])
+        self.dismiss_url = reverse("admin-kit-report-dismiss", args=[self.user_kit.id])
+        self.remove_url = reverse("admin-kit-report-remove-kit", args=[self.user_kit.id])
+
+    def authenticate(self, user):
+        self.client.force_authenticate(user=user)
+
+    def test_anonymous_cannot_list_reports(self):
+        response = self.client.get(self.list_url)
+        self.assertEqual(response.status_code, 401)
+
+    def test_regular_user_cannot_list_reports(self):
+        self.authenticate(self.viewer)
+        response = self.client.get(self.list_url)
+        self.assertEqual(response.status_code, 403)
+
+    def test_moderator_can_list_grouped_reports(self):
+        self.authenticate(self.moderator)
+        response = self.client.get(self.list_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        payload = response.data[0]
+        self.assertEqual(payload["id"], self.user_kit.id)
+        self.assertEqual(payload["report_count"], 2)
+        self.assertTrue(payload["has_pending_reports"])
+        self.assertIn("spam", payload["reasons"])
+
+    def test_staff_can_fetch_report_detail(self):
+        self.authenticate(self.staff_user)
+        response = self.client.get(self.detail_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["reports"]), 2)
+        reporter_usernames = {item["reporter"]["username"] for item in response.data["reports"]}
+        self.assertEqual(reporter_usernames, {self.reporter.username, self.other_reporter.username})
+
+    def test_dismiss_marks_pending_reports_dismissed_without_hiding_kit(self):
+        self.authenticate(self.moderator)
+        response = self.client.post(self.dismiss_url, {"note": "No violation found."}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.user_kit.refresh_from_db()
+        self.assertFalse(self.user_kit.is_hidden_by_moderation)
+        statuses = list(
+            KitReport.objects.filter(kit=self.user_kit).order_by("id").values_list("status", flat=True)
+        )
+        self.assertEqual(statuses, ["dismissed", "dismissed"])
+        self.assertTrue(
+            KitReportModerationAction.objects.filter(
+                userkit=self.user_kit,
+                action_type=KitReportModerationAction.ACTION_DISMISS,
+                actor=self.moderator,
+            ).exists()
+        )
+
+    def test_remove_kit_hides_public_surfaces_and_resolves_reports(self):
+        self.authenticate(self.moderator)
+        response = self.client.post(
+            self.remove_url,
+            {"note": "Offensive upload."},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.user_kit.refresh_from_db()
+        self.assertTrue(self.user_kit.is_hidden_by_moderation)
+        self.assertEqual(self.user_kit.hidden_by_moderation_by_id, self.moderator.id)
+        self.assertEqual(self.user_kit.moderation_hidden_reason, "Offensive upload.")
+        self.assertEqual(
+            set(KitReport.objects.filter(kit=self.user_kit).values_list("status", flat=True)),
+            {"resolved"},
+        )
+        self.assertTrue(
+            KitReportModerationAction.objects.filter(
+                userkit=self.user_kit,
+                action_type=KitReportModerationAction.ACTION_REMOVE_KIT,
+                actor=self.moderator,
+            ).exists()
+        )
+        self.assertTrue(
+            Notification.objects.filter(
+                recipient=self.owner,
+                actor=self.moderator,
+                type="moderation_kit_removed",
+                kit=self.user_kit,
+            ).exists()
+        )
+
+        self.client.force_authenticate(user=None)
+        public_collection = self.client.get(reverse("api-user-collection", args=[self.owner.username]))
+        self.assertEqual(public_collection.status_code, 200)
+        self.assertEqual(public_collection.data, [])
+
+        public_stats = self.client.get(reverse("user-stats", args=[self.owner.username]))
+        self.assertEqual(public_stats.status_code, 200)
+        self.assertEqual(public_stats.data["total_kits"], 0)
+
+        public_detail = self.client.get(reverse("kit-detail", args=[self.user_kit.id]))
+        self.assertEqual(public_detail.status_code, 404)
+
+        explore = self.client.get(reverse("explore-kits"))
+        self.assertEqual(explore.status_code, 200)
+        self.assertFalse(any(item["id"] == self.user_kit.id for item in explore.data))
+
+        self.client.force_authenticate(user=self.viewer)
+        feed = self.client.get(reverse("following-feed"))
+        self.assertEqual(feed.status_code, 200)
+        self.assertFalse(any(item["id"] == self.user_kit.id for item in feed.data["results"]))
+
+    def test_owner_can_still_view_hidden_kit_but_cannot_edit_it(self):
+        self.user_kit.is_hidden_by_moderation = True
+        self.user_kit.hidden_by_moderation_at = timezone.now()
+        self.user_kit.hidden_by_moderation_by = self.moderator
+        self.user_kit.moderation_hidden_reason = "Removed for review"
+        self.user_kit.save(
+            update_fields=[
+                "is_hidden_by_moderation",
+                "hidden_by_moderation_at",
+                "hidden_by_moderation_by",
+                "moderation_hidden_reason",
+            ]
+        )
+
+        self.client.force_authenticate(user=self.owner)
+        collection_response = self.client.get(reverse("api-user-collection", args=[self.owner.username]))
+        self.assertEqual(collection_response.status_code, 200)
+        self.assertEqual(collection_response.data[0]["id"], self.user_kit.id)
+        self.assertTrue(collection_response.data[0]["is_hidden_by_moderation"])
+
+        detail_response = self.client.get(reverse("kit-detail", args=[self.user_kit.id]))
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertTrue(detail_response.data["is_hidden_by_moderation"])
+
+        patch_response = self.client.patch(
+            reverse("api-my-collection-detail", args=[self.user_kit.id]),
+            {"condition": "GOOD"},
+            format="json",
+        )
+        self.assertEqual(patch_response.status_code, 403)
+
+    def test_pending_filter_excludes_dismissed_group(self):
+        self.report_one.status = "dismissed"
+        self.report_one.resolved_by = self.moderator
+        self.report_one.save(update_fields=["status", "resolved_by"])
+        self.report_two.status = "dismissed"
+        self.report_two.resolved_by = self.moderator
+        self.report_two.save(update_fields=["status", "resolved_by"])
+
+        self.authenticate(self.moderator)
+        pending_response = self.client.get(self.list_url, {"status": "pending"})
+        dismissed_response = self.client.get(self.list_url, {"status": "dismissed"})
+
+        self.assertEqual(pending_response.status_code, 200)
+        self.assertEqual(pending_response.data, [])
+        self.assertEqual(dismissed_response.status_code, 200)
+        self.assertEqual(len(dismissed_response.data), 1)
 
 
 class PublicUserKitDetailAPITests(APITestCase):
