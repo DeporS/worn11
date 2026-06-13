@@ -1,0 +1,391 @@
+.get-pro-page {
+	--get-pro-bg:
+		radial-gradient(circle at 12% 10%, rgba(191, 219, 254, 0.34) 0%, rgba(191, 219, 254, 0) 20%),
+		radial-gradient(circle at 88% 12%, rgba(224, 231, 255, 0.3) 0%, rgba(224, 231, 255, 0) 18%),
+		radial-gradient(circle at 72% 34%, rgba(186, 230, 253, 0.2) 0%, rgba(186, 230, 253, 0) 14%),
+		radial-gradient(circle at 28% 40%, rgba(219, 234, 254, 0.22) 0%, rgba(219, 234, 254, 0) 13%),
+		radial-gradient(circle at 84% 72%, rgba(219, 234, 254, 0.16) 0%, rgba(219, 234, 254, 0) 12%),
+		radial-gradient(circle at 18% 82%, rgba(216, 180, 254, 0.12) 0%, rgba(216, 180, 254, 0) 12%),
+		linear-gradient(180deg, #f8fbff 0%, #ffffff 48%, #ffffff 100%);
+	--get-pro-surface: #ffffff;
+	--get-pro-border: rgba(22, 58, 138, 0.1);
+	--get-pro-border-strong: rgba(37, 99, 235, 0.3);
+	--get-pro-text: #10213f;
+	--get-pro-muted: #5d6b86;
+	--get-pro-accent: #2563eb;
+	--get-pro-accent-deep: #1d4ed8;
+	--get-pro-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+	background: var(--get-pro-bg);
+	color: var(--get-pro-text);
+	padding: 2.75rem 0 3.5rem;
+	position: relative;
+	overflow: hidden;
+}
+
+.get-pro-page::before,
+.get-pro-page::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+}
+
+.get-pro-page::before {
+	background:
+		radial-gradient(circle at 20% 18%, rgba(255, 255, 255, 0.95) 0 1px, rgba(255, 255, 255, 0) 2px),
+		radial-gradient(circle at 74% 22%, rgba(255, 255, 255, 0.88) 0 1px, rgba(255, 255, 255, 0) 2px),
+		radial-gradient(circle at 66% 58%, rgba(255, 255, 255, 0.72) 0 1px, rgba(255, 255, 255, 0) 2px),
+		radial-gradient(circle at 30% 72%, rgba(255, 255, 255, 0.8) 0 1px, rgba(255, 255, 255, 0) 2px);
+	opacity: 0.55;
+	filter: blur(18px);
+}
+
+.get-pro-page::after {
+	background:
+		radial-gradient(circle at 18% 16%, rgba(191, 219, 254, 0.18) 0%, rgba(191, 219, 254, 0) 10%),
+		radial-gradient(circle at 82% 18%, rgba(216, 180, 254, 0.12) 0%, rgba(216, 180, 254, 0) 9%),
+		radial-gradient(circle at 78% 76%, rgba(186, 230, 253, 0.12) 0%, rgba(186, 230, 253, 0) 8%);
+	filter: blur(26px);
+	opacity: 0.8;
+}
+
+.get-pro-page .container {
+	max-width: 1080px;
+	position: relative;
+	z-index: 1;
+}
+
+.get-pro-header {
+	max-width: 700px;
+	margin: 0 auto 1.1rem;
+	text-align: center;
+}
+
+.get-pro-best-value-pill {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 999px;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+}
+
+.get-pro-header h1,
+.get-pro-section-heading h2,
+.get-pro-pricing-card-head h2 {
+	font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+	font-weight: 800;
+	letter-spacing: -0.03em;
+}
+
+.get-pro-header h1 {
+	font-size: clamp(3.8rem, 5.4vw, 4.9rem);
+	margin: 0 0 0.45rem;
+	line-height: 0.95;
+	letter-spacing: -0.05em;
+}
+
+.get-pro-subtitle,
+.get-pro-pricing-card-head p,
+.get-pro-founder-support,
+.get-pro-faq-item p {
+	color: var(--get-pro-muted);
+	line-height: 1.7;
+}
+
+.get-pro-subtitle {
+	font-size: clamp(1rem, 1.7vw, 1.15rem);
+	margin: 0;
+}
+
+.get-pro-founder-line {
+	margin: 0.65rem auto 0;
+	display: inline-flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: center;
+	gap: 0.55rem;
+	max-width: 46rem;
+	color: #526583;
+	font-size: 0.95rem;
+	line-height: 1.55;
+}
+
+.get-pro-founder-line-label {
+	display: inline-flex;
+	align-items: center;
+	padding: 0.3rem 0.66rem;
+	border-radius: 999px;
+	background: rgba(37, 99, 235, 0.08);
+	color: var(--get-pro-accent-deep);
+	font-size: 0.8rem;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	white-space: nowrap;
+}
+
+.get-pro-founder-line-separator {
+	color: rgba(82, 101, 131, 0.72);
+	font-weight: 700;
+}
+
+.get-pro-founder-line-text {
+	font-weight: 500;
+}
+
+.get-pro-pricing-section,
+.get-pro-features-section,
+.get-pro-faq-section {
+	padding-top: 0.95rem;
+}
+
+.get-pro-pricing-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 1.25rem;
+	align-items: stretch;
+}
+
+.get-pro-pricing-card,
+.get-pro-section-card {
+	background: var(--get-pro-surface);
+	border: 1px solid var(--get-pro-border);
+	border-radius: 26px;
+	box-shadow: var(--get-pro-shadow);
+}
+
+.get-pro-pricing-card {
+	padding: 1.85rem;
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+	transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+	min-height: 100%;
+}
+
+.get-pro-pricing-card:hover {
+	transform: translateY(-1px);
+	box-shadow: 0 16px 34px rgba(15, 23, 42, 0.08);
+}
+
+.get-pro-pricing-card-featured {
+	border-color: var(--get-pro-border-strong);
+	background: #f8fbff;
+	box-shadow: 0 14px 34px rgba(37, 99, 235, 0.1);
+}
+
+.get-pro-pricing-card-head {
+	padding-right: 6rem;
+	min-height: 7.75rem;
+	display: flex;
+	flex-direction: column;
+	justify-content: flex-start;
+}
+
+.get-pro-pricing-card-head h2 {
+	font-size: 1.35rem;
+	margin: 0 0 0.35rem;
+}
+
+.get-pro-pricing-card-head p {
+	margin: 0;
+}
+
+.get-pro-price-row {
+	display: flex;
+	align-items: flex-end;
+	gap: 0.6rem;
+}
+
+.get-pro-price {
+	font-size: clamp(2.65rem, 5vw, 3.7rem);
+	font-weight: 800;
+	letter-spacing: -0.04em;
+	line-height: 0.95;
+}
+
+.get-pro-period {
+	color: var(--get-pro-muted);
+	font-weight: 600;
+	margin-bottom: 0.38rem;
+}
+
+.get-pro-best-value-pill {
+	position: absolute;
+	top: 1rem;
+	right: 1rem;
+	padding: 0.36rem 0.72rem;
+	background: rgba(37, 99, 235, 0.08);
+	border: 1px solid rgba(37, 99, 235, 0.12);
+	color: var(--get-pro-accent-deep);
+	font-size: 0.75rem;
+}
+
+.get-pro-primary-button,
+.get-pro-outline-button {
+	border-radius: 16px;
+	font-weight: 700;
+	padding: 0.86rem 1.15rem;
+	border: 1px solid transparent;
+	transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
+	width: 100%;
+	justify-content: center;
+	margin-top: auto;
+}
+
+.get-pro-primary-button {
+	background: #2563eb;
+	color: #fff;
+	box-shadow: 0 10px 24px rgba(37, 99, 235, 0.16);
+}
+
+.get-pro-primary-button:hover,
+.get-pro-primary-button:focus-visible {
+	background: #1d4ed8;
+	color: #fff;
+	transform: translateY(-1px);
+	box-shadow: 0 12px 26px rgba(37, 99, 235, 0.18);
+}
+
+.get-pro-outline-button {
+	background: #ffffff;
+	border-color: rgba(22, 58, 138, 0.16);
+	color: var(--get-pro-accent-deep);
+}
+
+.get-pro-outline-button:hover,
+.get-pro-outline-button:focus-visible {
+	background: #f8fbff;
+	color: var(--get-pro-accent-deep);
+	transform: translateY(-1px);
+	box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
+}
+
+.get-pro-inline-notice {
+	margin-top: 0.9rem;
+	padding: 0.82rem 0.95rem;
+	border-radius: 16px;
+	background: rgba(37, 99, 235, 0.06);
+	color: #18366a;
+	border: 1px solid rgba(37, 99, 235, 0.1);
+	font-weight: 600;
+}
+
+.get-pro-section-card {
+	padding: 1.65rem;
+}
+
+.get-pro-section-heading {
+	margin-bottom: 0.9rem;
+}
+
+.get-pro-section-heading h2 {
+	font-size: clamp(1.55rem, 3vw, 2rem);
+	margin: 0;
+}
+
+.get-pro-feature-list {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 0.82rem 1.15rem;
+}
+
+.get-pro-feature-list li {
+	position: relative;
+	padding-left: 1.5rem;
+	color: #243a61;
+	line-height: 1.55;
+	font-weight: 400;
+}
+
+.get-pro-feature-list li::before {
+	content: "✓";
+	position: absolute;
+	left: 0;
+	top: 0.02rem;
+	color: #4a6fb9;
+	font-size: 0.88rem;
+	font-weight: 700;
+}
+
+.get-pro-faq-list {
+	display: grid;
+	gap: 0;
+}
+
+.get-pro-faq-item {
+	padding: 0.95rem 0;
+	border-bottom: 1px solid rgba(22, 58, 138, 0.08);
+}
+
+.get-pro-faq-item:last-child {
+	border-bottom: 0;
+}
+
+.get-pro-faq-item h3 {
+	margin: 0 0 0.35rem;
+	font-size: 1rem;
+}
+
+@media (max-width: 991.98px) {
+	.get-pro-pricing-grid,
+	.get-pro-feature-list {
+		grid-template-columns: 1fr;
+	}
+}
+
+@media (max-width: 767.98px) {
+	.get-pro-page {
+		padding: 2rem 0 2.8rem;
+	}
+
+	.get-pro-page::before {
+		opacity: 0.45;
+		filter: blur(14px);
+	}
+
+	.get-pro-page::after {
+		opacity: 0.65;
+		filter: blur(20px);
+	}
+
+	.get-pro-header {
+		margin-bottom: 1rem;
+	}
+
+	.get-pro-header h1 {
+		font-size: clamp(2.8rem, 10vw, 3.5rem);
+		line-height: 1;
+	}
+
+	.get-pro-founder-line {
+		margin-top: 0.55rem;
+		font-size: 0.89rem;
+		gap: 0.4rem;
+	}
+
+	.get-pro-pricing-card,
+	.get-pro-section-card {
+		border-radius: 22px;
+		padding: 1.35rem;
+	}
+
+	.get-pro-pricing-card-head {
+		padding-right: 0;
+		min-height: 0;
+	}
+
+	.get-pro-best-value-pill {
+		position: static;
+		width: fit-content;
+		margin-bottom: 0.25rem;
+	}
+
+	.get-pro-feature-highlights {
+		flex-direction: column;
+	}
+}

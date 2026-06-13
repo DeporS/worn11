@@ -17,6 +17,7 @@ import KitVariantsPage from "./pages/KitVariantsPage";
 import KitDetailPage from "./pages/KitDetailPage";
 import MessagesPage from "./pages/MessagesPage";
 import FeedPage from "./pages/FeedPage";
+import GetProPage from "./pages/GetProPage";
 import RemovedKitDetailPage from "./pages/RemovedKitDetailPage";
 import AdminKitTypesPage from "./pages/AdminKitTypesPage";
 import ModerationLayout from "./pages/admin/ModerationLayout";
@@ -230,6 +231,7 @@ function App() {
 							</AuthGate>
 						}
 					/>
+					<Route path="/get-pro" element={<GetProPage />} />
 
 					{/* Edit Profile Page */}
 					<Route
