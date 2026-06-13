@@ -292,15 +292,35 @@
 
 .profile-owner-collection-actions {
 	display: flex;
-	flex-direction: column;
+	flex-direction: row;
+	flex-wrap: wrap;
 	align-items: center;
-	gap: 0.65rem;
+	justify-content: center;
+	gap: 0.75rem;
+	width: 100%;
+	max-width: 100%;
 }
 
-.profile-owner-collection-actions .profile-wishlist-link,
-.profile-owner-collection-actions .profile-add-kit-link,
-.profile-owner-collection-actions .profile-export-link {
-	width: fit-content;
+.profile-owner-collection-actions .profile-collection-action-button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	min-width: 180px;
+	min-height: 42px;
+	height: 42px;
+	padding: 0 16px;
+	line-height: 1;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	flex: 0 0 180px;
+	width: 180px;
+	max-width: 220px;
+	max-height: 42px;
+	border-radius: 999px;
+	aspect-ratio: auto;
+	box-sizing: border-box;
 }
 
 .wishlist-empty-state {
@@ -1420,13 +1440,24 @@
 
 	.profile-owner-collection-actions {
 		width: 100%;
+		flex-direction: column;
+		flex-wrap: nowrap;
+		align-items: center;
+		gap: 0.625rem;
 	}
 
-	.profile-owner-collection-actions .profile-wishlist-link,
-	.profile-owner-collection-actions .profile-add-kit-link,
-	.profile-owner-collection-actions .profile-export-link {
+	.profile-owner-collection-actions .profile-collection-action-button {
+		flex: 0 0 42px;
 		width: 100%;
+		max-width: 260px;
+		min-width: 0;
+		min-height: 42px;
+		height: 42px;
+		max-height: 42px;
+		border-radius: 999px;
+		padding: 0 16px;
 		justify-content: center;
+		aspect-ratio: auto;
 	}
 
 	.profile-stats-panel {

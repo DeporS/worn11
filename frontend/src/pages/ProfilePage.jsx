@@ -9,7 +9,12 @@ import {
 	startConversation,
 	exportMyCollection,
 } from "../services/api";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import {
+	Link,
+	useNavigate,
+	useParams,
+	useSearchParams,
+} from "react-router-dom";
 import Swal from "sweetalert2";
 import KitCard from "../components/profile/KitCard";
 import SocialLink from "../components/profile/SocialLink";
@@ -64,7 +69,8 @@ const ProfilePage = ({ user }) => {
 	const [modalLoading, setModalLoading] = useState(false);
 	const [activeHighlightedKitId, setActiveHighlightedKitId] = useState(null);
 	const [isValueHistoryOpen, setIsValueHistoryOpen] = useState(false);
-	const [isValueHistoryProModalOpen, setIsValueHistoryProModalOpen] = useState(false);
+	const [isValueHistoryProModalOpen, setIsValueHistoryProModalOpen] =
+		useState(false);
 	const hasScrolledToHighlightedKitRef = useRef(false);
 	const highlightTimeoutRef = useRef(null);
 
@@ -124,7 +130,9 @@ const ProfilePage = ({ user }) => {
 		}
 
 		let frameId = window.requestAnimationFrame(() => {
-			const element = document.getElementById(`profile-kit-${matchingKit.id}`);
+			const element = document.getElementById(
+				`profile-kit-${matchingKit.id}`,
+			);
 			if (!element) return;
 
 			hasScrolledToHighlightedKitRef.current = true;
@@ -156,7 +164,9 @@ const ProfilePage = ({ user }) => {
 	}, []);
 
 	if (!profileUsername)
-		return <div className="text-center mt-5">{t("profile.loginRequired")}</div>;
+		return (
+			<div className="text-center mt-5">{t("profile.loginRequired")}</div>
+		);
 	if (loading)
 		return (
 			<div className="text-center mt-5">
@@ -341,7 +351,9 @@ const ProfilePage = ({ user }) => {
 		}
 	};
 
-	const canViewCollectionValue = Boolean(profileData?.can_view_collection_value);
+	const canViewCollectionValue = Boolean(
+		profileData?.can_view_collection_value,
+	);
 	const isCollectionValuePrivate =
 		isOwner &&
 		canViewCollectionValue &&
@@ -361,9 +373,7 @@ const ProfilePage = ({ user }) => {
 					<div className="d-flex align-items-center gap-4 profile-identity-block">
 						{/* Profile avatar */}
 						<UserAvatar user={profileData} size={80} />
-						<div
-							className="d-flex flex-column justify-content-center profile-name-block"
-						>
+						<div className="d-flex flex-column justify-content-center profile-name-block">
 							<div className="d-flex align-items-center gap-1 flex-wrap profile-name-row">
 								{/* Username and edit button */}
 								<h2 className="fw-bold mb-0 profile-username">
@@ -430,12 +440,11 @@ const ProfilePage = ({ user }) => {
 										{profileData?.country_info && (
 											<div
 												className="d-flex align-items-center gap-1 ms-1"
-												title={
-													localizeCountryName(
-														profileData.country_info.name,
-														t,
-													)
-												}
+												title={localizeCountryName(
+													profileData.country_info
+														.name,
+													t,
+												)}
 											>
 												<img
 													className="rounded"
@@ -549,18 +558,27 @@ const ProfilePage = ({ user }) => {
 							</div>
 
 							{/* Collection Value */}
-								<div
-									className={`text-center profile-stat-card position-relative ${isOwner ? "profile-stat-card-clickable" : ""}`}
-									title={t("profile.collectionValue")}
-									onClick={isOwner ? handleTotalValueClick : undefined}
-								>
+							<div
+								className={`text-center profile-stat-card position-relative ${isOwner ? "profile-stat-card-clickable" : ""}`}
+								title={t("profile.collectionValue")}
+								onClick={
+									isOwner ? handleTotalValueClick : undefined
+								}
+							>
 								{isCollectionValuePrivate ? (
 									<span
 										className="collection-value-privacy-icon"
-										title={t("profile.collectionValueOnlyYou")}
-										aria-label={t("profile.collectionValueOnlyYou")}
+										title={t(
+											"profile.collectionValueOnlyYou",
+										)}
+										aria-label={t(
+											"profile.collectionValueOnlyYou",
+										)}
 									>
-										<i className="bi bi-lock-fill" aria-hidden="true"></i>
+										<i
+											className="bi bi-lock-fill"
+											aria-hidden="true"
+										></i>
 									</span>
 								) : null}
 								<div className="d-flex justify-content-center align-items-center gap-2">
@@ -574,11 +592,22 @@ const ProfilePage = ({ user }) => {
 									) : (
 										<span
 											className="profile-collection-value-hidden-state"
-											title={t("profile.collectionValueHidden")}
-											aria-label={t("profile.collectionValueHidden")}
+											title={t(
+												"profile.collectionValueHidden",
+											)}
+											aria-label={t(
+												"profile.collectionValueHidden",
+											)}
 										>
-											<i className="bi bi-lock-fill" aria-hidden="true"></i>
-											<span>{t("profile.collectionValueHidden")}</span>
+											<i
+												className="bi bi-lock-fill"
+												aria-hidden="true"
+											></i>
+											<span>
+												{t(
+													"profile.collectionValueHidden",
+												)}
+											</span>
 										</span>
 									)}
 								</div>
@@ -657,7 +686,9 @@ const ProfilePage = ({ user }) => {
 															target="_blank"
 															rel="noopener noreferrer"
 															className="breadcrumb-link text-muted"
-															title={t("profile.website")}
+															title={t(
+																"profile.website",
+															)}
 														>
 															{profileData.website_link.replace(
 																/^https?:\/\//,
@@ -699,7 +730,9 @@ const ProfilePage = ({ user }) => {
 																}
 															>
 																<span className="text-muted">
-																	{t("profile.emailHidden")}
+																	{t(
+																		"profile.emailHidden",
+																	)}
 																</span>
 
 																<span
@@ -709,7 +742,9 @@ const ProfilePage = ({ user }) => {
 																			true,
 																		)
 																	}
-																	title={t("profile.showEmail")}
+																	title={t(
+																		"profile.showEmail",
+																	)}
 																>
 																	{hover ? (
 																		<EyeOpenIcon className="eye-icon" />
@@ -862,27 +897,32 @@ const ProfilePage = ({ user }) => {
 				<div className="profile-owner-collection-actions">
 					<Link
 						to={`/profile/${profileUsername}/wishlist`}
-						className="btn btn-outline-dark rounded-pill px-4 py-2 profile-wishlist-link"
+						className="btn btn-outline-dark profile-collection-action-button profile-wishlist-link"
 					>
 						<i className="bi bi-bookmark-heart me-2"></i>
 						{t("wishlist.open")}
 					</Link>
 					{isOwner ? (
+						<Link
+							to="/add-kit"
+							className="btn btn-outline-secondary profile-collection-action-button profile-add-kit-link"
+						>
+							{t("profile.addKit")}
+						</Link>
+					) : null}
+					{isOwner ? (
 						<button
 							type="button"
 							onClick={handleExportCollectionClick}
-							className={`btn rounded-pill px-4 py-2 profile-export-link ${
-								profileData?.is_pro ? "btn-outline-primary" : "btn-outline-secondary"
+							className={`btn profile-collection-action-button profile-export-link ${
+								profileData?.is_pro
+									? "btn-outline-primary"
+									: "btn-outline-secondary"
 							}`}
 						>
 							<i className="bi bi-download me-2"></i>
 							{t("profile.exportCollection")}
 						</button>
-					) : null}
-					{isOwner ? (
-						<Link to="/add-kit" className="add-ghost profile-add-kit-link">
-							{t("profile.addKit")}
-						</Link>
 					) : null}
 				</div>
 			</div>
@@ -900,19 +940,21 @@ const ProfilePage = ({ user }) => {
 							id={`profile-kit-${item.id}`}
 							className={`col-12 col-sm-12 col-md-12 col-lg-6 col-xl-4 col-xxl-3 profile-kit-cell ${String(item.id) === activeHighlightedKitId ? "profile-kit-highlight" : ""}`}
 						>
-								<KitCard
-									item={item}
-									onDeleteSuccess={handleDeleteSuccess}
-									user={user}
-									hideViewOnProfile
-								/>
+							<KitCard
+								item={item}
+								onDeleteSuccess={handleDeleteSuccess}
+								user={user}
+								hideViewOnProfile
+							/>
 						</div>
 					))}
 
 					{myKits.length === 0 && (
 						<div className="text-center text-muted py-5 w-100">
 							<p>
-								{isOwner ? t("profile.noKitsOwner") : t("profile.noKitsOther")}
+								{isOwner
+									? t("profile.noKitsOwner")
+									: t("profile.noKitsOther")}
 							</p>
 						</div>
 					)}
