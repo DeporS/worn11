@@ -24,7 +24,6 @@ load_dotenv(os.path.join(BASE_DIR, '.env'))
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django')
-FRONTEND_BASE_URL = os.environ.get('FRONTEND_BASE_URL', '').strip()
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -214,5 +213,6 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 CORS_ALLOW_ALL_ORIGINS = True
+CORS_EXPOSE_HEADERS = ['Content-Disposition']
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

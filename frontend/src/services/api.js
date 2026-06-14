@@ -91,6 +91,31 @@ export const getMyCollectionValueHistory = async () => {
 	return response.data;
 };
 
+export const getFilenameFromContentDisposition = (
+	contentDisposition,
+	fallback,
+) => {
+	if (!contentDisposition) return fallback;
+
+	const filenameStarMatch = contentDisposition.match(
+		/filename\*\s*=\s*([^;]+)/i,
+	);
+	if (filenameStarMatch?.[1]) {
+		const rawValue = filenameStarMatch[1].trim().replace(/^"|"$/g, "");
+		const encodedValue = rawValue.includes("'")
+			? rawValue.split("'").slice(2).join("'")
+			: rawValue;
+		try {
+			return decodeURIComponent(encodedValue);
+		} catch {
+			return encodedValue || fallback;
+		}
+	}
+
+	const filenameMatch = contentDisposition.match(/filename\s*=\s*"?([^";]+)"?/i);
+	return filenameMatch?.[1] || fallback;
+};
+
 export const exportMyCollection = async ({
 	format = "csv",
 	includeSold = true,
@@ -103,13 +128,19 @@ export const exportMyCollection = async ({
 		responseType: "blob",
 	});
 
-	const contentDisposition = response.headers["content-disposition"] || "";
-	const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/i);
+	const contentDisposition =
+		response.headers["content-disposition"] ||
+		response.headers["Content-Disposition"] ||
+		"";
+	const fallbackFilename = `worn11-collection-export.${
+		format === "xlsx" ? "xlsx" : "csv"
+	}`;
 	return {
 		blob: response.data,
-		filename:
-			filenameMatch?.[1] ||
-			`worn11-collection.${format === "xlsx" ? "xlsx" : "csv"}`,
+		filename: getFilenameFromContentDisposition(
+			contentDisposition,
+			fallbackFilename,
+		),
 	};
 };
 

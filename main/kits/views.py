@@ -12,12 +12,12 @@ from rest_framework.throttling import ScopedRateThrottle
 from .throttles import KitCreationThrottle
 
 import csv
+import re
 from datetime import date, datetime
 from decimal import Decimal, ROUND_HALF_UP
 from io import BytesIO
 from xml.sax.saxutils import escape
 from zipfile import ZIP_DEFLATED, ZipFile
-from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.db import IntegrityError, transaction
 from django.db.models import Sum, Count, Exists, OuterRef, Value, BooleanField, Prefetch, Q, Subquery, Max
@@ -26,7 +26,6 @@ from django.http import HttpResponse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from urllib.parse import urlencode
-import re
 
 from .models import League, UserKit, UserKitImage, WishlistItem, Kit, KitType, KitTypeAlias, TeamSeasonKitType, KitTypeModerationAction, TeamModerationAction, ShirtVersion, SIZE_CHOICES, CONDITION_CHOICES, SHIRT_TECHNOLOGIES, SHIRT_TYPES, Team, Profile, Country, Follow, KitComment, KitCommentLike, KitReport, KitReportModerationAction, Conversation, Message, Notification, CollectionValueSnapshot, calculate_collection_total_value, collection_value_history_needs_hidden_kit_rebuild, record_collection_value_snapshot, rebuild_collection_value_history, build_team_slug, normalize_wishlist_kit_type
 from .permissions import IsStaffOrModerator, IsStaffOrSuperuser, can_undo_moderation_action, has_pro_access, moderation_action_is_currently_undoable, is_staff_or_moderator
@@ -837,15 +836,7 @@ def _build_export_status(userkit):
     return 'In collection' if userkit.in_the_collection else 'Sold'
 
 
-def _build_public_kit_url(request, userkit):
-    path = f'/profile/{userkit.user.username}/kits/{userkit.id}'
-    frontend_base_url = getattr(settings, 'FRONTEND_BASE_URL', '').strip()
-    if frontend_base_url:
-        return f"{frontend_base_url.rstrip('/')}{path}"
-    return path
-
-
-def _build_export_row(request, userkit):
+def _build_export_row(userkit):
     value = userkit.final_value
     purchase_price = userkit.purchase_price
     profit_loss = userkit.get_profit_loss()
@@ -872,8 +863,18 @@ def _build_export_row(request, userkit):
         'ROI %': roi_percent,
         'ROI ratio': roi_ratio,
         'Added at': timezone.localtime(userkit.added_at).date(),
-        'Public URL': _build_public_kit_url(request, userkit),
     }
+
+
+def _sanitize_export_filename_username(username):
+    normalized = re.sub(r'[^a-z0-9_-]+', '-', (username or '').strip().lower())
+    normalized = re.sub(r'-{2,}', '-', normalized).strip('-_')
+    return normalized or 'user'
+
+
+def _build_export_filename(user, export_date, extension):
+    safe_username = _sanitize_export_filename_username(getattr(user, 'username', ''))
+    return f'{safe_username}-worn11-collection-{export_date}.{extension}'
 
 
 EXPORT_COLUMNS = [
@@ -893,7 +894,6 @@ EXPORT_COLUMNS = [
     'Profit / loss',
     'ROI %',
     'Added at',
-    'Public URL',
 ]
 
 EXPORT_DECIMAL_ZERO = Decimal('0.00')
@@ -1045,7 +1045,6 @@ def _build_collection_sheet_rows(export_rows):
             {'value': row['Profit / loss'], 'style': 4 if row['Profit / loss'] is not None else 0},
             {'value': roi_ratio, 'style': 5 if roi_ratio is not None else 0},
             {'value': row['Added at'], 'style': 2 if row['Added at'] is not None else 0},
-            {'value': row['Public URL']},
         ])
     return rows
 
@@ -1074,9 +1073,9 @@ def build_collection_export_xlsx(export_rows, summary_rows):
 
     collection_sheet_xml = _build_sheet_xml(
         collection_rows,
-        column_widths=[22, 14, 20, 10, 16, 18, 14, 14, 12, 34, 16, 16, 16, 16, 14, 16, 34],
+        column_widths=[22, 14, 20, 10, 16, 18, 14, 14, 12, 34, 16, 16, 16, 16, 14, 16],
         freeze_top_row=True,
-        autofilter_range=f'A1:Q{max(len(collection_rows), 1)}',
+        autofilter_range=f'A1:P{max(len(collection_rows), 1)}',
     )
     summary_sheet_xml = _build_sheet_xml(
         summary_sheet_rows,
@@ -2943,13 +2942,14 @@ class MyCollectionExportAPI(APIView):
             default=True,
         )
         userkits = list(get_owner_export_queryset(request.user, include_sold=include_sold))
-        export_rows = [_build_export_row(request, userkit) for userkit in userkits]
+        export_rows = [_build_export_row(userkit) for userkit in userkits]
         summary_rows = _build_export_summary(userkits)
         export_date = timezone.localdate().isoformat()
+        export_filename_base = _build_export_filename(request.user, export_date, 'csv')
 
         if export_format == 'csv':
             response = HttpResponse(content_type='text/csv; charset=utf-8')
-            response['Content-Disposition'] = f'attachment; filename="worn11-collection-{export_date}.csv"'
+            response['Content-Disposition'] = f'attachment; filename="{export_filename_base}"'
             writer = csv.DictWriter(response, fieldnames=EXPORT_COLUMNS)
             writer.writeheader()
             for row in export_rows:
@@ -2961,7 +2961,7 @@ class MyCollectionExportAPI(APIView):
             xlsx_bytes,
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         )
-        response['Content-Disposition'] = f'attachment; filename="worn11-collection-{export_date}.xlsx"'
+        response['Content-Disposition'] = f'attachment; filename="{_build_export_filename(request.user, export_date, "xlsx")}"'
         return response
 
 

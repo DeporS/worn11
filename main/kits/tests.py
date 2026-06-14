@@ -18,6 +18,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient, APITestCase
 
 from .models import Country, League, Kit, KitType, KitTypeAlias, TeamSeasonKitType, KitTypeModerationAction, TeamModerationAction, ShirtVersion, Team, UserKit, UserKitImage, WishlistItem, KitComment, KitCommentLike, KitReport, KitReportModerationAction, Conversation, Message, Follow, Notification, CollectionValueSnapshot, AUTOMATED_VALUATION_UNAVAILABLE_MESSAGE, TECHNOLOGIE_MULTIPLIERS, calculate_collection_total_value
+from .views import _sanitize_export_filename_username
 from .serializers import KitSerializer, TeamSerializer, UserKitSerializer, WishlistItemSerializer
 
 
@@ -5781,6 +5782,8 @@ class MyCollectionExportAPITests(APITestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "text/csv; charset=utf-8")
+        self.assertIn(f'attachment; filename="export_owner-worn11-collection-{timezone.localdate().isoformat()}.csv"', response["Content-Disposition"])
+        self.assertNotIn('attachment; filename="worn11-collection-', response["Content-Disposition"])
         rows = list(csv.DictReader(StringIO(response.content.decode("utf-8"))))
         self.assertEqual(len(rows), 2)
         export_row = next(row for row in rows if row["Season"] == "2024/2025")
@@ -5797,7 +5800,6 @@ class MyCollectionExportAPITests(APITestCase):
         self.assertEqual(export_row["Profit / loss"], "30.00")
         self.assertEqual(export_row["ROI %"], "37.50")
         self.assertEqual(export_row["Added at"], str(timezone.localdate()))
-        self.assertTrue(export_row["Public URL"].endswith(f"/profile/{self.owner.username}/kits/{self.export_kit.id}"))
         csv_text = response.content.decode("utf-8")
         self.assertNotIn("2022/2023", csv_text)
         self.assertNotIn("2021/2022", csv_text)
@@ -5805,6 +5807,7 @@ class MyCollectionExportAPITests(APITestCase):
         self.assertNotIn("Manual value", csv_text)
         self.assertNotIn("Final value", csv_text)
         self.assertNotIn("Image URLs", csv_text)
+        self.assertNotIn("Public URL", csv_text)
 
     def test_pro_user_can_export_csv_with_correct_roi_percentage(self):
         roi_kit = UserKit.objects.create(
@@ -5853,6 +5856,11 @@ class MyCollectionExportAPITests(APITestCase):
             response["Content-Type"],
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
+        self.assertIn(
+            f'attachment; filename="export_owner-worn11-collection-{timezone.localdate().isoformat()}.xlsx"',
+            response["Content-Disposition"],
+        )
+        self.assertNotIn('attachment; filename="worn11-collection-', response["Content-Disposition"])
         workbook_xml, sheet1_xml, sheet2_xml = self._workbook_xml_strings(response)
         self.assertIn('name="Collection"', workbook_xml)
         self.assertIn('name="Summary"', workbook_xml)
@@ -5866,7 +5874,7 @@ class MyCollectionExportAPITests(APITestCase):
         self.assertNotIn("Final value", sheet1_xml)
         self.assertNotIn("Image URLs", sheet1_xml)
         self.assertNotIn("2022/2023", sheet1_xml)
-        self.assertIn(f"/profile/{self.owner.username}/kits/{self.export_kit.id}", sheet1_xml)
+        self.assertNotIn("Public URL", sheet1_xml)
         self.assertIn("0.375", sheet1_xml)
         self.assertIn("0.20", sheet2_xml)
 
@@ -5915,6 +5923,12 @@ class MyCollectionExportAPITests(APITestCase):
         self.authenticate(self.owner)
         response = self.client.get(self.url, {"format": "pdf"})
         self.assertEqual(response.status_code, 400)
+
+    def test_export_filename_username_is_sanitized(self):
+        self.assertEqual(_sanitize_export_filename_username("DeporS"), "depors")
+        self.assertEqual(_sanitize_export_filename_username("John Doe"), "john-doe")
+        self.assertEqual(_sanitize_export_filename_username("krzysztof/matyla"), "krzysztof-matyla")
+        self.assertEqual(_sanitize_export_filename_username(""), "user")
 
 
 class AdminKitReportModerationAPITests(APITestCase):
