@@ -4435,7 +4435,12 @@ class UserKitPrivateNoteTests(APITestCase):
             private_note="Collector-only details",
         )
 
+    def enable_pro(self):
+        self.owner.profile.is_pro = True
+        self.owner.profile.save(update_fields=["is_pro"])
+
     def test_create_userkit_saves_private_note(self):
+        self.enable_pro()
         self.client.force_authenticate(user=self.owner)
 
         response = self.client.post(
@@ -4458,7 +4463,28 @@ class UserKitPrivateNoteTests(APITestCase):
         self.assertEqual(response.data["private_note"], "Bought from a local seller")
         self.assertTrue(response.data["has_private_note"])
 
+    def test_non_pro_cannot_create_userkit_with_private_note(self):
+        self.client.force_authenticate(user=self.owner)
+
+        response = self.client.post(
+            reverse("api-my-collection"),
+            {
+                "team_name": self.team.name,
+                "season": "2025/2026",
+                "kit_type": "Away",
+                "size": "L",
+                "condition": "VERY_GOOD",
+                "shirt_technology": "REPLICA",
+                "private_note": "Locked note",
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["private_note"][0], "Private notes are a Pro feature.")
+
     def test_update_userkit_updates_private_note(self):
+        self.enable_pro()
         self.client.force_authenticate(user=self.owner)
 
         response = self.client.patch(
@@ -4472,6 +4498,31 @@ class UserKitPrivateNoteTests(APITestCase):
         self.assertEqual(self.user_kit.private_note, "Updated note")
         self.assertEqual(response.data["private_note"], "Updated note")
         self.assertTrue(response.data["has_private_note"])
+
+    def test_non_pro_cannot_update_private_note(self):
+        self.client.force_authenticate(user=self.owner)
+
+        response = self.client.patch(
+            reverse("api-my-collection-detail", args=[self.user_kit.id]),
+            {"private_note": "Updated note"},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["private_note"][0], "Private notes are a Pro feature.")
+
+    def test_non_pro_update_without_private_note_preserves_existing_private_note(self):
+        self.client.force_authenticate(user=self.owner)
+
+        response = self.client.patch(
+            reverse("api-my-collection-detail", args=[self.user_kit.id]),
+            {"size": "M"},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.user_kit.refresh_from_db()
+        self.assertEqual(self.user_kit.private_note, "Collector-only details")
 
     def test_owner_can_see_private_note_in_own_collection_response(self):
         self.client.force_authenticate(user=self.owner)
@@ -4535,8 +4586,7 @@ class UserKitPrivateNoteTests(APITestCase):
         self.assertNotIn("has_private_note", response.data["results"][0])
 
     def test_private_note_update_does_not_create_collection_value_snapshot(self):
-        self.owner.profile.is_pro = True
-        self.owner.profile.save()
+        self.enable_pro()
         self.client.force_authenticate(user=self.owner)
 
         response = self.client.patch(
@@ -4549,6 +4599,7 @@ class UserKitPrivateNoteTests(APITestCase):
         self.assertEqual(CollectionValueSnapshot.objects.count(), 0)
 
     def test_private_note_max_length_validation(self):
+        self.enable_pro()
         self.client.force_authenticate(user=self.owner)
 
         response = self.client.patch(
@@ -4559,6 +4610,170 @@ class UserKitPrivateNoteTests(APITestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("private_note", response.data)
+
+
+class UserKitOfferLinkTests(APITestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.owner = User.objects.create_user(username="offer_owner", password="password123")
+        self.other_user = User.objects.create_user(username="offer_other", password="password123")
+        self.team = Team.objects.create(name="Offer Link FC", is_verified=True)
+        self.kit = Kit.objects.create(
+            team=self.team,
+            season="2024/2025",
+            kit_type="Home",
+            estimated_price=Decimal("95.00"),
+        )
+        self.user_kit = UserKit.objects.create(
+            user=self.owner,
+            kit=self.kit,
+            shirt_technology="REPLICA",
+            condition="VERY_GOOD",
+            size="L",
+            for_sale=True,
+            offer_link="https://example.com/listing",
+        )
+
+    def enable_pro(self):
+        self.owner.profile.is_pro = True
+        self.owner.profile.save(update_fields=["is_pro"])
+
+    def create_payload(self, **overrides):
+        payload = {
+            "team_name": self.team.name,
+            "season": "2025/2026",
+            "kit_type": "Away",
+            "size": "L",
+            "condition": "VERY_GOOD",
+            "shirt_version_code": "REPLICA",
+            "for_sale": True,
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_non_pro_can_create_for_sale_kit_without_offer_link(self):
+        self.client.force_authenticate(user=self.owner)
+
+        response = self.client.post(
+            reverse("api-my-collection"),
+            self.create_payload(),
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        created = UserKit.objects.get(pk=response.data["id"])
+        self.assertTrue(created.for_sale)
+        self.assertFalse(created.offer_link)
+
+    def test_non_pro_cannot_create_offer_link(self):
+        self.client.force_authenticate(user=self.owner)
+
+        response = self.client.post(
+            reverse("api-my-collection"),
+            self.create_payload(offer_link="https://example.com/new-listing"),
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["offer_link"][0], "External selling links are a Pro feature.")
+
+    def test_non_pro_cannot_update_offer_link(self):
+        self.client.force_authenticate(user=self.owner)
+
+        response = self.client.patch(
+            reverse("api-my-collection-detail", args=[self.user_kit.id]),
+            {"offer_link": "https://example.com/updated"},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["offer_link"][0], "External selling links are a Pro feature.")
+
+    def test_non_pro_update_without_offer_link_preserves_existing_offer_link(self):
+        self.client.force_authenticate(user=self.owner)
+
+        response = self.client.patch(
+            reverse("api-my-collection-detail", args=[self.user_kit.id]),
+            {"size": "M"},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.user_kit.refresh_from_db()
+        self.assertEqual(self.user_kit.offer_link, "https://example.com/listing")
+
+    def test_pro_can_create_offer_link(self):
+        self.enable_pro()
+        self.client.force_authenticate(user=self.owner)
+
+        response = self.client.post(
+            reverse("api-my-collection"),
+            self.create_payload(offer_link="https://example.com/new-listing"),
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        created = UserKit.objects.get(pk=response.data["id"])
+        self.assertEqual(created.offer_link, "https://example.com/new-listing")
+
+    def test_pro_can_update_offer_link(self):
+        self.enable_pro()
+        self.client.force_authenticate(user=self.owner)
+
+        response = self.client.patch(
+            reverse("api-my-collection-detail", args=[self.user_kit.id]),
+            {"offer_link": "https://example.com/updated"},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.user_kit.refresh_from_db()
+        self.assertEqual(self.user_kit.offer_link, "https://example.com/updated")
+
+    def test_public_profile_hides_offer_link_for_non_pro_owner(self):
+        self.client.force_authenticate(user=self.other_user)
+
+        response = self.client.get(reverse("api-user-collection", args=[self.owner.username]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("offer_link", response.data[0])
+
+    def test_public_profile_shows_offer_link_for_pro_owner_when_for_sale(self):
+        self.enable_pro()
+        self.client.force_authenticate(user=self.other_user)
+
+        response = self.client.get(reverse("api-user-collection", args=[self.owner.username]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data[0]["offer_link"], "https://example.com/listing")
+
+    def test_public_profile_hides_offer_link_when_not_for_sale(self):
+        self.enable_pro()
+        self.user_kit.for_sale = False
+        self.user_kit.save(update_fields=["for_sale"])
+        self.client.force_authenticate(user=self.other_user)
+
+        response = self.client.get(reverse("api-user-collection", args=[self.owner.username]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("offer_link", response.data[0])
+
+    def test_public_detail_hides_offer_link_for_non_pro_owner(self):
+        self.client.force_authenticate(user=self.other_user)
+
+        response = self.client.get(reverse("kit-detail", args=[self.user_kit.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("offer_link", response.data)
+
+    def test_public_detail_shows_offer_link_for_pro_owner_when_for_sale(self):
+        self.enable_pro()
+        self.client.force_authenticate(user=self.other_user)
+
+        response = self.client.get(reverse("kit-detail", args=[self.user_kit.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["offer_link"], "https://example.com/listing")
 
 
 class UserKitPurchaseTrackingTests(APITestCase):

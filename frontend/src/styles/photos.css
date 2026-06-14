@@ -39,9 +39,7 @@
 }
 
 .purchase-tracking-upgrade-link {
-    display: inline-flex;
-    align-items: center;
-    width: fit-content;
+    display: inline;
     color: #2563eb;
     font-size: 0.875rem;
     font-weight: 600;
@@ -50,4 +48,28 @@
 
 .purchase-tracking-upgrade-link:hover {
     text-decoration: underline;
+}
+
+.pro-collection-tools-card {
+    background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+}
+
+.pro-collection-tools-list {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.pro-collection-tools-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #334155;
+    font-size: 0.9rem;
+    line-height: 1.35;
+}
+
+.pro-collection-tools-item i {
+    color: #2563eb;
+    font-size: 0.95rem;
+    flex: 0 0 auto;
 }

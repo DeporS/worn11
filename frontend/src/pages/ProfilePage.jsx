@@ -895,34 +895,38 @@ const ProfilePage = ({ user }) => {
 			{/* Add Kit Button */}
 			<div className="d-flex justify-content-center my-4">
 				<div className="profile-owner-collection-actions">
-					<Link
-						to={`/profile/${profileUsername}/wishlist`}
-						className="btn btn-outline-dark profile-collection-action-button profile-wishlist-link"
-					>
-						<i className="bi bi-bookmark-heart me-2"></i>
-						{t("wishlist.open")}
-					</Link>
-					{isOwner ? (
+					<div className="profile-owner-collection-tools">
 						<Link
-							to="/add-kit"
-							className="btn btn-outline-secondary profile-collection-action-button profile-add-kit-link"
+							to={`/profile/${profileUsername}/wishlist`}
+							className="btn btn-outline-dark profile-collection-action-button profile-wishlist-link"
 						>
-							{t("profile.addKit")}
+							<i className="bi bi-bookmark-heart me-2"></i>
+							{t("wishlist.open")}
 						</Link>
-					) : null}
+						{isOwner ? (
+							<button
+								type="button"
+								onClick={handleExportCollectionClick}
+								className={`btn profile-collection-action-button profile-export-link ${
+									profileData?.is_pro
+										? "btn-outline-primary"
+										: "btn-outline-secondary"
+								}`}
+							>
+								<i className="bi bi-download me-2"></i>
+								{t("profile.exportCollection")}
+							</button>
+						) : null}
+					</div>
 					{isOwner ? (
-						<button
-							type="button"
-							onClick={handleExportCollectionClick}
-							className={`btn profile-collection-action-button profile-export-link ${
-								profileData?.is_pro
-									? "btn-outline-primary"
-									: "btn-outline-secondary"
-							}`}
-						>
-							<i className="bi bi-download me-2"></i>
-							{t("profile.exportCollection")}
-						</button>
+						<div className="profile-owner-primary-action">
+							<Link
+								to="/add-kit"
+								className="btn btn-outline-secondary profile-collection-action-button profile-add-kit-link"
+							>
+								{t("profile.addKit")}
+							</Link>
+						</div>
 					) : null}
 				</div>
 			</div>

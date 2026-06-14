@@ -1416,6 +1416,8 @@ class UserKitSerializer(serializers.ModelSerializer):
     PRIVATE_NOTE_MAX_LENGTH = 2000
     LEGACY_VERSION_CODES = {'REPLICA', 'PLAYER_ISSUE', 'MATCH_WORN'}
     PURCHASE_TRACKING_PRO_ERROR = 'Purchase tracking is a Pro feature.'
+    PRIVATE_NOTE_PRO_ERROR = 'Private notes are a Pro feature.'
+    OFFER_LINK_PRO_ERROR = 'External selling links are a Pro feature.'
 
     # Read-only nested serializers
     kit = KitSerializer(read_only=True)
@@ -1543,12 +1545,27 @@ class UserKitSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Purchase date cannot be in the future.')
         return value
 
+    def _has_non_empty_initial_value(self, field_name):
+        raw_value = self.initial_data.get(field_name, serializers.empty)
+        if raw_value in (serializers.empty, None, ''):
+            return False
+        if isinstance(raw_value, str):
+            return bool(raw_value.strip())
+        return True
+
     def _purchase_tracking_field_errors(self):
         errors = {}
         for field in ('purchase_price', 'purchase_date'):
-            raw_value = self.initial_data.get(field, serializers.empty)
-            if raw_value not in (serializers.empty, None, ''):
+            if self._has_non_empty_initial_value(field):
                 errors[field] = self.PURCHASE_TRACKING_PRO_ERROR
+        return errors
+
+    def _pro_only_field_errors(self):
+        errors = {}
+        if self._has_non_empty_initial_value('private_note'):
+            errors['private_note'] = self.PRIVATE_NOTE_PRO_ERROR
+        if self._has_non_empty_initial_value('offer_link'):
+            errors['offer_link'] = self.OFFER_LINK_PRO_ERROR
         return errors
 
     def validate(self, attrs):
@@ -1556,6 +1573,9 @@ class UserKitSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
 
         if not has_pro_access(getattr(request, 'user', None)):
+            pro_only_errors = self._pro_only_field_errors()
+            if pro_only_errors:
+                raise serializers.ValidationError(pro_only_errors)
             purchase_tracking_errors = self._purchase_tracking_field_errors()
             if purchase_tracking_errors:
                 raise serializers.ValidationError(purchase_tracking_errors)
@@ -1632,6 +1652,12 @@ class UserKitSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
+        can_show_public_offer_link = (
+            has_pro_access(instance.user)
+            and instance.in_the_collection
+            and instance.for_sale
+            and bool(instance.offer_link)
+        )
 
         if not self.get_can_view_kit_values(instance):
             representation['final_value'] = None
@@ -1649,6 +1675,8 @@ class UserKitSerializer(serializers.ModelSerializer):
             representation.pop('roi_percent', None)
             representation.pop('private_note', None)
             representation.pop('has_private_note', None)
+            if not can_show_public_offer_link:
+                representation.pop('offer_link', None)
 
         return representation
 

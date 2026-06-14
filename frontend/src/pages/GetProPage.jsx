@@ -8,6 +8,17 @@ const GetProPage = () => {
 	const [notice, setNotice] = useState("");
 
 	useEffect(() => {
+		const root = document.documentElement;
+		root.classList.add("get-pro-no-scroll");
+		document.body.classList.add("get-pro-no-scroll");
+
+		return () => {
+			root.classList.remove("get-pro-no-scroll");
+			document.body.classList.remove("get-pro-no-scroll");
+		};
+	}, []);
+
+	useEffect(() => {
 		if (!notice) return undefined;
 
 		const timeoutId = window.setTimeout(() => {
@@ -54,91 +65,95 @@ const GetProPage = () => {
 	return (
 		<div className="get-pro-page">
 			<div className="container">
-				<section className="get-pro-header">
-					<h1>{t("getPro.title")}</h1>
-					<p className="get-pro-subtitle">
-						{t("getPro.subtitle")}
-					</p>
-					<p className="get-pro-founder-line">
-						<span className="get-pro-founder-line-label">
-							{t("getPro.founderLabel")}
-						</span>
-						<span className="get-pro-founder-line-separator">·</span>
-						<span className="get-pro-founder-line-text">
-							{t("getPro.founderLine")}
-						</span>
-					</p>
-				</section>
+				<div className="get-pro-shell">
+					<div className="get-pro-main">
+						<section className="get-pro-header">
+							<h1>{t("getPro.title")}</h1>
+							<p className="get-pro-subtitle">
+								{t("getPro.subtitle")}
+							</p>
+							<p className="get-pro-founder-line">
+								<span className="get-pro-founder-line-label">
+									{t("getPro.founderLabel")}
+								</span>
+								<span className="get-pro-founder-line-separator">·</span>
+								<span className="get-pro-founder-line-text">
+									{t("getPro.founderLine")}
+								</span>
+							</p>
+						</section>
 
-				<section className="get-pro-pricing-section">
-					<div className="get-pro-pricing-grid">
-						<article className="get-pro-pricing-card">
-							<div className="get-pro-pricing-card-head">
-								<h2>{t("getPro.monthlyTitle")}</h2>
-								<p>{t("getPro.monthlyDescription")}</p>
-							</div>
-							<div className="get-pro-price-row">
-								<span className="get-pro-price">
-									{t("getPro.monthlyPrice")}
-								</span>
-								<span className="get-pro-period">
-									{t("getPro.perMonth")}
-								</span>
-							</div>
-							<button
-								type="button"
-								className="btn get-pro-outline-button"
-								onClick={showComingSoon}
-							>
-								{t("getPro.chooseMonthly")}
-							</button>
-						</article>
+						<section className="get-pro-pricing-section">
+							<div className="get-pro-pricing-grid">
+								<article className="get-pro-pricing-card">
+									<div className="get-pro-pricing-card-head">
+										<h2>{t("getPro.monthlyTitle")}</h2>
+										<p>{t("getPro.monthlyDescription")}</p>
+									</div>
+									<div className="get-pro-price-row">
+										<span className="get-pro-price">
+											{t("getPro.monthlyPrice")}
+										</span>
+										<span className="get-pro-period">
+											{t("getPro.perMonth")}
+										</span>
+									</div>
+									<button
+										type="button"
+										className="btn get-pro-outline-button"
+										onClick={showComingSoon}
+									>
+										{t("getPro.chooseMonthly")}
+									</button>
+								</article>
 
-						<article className="get-pro-pricing-card get-pro-pricing-card-featured">
-							<div className="get-pro-best-value-pill">
-								{t("getPro.bestValue")}
+								<article className="get-pro-pricing-card get-pro-pricing-card-featured">
+									<div className="get-pro-best-value-pill">
+										{t("getPro.bestValue")}
+									</div>
+									<div className="get-pro-pricing-card-head">
+										<h2>{t("getPro.yearlyTitle")}</h2>
+										<p>{t("getPro.yearlyDescription")}</p>
+									</div>
+									<div className="get-pro-price-row">
+										<span className="get-pro-price">
+											{t("getPro.yearlyPrice")}
+										</span>
+										<span className="get-pro-period">
+											{t("getPro.perYear")}
+										</span>
+									</div>
+									<button
+										type="button"
+										className="btn get-pro-primary-button"
+										onClick={showComingSoon}
+									>
+										{t("getPro.chooseYearly")}
+									</button>
+								</article>
 							</div>
-							<div className="get-pro-pricing-card-head">
-								<h2>{t("getPro.yearlyTitle")}</h2>
-								<p>{t("getPro.yearlyDescription")}</p>
-							</div>
-							<div className="get-pro-price-row">
-								<span className="get-pro-price">
-									{t("getPro.yearlyPrice")}
-								</span>
-								<span className="get-pro-period">
-									{t("getPro.perYear")}
-								</span>
-							</div>
-							<button
-								type="button"
-								className="btn get-pro-primary-button"
-								onClick={showComingSoon}
-							>
-								{t("getPro.chooseYearly")}
-							</button>
-						</article>
+
+							{notice ? (
+								<div className="get-pro-inline-notice" role="status">
+									{notice}
+								</div>
+							) : null}
+						</section>
 					</div>
 
-					{notice ? (
-						<div className="get-pro-inline-notice" role="status">
-							{notice}
+					<section className="get-pro-features-section">
+						<div className="get-pro-section-card">
+							<div className="get-pro-section-heading">
+								<h2>{t("getPro.featuresTitle")}</h2>
+							</div>
+							<ul className="get-pro-feature-list">
+								{proFeatures.map((feature) => (
+									<li key={feature}>{feature}</li>
+								))}
+							</ul>
 						</div>
-					) : null}
-				</section>
-
-				<section className="get-pro-features-section">
-					<div className="get-pro-section-card">
-						<div className="get-pro-section-heading">
-							<h2>{t("getPro.featuresTitle")}</h2>
-						</div>
-						<ul className="get-pro-feature-list">
-							{proFeatures.map((feature) => (
-								<li key={feature}>{feature}</li>
-							))}
-						</ul>
-					</div>
-				</section>
+					</section>
+				</div>
 
 				{/* <section className="get-pro-faq-section">
 					<div className="get-pro-section-card">

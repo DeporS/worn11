@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { addKitToCollection } from "../services/api";
 import api from "../services/api";
@@ -354,7 +354,7 @@ const AddShirtFormPage = () => {
 
 		// Validate offer link - prevent malicious strings
 		const urlPattern = /^(http|https):\/\/[^ "]+$/;
-		if (offerLink && !urlPattern.test(offerLink)) {
+		if (isPro && offerLink && !urlPattern.test(offerLink)) {
 			setLinkError(t("forms.linkProtocolError"));
 			setLoading(false);
 			return;
@@ -380,8 +380,10 @@ const AddShirtFormPage = () => {
 		formData.append("manual_value", manualValue);
 		formData.append("player_name", playerName);
 		formData.append("player_number", playerNumber);
-		formData.append("private_note", privateNote);
-		formData.append("offer_link", offerLink);
+		if (isPro) {
+			formData.append("private_note", privateNote);
+			formData.append("offer_link", offerLink);
+		}
 		if (isPro) {
 			formData.append("purchase_price", purchasePrice);
 			formData.append("purchase_date", purchaseDate);
@@ -1293,178 +1295,199 @@ const AddShirtFormPage = () => {
 									</div>
 								</div>
 
-								<div
-									className="mb-4 p-3 rounded border bg-light border-light"
-									style={{ transition: "all 0.3s ease" }}
-								>
-									<div className="d-flex align-items-center gap-2 mb-2 text-muted">
-										<i className="bi bi-receipt fs-5"></i>
-										<span
-											className="fw-bold text-uppercase"
-											style={{
-												fontSize: "0.75rem",
-												letterSpacing: "1px",
-											}}
+								{isPro ? (
+									<>
+										<div
+											className="mb-4 p-3 rounded border bg-light border-light"
+											style={{ transition: "all 0.3s ease" }}
 										>
-											{t("forms.purchaseTracking")}
-										</span>
-									</div>
-
-									{isPro ? (
-										<div className="row g-2">
-											<div className="col-md-6">
-												<div className="form-floating">
-													<input
-														type="number"
-														step="0.01"
-														min="0"
-														className="form-control money-input"
-														inputMode="decimal"
-														id="floatingPurchasePrice"
-														placeholder="0.00"
-														value={purchasePrice}
-														onChange={(e) =>
-															setPurchasePrice(
-																e.target.value,
-															)
-														}
-													/>
-													<label htmlFor="floatingPurchasePrice">
-														{t("kit.purchasePrice")}
-													</label>
-												</div>
-											</div>
-											<div className="col-md-6">
-												<div className="form-floating">
-													<input
-														type="date"
-														className="form-control"
-														id="floatingPurchaseDate"
-														value={purchaseDate}
-														onChange={(e) =>
-															setPurchaseDate(
-																e.target.value,
-															)
-														}
-													/>
-													<label htmlFor="floatingPurchaseDate">
-														{t(
-															"forms.purchaseDate",
-														)}
-													</label>
-												</div>
-											</div>
-										</div>
-									) : (
-										<div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 p-3 rounded bg-white border">
-											<div>
-												<div className="fw-semibold text-dark small mb-1">
-													{t(
-														"kit.purchaseTrackingProOnly",
-													)}
-												</div>
-												{/* <a
-													href="/get-pro"
-													className="purchase-tracking-upgrade-link"
+											<div className="d-flex align-items-center gap-2 mb-2 text-muted">
+												<i className="bi bi-receipt fs-5"></i>
+												<span
+													className="fw-bold text-uppercase"
+													style={{
+														fontSize: "0.75rem",
+														letterSpacing: "1px",
+													}}
 												>
-													{t("kit.upgradeToPro")}
-												</a> */}
+													{t("forms.purchaseTracking")}
+												</span>
+											</div>
+
+											<div className="row g-2">
+												<div className="col-md-6">
+													<div className="form-floating">
+														<input
+															type="number"
+															step="0.01"
+															min="0"
+															className="form-control money-input"
+															inputMode="decimal"
+															id="floatingPurchasePrice"
+															placeholder="0.00"
+															value={purchasePrice}
+															onChange={(e) =>
+																setPurchasePrice(
+																	e.target.value,
+																)
+															}
+														/>
+														<label htmlFor="floatingPurchasePrice">
+															{t("kit.purchasePrice")}
+														</label>
+													</div>
+												</div>
+												<div className="col-md-6">
+													<div className="form-floating">
+														<input
+															type="date"
+															className="form-control"
+															id="floatingPurchaseDate"
+															value={purchaseDate}
+															onChange={(e) =>
+																setPurchaseDate(
+																	e.target.value,
+																)
+															}
+														/>
+														<label htmlFor="floatingPurchaseDate">
+															{t("forms.purchaseDate")}
+														</label>
+													</div>
+												</div>
 											</div>
 										</div>
-									)}
-								</div>
 
-								{/* Offer Link */}
-								<div
-									className={`mb-4 p-3 rounded border ${linkError ? "border-danger bg-danger bg-opacity-10" : "bg-light border-light"}`}
-									style={{ transition: "all 0.3s ease" }}
-								>
-									<div className="d-flex align-items-center gap-2 mb-3 text-muted">
-										<i className="bi bi-link-45deg fs-4"></i>
-										<span
-											className="fw-bold text-uppercase"
-											style={{
-												fontSize: "0.75rem",
-												letterSpacing: "1px",
-											}}
+										{/* Offer Link */}
+										<div
+											className={`mb-4 p-3 rounded border ${linkError ? "border-danger bg-danger bg-opacity-10" : "bg-light border-light"}`}
+											style={{ transition: "all 0.3s ease" }}
 										>
-											{t("forms.offerLinkOptional")}
-										</span>
-									</div>
+											<div className="d-flex align-items-center gap-2 mb-3 text-muted">
+												<i className="bi bi-link-45deg fs-4"></i>
+												<span
+													className="fw-bold text-uppercase"
+													style={{
+														fontSize: "0.75rem",
+														letterSpacing: "1px",
+													}}
+												>
+													{t("forms.offerLinkOptional")}
+												</span>
+											</div>
 
-									<div className="row g-2">
-										<div className="">
+											<div className="row g-2">
+												<div className="">
+													<div className="form-floating">
+														<input
+															type="url"
+															className={`form-control ${linkError ? "is-invalid" : ""}`}
+															id="floatingOfferLink"
+															placeholder="https://example.com/offer"
+															value={offerLink}
+															onChange={(e) =>
+																setOfferLink(
+																	e.target.value,
+																)
+															}
+														/>
+														<label htmlFor="floatingOfferLink">
+															{t("forms.offerLinkLabel")}
+														</label>
+													</div>
+												</div>
+											</div>
+
+											{linkError && (
+												<div className="text-danger mt-2 small d-flex align-items-center">
+													<i className="bi bi-exclamation-circle me-1"></i>
+													{linkError}
+												</div>
+											)}
+										</div>
+
+										<div
+											className="mb-4 p-3 rounded border bg-light border-light"
+											style={{ transition: "all 0.3s ease" }}
+										>
+											<div className="d-flex align-items-center gap-2 mb-3 text-muted">
+												<i className="bi bi-lock fs-5"></i>
+												<span
+													className="fw-bold text-uppercase"
+													style={{
+														fontSize: "0.75rem",
+														letterSpacing: "1px",
+													}}
+												>
+													{t("forms.privateNoteLabel")}
+												</span>
+											</div>
+
 											<div className="form-floating">
-												<input
-													type="url"
-													className={`form-control ${linkError ? "is-invalid" : ""}`}
-													id="floatingOfferLink"
-													placeholder="https://example.com/offer"
-													value={offerLink}
+												<textarea
+													className="form-control"
+													id="floatingPrivateNote"
+													placeholder={t(
+														"forms.privateNotePlaceholder",
+													)}
+													style={{ minHeight: "140px" }}
+													maxLength={2000}
+													value={privateNote}
 													onChange={(e) =>
-														setOfferLink(
-															e.target.value,
-														)
+														setPrivateNote(e.target.value)
 													}
 												/>
-												<label htmlFor="floatingOfferLink">
-													{t("forms.offerLinkLabel")}
+												<label htmlFor="floatingPrivateNote">
+													{t("forms.privateNote")}
 												</label>
 											</div>
+											<div className="form-text mt-2 small d-flex justify-content-between gap-3">
+												<span>
+													{t("forms.privateNoteHelp")}
+												</span>
+												<span>{privateNote.length}/2000</span>
+											</div>
 										</div>
-									</div>
-
-									{/* Error */}
-									{linkError && (
-										<div className="text-danger mt-2 small d-flex align-items-center">
-											<i className="bi bi-exclamation-circle me-1"></i>
-											{linkError}
+									</>
+								) : (
+									<div className="mb-4 p-3 rounded border bg-light border-light pro-collection-tools-card">
+										<div className="d-flex align-items-center gap-2 mb-2 text-muted">
+											<i className="bi bi-stars fs-5"></i>
+											<span
+												className="fw-bold text-uppercase"
+												style={{
+													fontSize: "0.75rem",
+													letterSpacing: "1px",
+												}}
+											>
+												{t("forms.proCollectionTools")}
+											</span>
 										</div>
-									)}
-								</div>
-
-								<div
-									className="mb-4 p-3 rounded border bg-light border-light"
-									style={{ transition: "all 0.3s ease" }}
-								>
-									<div className="d-flex align-items-center gap-2 mb-3 text-muted">
-										<i className="bi bi-lock fs-5"></i>
-										<span
-											className="fw-bold text-uppercase"
-											style={{
-												fontSize: "0.75rem",
-												letterSpacing: "1px",
-											}}
+										<p className="small text-muted mb-3">
+											{t("forms.proCollectionToolsHelp")}
+										</p>
+										<div className="pro-collection-tools-list mb-2">
+											<div className="pro-collection-tools-item">
+												<i className="bi bi-check2" aria-hidden="true"></i>
+												<span>{t("forms.proCollectionToolsPurchaseTracking")}</span>
+											</div>
+											<div className="pro-collection-tools-item">
+												<i className="bi bi-check2" aria-hidden="true"></i>
+												<span>{t("forms.proCollectionToolsExternalLinks")}</span>
+											</div>
+											<div className="pro-collection-tools-item">
+												<i className="bi bi-check2" aria-hidden="true"></i>
+												<span>{t("forms.proCollectionToolsPrivateNotes")}</span>
+											</div>
+										</div>
+										<Link
+											to="/get-pro"
+											className="purchase-tracking-upgrade-link"
 										>
-											{t("forms.privateNoteLabel")}
-										</span>
+											{t("kit.upgradeToPro")}
+										</Link>
 									</div>
-
-									<div className="form-floating">
-										<textarea
-											className="form-control"
-											id="floatingPrivateNote"
-											placeholder={t(
-												"forms.privateNotePlaceholder",
-											)}
-											style={{ minHeight: "140px" }}
-											maxLength={2000}
-											value={privateNote}
-											onChange={(e) =>
-												setPrivateNote(e.target.value)
-											}
-										/>
-										<label htmlFor="floatingPrivateNote">
-											{t("forms.privateNote")}
-										</label>
-									</div>
-									<div className="form-text mt-2 small d-flex justify-content-between gap-3">
-										<span>
-											{t("forms.privateNoteHelp")}
-										</span>
-										<span>{privateNote.length}/2000</span>
-									</div>
-								</div>
+								)}
 
 								{/* Buttons */}
 								<div className="d-grid gap-2">
