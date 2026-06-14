@@ -37,6 +37,13 @@ const KitCard = ({
 	const canShowValue = item.final_value !== null && item.final_value !== undefined;
 	const isSold = item.in_the_collection === false;
 	const isModerationHidden = item.is_hidden_by_moderation === true;
+	const museumUrl =
+		item?.kit?.team?.slug && item?.kit?.season && item?.kit?.kit_type
+			? `/history/team/${item.kit.team.slug}/variants?${new URLSearchParams({
+					season: item.kit.season,
+					type: item.kit.kit_type,
+				}).toString()}`
+			: null;
 
 	// Like state
 	const [isLiked, setIsLiked] = useState(() => {
@@ -524,6 +531,18 @@ const KitCard = ({
 							)}
 
 							{/* Share Button */}
+							{museumUrl ? (
+								<Link
+									to={museumUrl}
+									className="btn btn-sm edit-button"
+									title={t("kitCard.seeInMuseum")}
+									aria-label={t("kitCard.seeInMuseum")}
+									onClick={(e) => e.stopPropagation()}
+								>
+									<i className="bi bi-bank2" aria-hidden="true"></i>
+								</Link>
+							) : null}
+
 							<button
 								className="btn btn-sm edit-button"
 								onClick={handleShareClick}
