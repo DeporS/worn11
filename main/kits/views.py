@@ -17,6 +17,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from io import BytesIO
 from xml.sax.saxutils import escape
 from zipfile import ZIP_DEFLATED, ZipFile
+from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.db import IntegrityError, transaction
 from django.db.models import Sum, Count, Exists, OuterRef, Value, BooleanField, Prefetch, Q, Subquery, Max
@@ -832,36 +833,26 @@ def get_owner_export_queryset(user, *, include_sold=True):
     return queryset
 
 
-def _build_public_profile_url(request, userkit):
-    path = f"/profile/{userkit.user.username}?highlightKit={userkit.id}"
-    try:
-        return request.build_absolute_uri(path)
-    except Exception:
-        return path
-
-
-def _build_image_urls(request, userkit):
-    image_urls = []
-    for image in userkit.images.all():
-        if not image.image:
-            continue
-        try:
-            image_urls.append(request.build_absolute_uri(image.image.url))
-        except Exception:
-            image_urls.append(image.image.url)
-    return '; '.join(image_urls)
-
-
 def _build_export_status(userkit):
     return 'In collection' if userkit.in_the_collection else 'Sold'
 
 
+def _build_public_kit_url(request, userkit):
+    path = f'/profile/{userkit.user.username}/kits/{userkit.id}'
+    frontend_base_url = getattr(settings, 'FRONTEND_BASE_URL', '').strip()
+    if frontend_base_url:
+        return f"{frontend_base_url.rstrip('/')}{path}"
+    return path
+
+
 def _build_export_row(request, userkit):
-    estimated_value = getattr(getattr(userkit, 'kit', None), 'estimated_price', None)
-    final_value = userkit.final_value
+    value = userkit.final_value
     purchase_price = userkit.purchase_price
     profit_loss = userkit.get_profit_loss()
     roi_percent = userkit.get_roi_percent()
+    roi_ratio = None
+    if profit_loss is not None and purchase_price is not None and purchase_price > 0:
+        roi_ratio = (profit_loss / purchase_price).quantize(Decimal('0.0001'))
 
     return {
         'Team': userkit.kit.team.name,
@@ -874,16 +865,14 @@ def _build_export_row(request, userkit):
         'In collection': 'Yes' if userkit.in_the_collection else 'No',
         'For sale': 'Yes' if userkit.for_sale else 'No',
         'External URL': userkit.offer_link or '',
-        'Estimated value': estimated_value,
-        'Manual value': userkit.manual_value,
-        'Final value': final_value,
+        'Value': value,
         'Purchase price': purchase_price,
         'Purchase date': userkit.purchase_date,
         'Profit / loss': profit_loss,
         'ROI %': roi_percent,
-        'Added at': timezone.localtime(userkit.added_at),
-        'Public URL': _build_public_profile_url(request, userkit),
-        'Image URLs': _build_image_urls(request, userkit),
+        'ROI ratio': roi_ratio,
+        'Added at': timezone.localtime(userkit.added_at).date(),
+        'Public URL': _build_public_kit_url(request, userkit),
     }
 
 
@@ -898,16 +887,13 @@ EXPORT_COLUMNS = [
     'In collection',
     'For sale',
     'External URL',
-    'Estimated value',
-    'Manual value',
-    'Final value',
+    'Value',
     'Purchase price',
     'Purchase date',
     'Profit / loss',
     'ROI %',
     'Added at',
     'Public URL',
-    'Image URLs',
 ]
 
 EXPORT_DECIMAL_ZERO = Decimal('0.00')
@@ -944,7 +930,12 @@ def _build_export_summary(userkits):
     owned_final_values = [item.final_value for item in owned_kits if item.final_value is not None]
     purchase_prices = [item.purchase_price for item in userkits if item.purchase_price is not None]
     profit_losses = [item.get_profit_loss() for item in userkits if item.get_profit_loss() is not None]
-    roi_values = [item.get_roi_percent() for item in userkits if item.get_roi_percent() is not None]
+    roi_ratios = []
+    for item in userkits:
+        profit_loss = item.get_profit_loss()
+        if profit_loss is None or item.purchase_price is None or item.purchase_price <= 0:
+            continue
+        roi_ratios.append((profit_loss / item.purchase_price).quantize(Decimal('0.0001')))
 
     return [
         ('Total kits', len(userkits)),
@@ -954,7 +945,7 @@ def _build_export_summary(userkits):
         ('Average kit value', _average_decimal(owned_final_values) if owned_final_values else None),
         ('Total purchase cost', _sum_decimal(purchase_prices) if purchase_prices else EXPORT_DECIMAL_ZERO),
         ('Total profit/loss', _sum_decimal(profit_losses) if profit_losses else EXPORT_DECIMAL_ZERO),
-        ('Average ROI %', _average_decimal(roi_values) if roi_values else None),
+        ('Average ROI %', _average_decimal(roi_ratios) if roi_ratios else None),
     ]
 
 
@@ -1036,6 +1027,7 @@ def _build_collection_sheet_rows(export_rows):
     rows = [[{'value': column, 'style': 1} for column in EXPORT_COLUMNS]]
 
     for row in export_rows:
+        roi_ratio = row.get('ROI ratio')
         rows.append([
             {'value': row['Team']},
             {'value': row['Season']},
@@ -1047,16 +1039,13 @@ def _build_collection_sheet_rows(export_rows):
             {'value': row['In collection']},
             {'value': row['For sale']},
             {'value': row['External URL']},
-            {'value': row['Estimated value'], 'style': 4 if row['Estimated value'] is not None else 0},
-            {'value': row['Manual value'], 'style': 4 if row['Manual value'] is not None else 0},
-            {'value': row['Final value'], 'style': 4 if row['Final value'] is not None else 0},
+            {'value': row['Value'], 'style': 4 if row['Value'] is not None else 0},
             {'value': row['Purchase price'], 'style': 4 if row['Purchase price'] is not None else 0},
             {'value': row['Purchase date'], 'style': 2 if row['Purchase date'] is not None else 0},
             {'value': row['Profit / loss'], 'style': 4 if row['Profit / loss'] is not None else 0},
-            {'value': row['ROI %'], 'style': 5 if row['ROI %'] is not None else 0},
-            {'value': row['Added at'], 'style': 3 if row['Added at'] is not None else 0},
+            {'value': roi_ratio, 'style': 5 if roi_ratio is not None else 0},
+            {'value': row['Added at'], 'style': 2 if row['Added at'] is not None else 0},
             {'value': row['Public URL']},
-            {'value': row['Image URLs']},
         ])
     return rows
 
@@ -1085,9 +1074,9 @@ def build_collection_export_xlsx(export_rows, summary_rows):
 
     collection_sheet_xml = _build_sheet_xml(
         collection_rows,
-        column_widths=[22, 14, 20, 10, 16, 18, 14, 14, 12, 34, 16, 16, 16, 16, 14, 16, 12, 22, 34, 42],
+        column_widths=[22, 14, 20, 10, 16, 18, 14, 14, 12, 34, 16, 16, 16, 16, 14, 16, 34],
         freeze_top_row=True,
-        autofilter_range=f'A1:T{max(len(collection_rows), 1)}',
+        autofilter_range=f'A1:Q{max(len(collection_rows), 1)}',
     )
     summary_sheet_xml = _build_sheet_xml(
         summary_sheet_rows,
@@ -2964,7 +2953,7 @@ class MyCollectionExportAPI(APIView):
             writer = csv.DictWriter(response, fieldnames=EXPORT_COLUMNS)
             writer.writeheader()
             for row in export_rows:
-                writer.writerow(row)
+                writer.writerow({column: row.get(column) for column in EXPORT_COLUMNS})
             return response
 
         xlsx_bytes = build_collection_export_xlsx(export_rows, summary_rows)

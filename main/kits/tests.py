@@ -3,6 +3,7 @@ from decimal import Decimal
 from datetime import datetime, timedelta
 from importlib import import_module
 from io import BytesIO, StringIO
+import xml.etree.ElementTree as ET
 from urllib.parse import urlencode
 from unittest.mock import patch
 from zipfile import ZipFile
@@ -5785,16 +5786,55 @@ class MyCollectionExportAPITests(APITestCase):
         export_row = next(row for row in rows if row["Season"] == "2024/2025")
         self.assertEqual(export_row["Team"], "Export FC")
         self.assertIn("Purchase price", export_row)
-        self.assertEqual(export_row["Manual value"], "110.00")
-        self.assertEqual(export_row["Final value"], "110.00")
+        self.assertIn("Value", export_row)
+        self.assertNotIn("Estimated value", export_row)
+        self.assertNotIn("Manual value", export_row)
+        self.assertNotIn("Final value", export_row)
+        self.assertNotIn("Image URLs", export_row)
+        self.assertEqual(export_row["Value"], "110.00")
         self.assertEqual(export_row["Purchase price"], "80.00")
         self.assertEqual(export_row["Purchase date"], str(timezone.localdate() - timedelta(days=7)))
         self.assertEqual(export_row["Profit / loss"], "30.00")
         self.assertEqual(export_row["ROI %"], "37.50")
-        self.assertIn("/media/", export_row["Image URLs"])
+        self.assertEqual(export_row["Added at"], str(timezone.localdate()))
+        self.assertTrue(export_row["Public URL"].endswith(f"/profile/{self.owner.username}/kits/{self.export_kit.id}"))
         csv_text = response.content.decode("utf-8")
         self.assertNotIn("2022/2023", csv_text)
         self.assertNotIn("2021/2022", csv_text)
+        self.assertNotIn("Estimated value", csv_text)
+        self.assertNotIn("Manual value", csv_text)
+        self.assertNotIn("Final value", csv_text)
+        self.assertNotIn("Image URLs", csv_text)
+
+    def test_pro_user_can_export_csv_with_correct_roi_percentage(self):
+        roi_kit = UserKit.objects.create(
+            user=self.owner,
+            kit=Kit.objects.create(
+                team=self.team,
+                season="2025/2026",
+                kit_type="Special",
+                estimated_price=Decimal("89.99"),
+            ),
+            shirt_technology="REPLICA",
+            shirt_version=ShirtVersion.objects.get(code="REPLICA"),
+            condition="VERY_GOOD",
+            size="L",
+            manual_value=Decimal("89.99"),
+            purchase_price=Decimal("50.00"),
+            purchase_date=timezone.localdate() - timedelta(days=30),
+        )
+        roi_kit.final_value = Decimal("89.99")
+        roi_kit.save(update_fields=["final_value"])
+
+        self.authenticate(self.owner)
+        response = self.client.get(self.url, {"format": "csv"})
+
+        rows = list(csv.DictReader(StringIO(response.content.decode("utf-8"))))
+        export_row = next(row for row in rows if row["Season"] == "2025/2026")
+        self.assertEqual(export_row["Value"], "89.99")
+        self.assertEqual(export_row["Purchase price"], "50.00")
+        self.assertEqual(export_row["Profit / loss"], "39.99")
+        self.assertEqual(export_row["ROI %"], "79.98")
 
     def test_export_can_exclude_sold_items(self):
         self.authenticate(self.owner)
@@ -5817,10 +5857,59 @@ class MyCollectionExportAPITests(APITestCase):
         self.assertIn('name="Collection"', workbook_xml)
         self.assertIn('name="Summary"', workbook_xml)
         self.assertIn("Purchase price", sheet1_xml)
+        self.assertIn("Value", sheet1_xml)
         self.assertIn("ROI %", sheet1_xml)
         self.assertIn("Total kits", sheet2_xml)
         self.assertIn("Total collection value", sheet2_xml)
+        self.assertNotIn("Estimated value", sheet1_xml)
+        self.assertNotIn("Manual value", sheet1_xml)
+        self.assertNotIn("Final value", sheet1_xml)
+        self.assertNotIn("Image URLs", sheet1_xml)
         self.assertNotIn("2022/2023", sheet1_xml)
+        self.assertIn(f"/profile/{self.owner.username}/kits/{self.export_kit.id}", sheet1_xml)
+        self.assertIn("0.375", sheet1_xml)
+        self.assertIn("0.20", sheet2_xml)
+
+        namespace = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+        sheet1_root = ET.fromstring(sheet1_xml)
+        export_row_xml = next(
+            row for row in sheet1_root.findall("x:sheetData/x:row", namespace)
+            if any((cell.find("x:is/x:t", namespace) is not None and cell.find("x:is/x:t", namespace).text == "2024/2025")
+                   for cell in row.findall("x:c", namespace))
+        )
+        added_at_cell = export_row_xml.findall("x:c", namespace)[15]
+        added_at_value = added_at_cell.find("x:v", namespace).text
+        self.assertEqual(added_at_cell.attrib.get("s"), "2")
+        self.assertTrue(float(added_at_value).is_integer())
+
+    def test_pro_user_can_export_xlsx_with_correct_roi_percentage_format(self):
+        roi_kit = UserKit.objects.create(
+            user=self.owner,
+            kit=Kit.objects.create(
+                team=self.team,
+                season="2025/2026",
+                kit_type="Special",
+                estimated_price=Decimal("89.99"),
+            ),
+            shirt_technology="REPLICA",
+            shirt_version=ShirtVersion.objects.get(code="REPLICA"),
+            condition="VERY_GOOD",
+            size="L",
+            manual_value=Decimal("89.99"),
+            purchase_price=Decimal("50.00"),
+            purchase_date=timezone.localdate() - timedelta(days=30),
+        )
+        roi_kit.final_value = Decimal("89.99")
+        roi_kit.save(update_fields=["final_value"])
+
+        self.authenticate(self.owner)
+        response = self.client.get(self.url, {"format": "xlsx"})
+
+        workbook_xml, sheet1_xml, sheet2_xml = self._workbook_xml_strings(response)
+        self.assertIn('name="Collection"', workbook_xml)
+        self.assertIn("0.7998", sheet1_xml)
+        self.assertIn('s="5"', sheet1_xml)
+        self.assertIn("0.40", sheet2_xml)
 
     def test_invalid_format_is_rejected(self):
         self.authenticate(self.owner)
